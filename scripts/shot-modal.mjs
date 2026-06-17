@@ -1,0 +1,10 @@
+import { chromium } from 'playwright'
+const b = await chromium.launch()
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } })
+await p.goto('http://localhost:3000/pacientes', { waitUntil: 'networkidle', timeout: 30000 })
+await p.waitForTimeout(700)
+await p.getByRole('button', { name: /novo paciente/i }).click()
+await p.waitForTimeout(600)
+await p.screenshot({ path: 'docs/local-shots/pacientes_modal.png' })
+console.log('OK')
+await b.close()

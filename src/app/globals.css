@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+   agicare — design tokens (do Figma :root, docs/figma-audit.md)
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Marca — primária teal (botões/ativos) = primary-medium; verde = accent */
+  --color-brand-50: #ecfdfb;
+  --color-brand-100: #d0f7f4;
+  --color-brand-200: #a6efeb;
+  --color-brand-300: #6fe2e1;
+  --color-brand-400: #2fcdd2;
+  --color-brand-500: #0db8c2; /* primary-medium (teal) */
+  --color-brand-600: #0a96a3;
+  --color-brand-700: #0c7884;
+  --color-brand-800: #11616c;
+  --color-brand-900: #13505b;
+
+  --color-primary: #0be0ae;        /* primary (verde) */
+  --color-primary-light: #8de1ec;
+  --color-primary-medium: #0db8c2; /* teal */
+  --color-secondary: #0a3838;      /* teal escuro */
+  --color-accent: #0be0ae;         /* verde */
+
+  /* Superfícies */
+  --color-canvas: #fafbfc;       /* background */
+  --color-surface: #ffffff;      /* card */
+  --color-muted-surface: #f4f5f7; /* muted */
+  --color-line: #e4e4e7;         /* border */
+  --color-ink: #1c1c1e;          /* foreground */
+  --color-muted: #71717a;        /* muted-foreground */
+  --color-neutral: #b3b3b3;
+
+  /* Sidebar (escura) */
+  --color-sidebar: #0a3838;
+  --color-sidebar-accent: #0f4c4c;
+  --color-sidebar-foreground: #fafbfc;
+
+  /* Status */
+  --color-status-wait: #2563eb;    /* aguardando (azul) */
+  --color-status-active: #0db8c2;  /* chamado/em atendimento (teal/info) */
+  --color-status-ok: #0be0ae;      /* ativo/finalizado (verde/success) */
+  --color-status-danger: #dc2626;  /* urgente (error) */
+  --color-status-warn: #d97706;    /* preferencial (warning) */
+
+  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Gradiente de marca (fundo do login) */
+  --brand-gradient: linear-gradient(135deg, #0db8c2 0%, #8de1ec 50%, #0be0ae 100%);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ─────────────────────────────────────────────────────────────
+   White-label — Tema Escuro
+   A classe `.dark` é aplicada no <html> pelo ThemeProvider/ThemeScript
+   (modo "escuro" ou "auto" + prefers-color-scheme: dark). Sobrescreve só
+   os tokens de SUPERFÍCIE/TEXTO — a marca (brand/accent/status) é a mesma
+   nos dois temas (e pode ser trocada por paleta via CSS vars injetadas).
+   Especificidade html.dark (0,1,1) > :root (0,1,0) → vence sempre.
+   ───────────────────────────────────────────────────────────── */
+html.dark {
+  --color-canvas: #0a1416;        /* background */
+  --color-surface: #11201f;       /* card */
+  --color-muted-surface: #16282a; /* muted */
+  --color-line: #24383a;          /* border */
+  --color-ink: #e8f0f0;           /* foreground */
+  --color-muted: #93a8a8;         /* muted-foreground */
+  --color-neutral: #6b7d7d;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Suaviza a troca de tema (sem animar layout/fontes). */
+html.dark,
+html:not(.dark) {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+* {
+  border-color: var(--color-line);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+.bg-brand-gradient {
+  background: var(--brand-gradient);
 }

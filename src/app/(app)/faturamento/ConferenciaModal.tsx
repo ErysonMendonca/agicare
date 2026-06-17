@@ -1,0 +1,350 @@
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  CheckCircle2,
+  CreditCard,
+  Building2,
+  ShieldCheck,
+  Lock,
+  Loader2,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { cn } from "@/lib/utils";
+import { EmBreve } from "@/components/ui/EmBreve";
+import { type Evento, type ItemCheckout } from "@/lib/data/billing";
+import { registrarCheckout, carregarItensCheckout } from "./actions";
+
+type Forma = "particular" | "convenio" | "empresa";
+type Pagamento = "pix" | "cartao" | "boleto";
+
+function formatBRL(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+}
+
+const formas: { id: Forma; label: string; icon: typeof CreditCard }[] = [
+  { id: "particular", label: "Particular", icon: CreditCard },
+  { id: "convenio", label: "Convênio (TISS)", icon: ShieldCheck },
+  { id: "empresa", label: "Empresa", icon: Building2 },
+];
+
+const pagamentos: { id: Pagamento; label: string }[] = [
+  { id: "pix", label: "PIX" },
+  { id: "cartao", label: "Cartão" },
+  { id: "boleto", label: "Boleto" },
+];
+
+export function ConferenciaModal({
+  evento,
+  gestor,
+  open,
+  onClose,
+}: {
+  evento: Evento;
+  gestor: boolean;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [forma, setForma] = useState<Forma>(
+    evento.tipo === "Particular" ? "particular" : "convenio",
+  );
+  const [pagamento, setPagamento] = useState<Pagamento>("pix");
+  const [desconto, setDesconto] = useState("0");
+  const [acrescimo, setAcrescimo] = useState("0");
+  // Dados da NF + prazos quando o pagador é uma empresa conveniada.
+  const [nfNumero, setNfNumero] = useState("");
+  const [nfEmissao, setNfEmissao] = useState("");
+  const [nfVencimento, setNfVencimento] = useState("");
+  const [nfPrazos, setNfPrazos] = useState("");
+  const [itens, setItens] = useState<ItemCheckout[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  // Carrega os itens REAIS conferidos do atendimento ao abrir o modal.
+  useEffect(() => {
+    let ativo = true;
+    carregarItensCheckout(evento.codigo, evento.servico, evento.valorNumerico)
+      .then((res) => {
+        if (ativo) setItens(res.itens);
+      })
+      .finally(() => {
+        if (ativo) setCarregando(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [evento.codigo, evento.servico, evento.valorNumerico]);
+
+  const subtotal = itens.reduce((acc, i) => acc + i.valor * i.qtd, 0);
+  const descontoNum = Math.max(0, Number(desconto.replace(",", ".")) || 0);
+  const acrescimoNum = Math.max(0, Number(acrescimo.replace(",", ".")) || 0);
+  const totalFinal = Math.max(0, subtotal - descontoNum + acrescimoNum);
+
+  function handleConfirmar() {
+    startTransition(async () => {
+      const res = await registrarCheckout({
+        eventCode: evento.codigo,
+        forma,
+        pagamento: forma === "particular" ? pagamento : undefined,
+        desconto: gestor ? descontoNum : 0,
+        acrescimo: gestor ? acrescimoNum : 0,
+        itens,
+        empresa:
+          forma === "empresa"
+            ? {
+                nfNumero: nfNumero.trim() || undefined,
+                nfEmissao: nfEmissao || undefined,
+                nfVencimento: nfVencimento || undefined,
+                nfPrazos: nfPrazos.trim() || undefined,
+              }
+            : undefined,
+      });
+      if (res?.ok) {
+        toast.success("Check-out conferido e faturado.");
+        router.refresh();
+        onClose();
+      } else {
+        toast.error(res?.error ?? "Não foi possível concluir o check-out.");
+      }
+    });
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Conferência de Check-out"
+      subtitle={`${evento.paciente} · ${evento.codigo}`}
+      className="max-w-2xl"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={pending}>
+            Cancelar
+          </Button>
+          <Button onClick={handleConfirmar} disabled={pending || carregando}>
+            <CheckCircle2 className="h-4 w-4" />
+            Confirmar Check-out
+          </Button>
+        </>
+      }
+    >
+      {/* Itens TUSS + materiais (reais do atendimento) */}
+      <div>
+        <h3 className="text-sm font-semibold text-ink">Itens conferidos</h3>
+        <div className="mt-2 overflow-hidden rounded-xl border border-line">
+          {carregando ? (
+            <div className="flex items-center justify-center gap-2 px-3 py-8 text-sm text-muted">
+              <Loader2 className="h-4 w-4 animate-spin" /> Carregando itens...
+            </div>
+          ) : itens.length === 0 ? (
+            <div className="px-3 py-8 text-center text-sm text-muted">
+              Nenhum item faturável identificado no atendimento.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-muted-surface text-xs uppercase tracking-wide text-muted">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium">Tipo</th>
+                  <th className="px-3 py-2 text-left font-medium">Código</th>
+                  <th className="px-3 py-2 text-left font-medium">Descrição</th>
+                  <th className="px-3 py-2 text-right font-medium">Qtd</th>
+                  {gestor && (
+                    <th className="px-3 py-2 text-right font-medium">Valor</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {itens.map((i, idx) => (
+                  <tr key={`${i.codigo}-${idx}`}>
+                    <td className="px-3 py-2">
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-xs font-medium",
+                          i.tipo === "TUSS"
+                            ? "bg-blue-50 text-blue-600"
+                            : "bg-purple-50 text-purple-600",
+                        )}
+                      >
+                        {i.tipo}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-muted">
+                      {i.codigo}
+                    </td>
+                    <td className="px-3 py-2 text-ink">{i.descricao}</td>
+                    <td className="px-3 py-2 text-right text-ink">{i.qtd}</td>
+                    {gestor && (
+                      <td className="px-3 py-2 text-right font-medium text-ink">
+                        {formatBRL(i.valor)}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Ajustes (sem alterar o prontuário) */}
+      {gestor ? (
+        <div className="mt-5">
+          <h3 className="text-sm font-semibold text-ink">
+            Ajustes (desconto / acréscimo)
+          </h3>
+          <p className="mt-0.5 text-xs text-muted">
+            Valores em reais. Não alteram o prontuário clínico.
+          </p>
+          <div className="mt-2 flex flex-wrap items-end gap-4">
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Desconto (R$)
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={desconto}
+                onChange={(e) => setDesconto(e.target.value)}
+                className="w-32"
+                aria-label="Valor do desconto"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted">
+              Acréscimo (R$)
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={acrescimo}
+                onChange={(e) => setAcrescimo(e.target.value)}
+                className="w-32"
+                aria-label="Valor do acréscimo"
+              />
+            </label>
+            <div className="pb-2 text-sm text-muted">
+              Subtotal {formatBRL(subtotal)} · Total{" "}
+              <span className="font-semibold text-brand-600">
+                {formatBRL(totalFinal)}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 flex items-center gap-2 rounded-xl bg-muted-surface px-4 py-3 text-sm text-muted">
+          <Lock className="h-4 w-4" /> Valores e ajustes restritos ao gestor.
+        </div>
+      )}
+
+      {/* Bifurcação: forma de cobrança */}
+      <div className="mt-5">
+        <h3 className="text-sm font-semibold text-ink">Forma de cobrança</h3>
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {formas.map((f) => {
+            const Icon = f.icon;
+            const ativo = forma === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setForma(f.id)}
+                className={cn(
+                  "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors",
+                  ativo
+                    ? "border-brand-400 bg-brand-50 text-brand-700"
+                    : "border-line text-ink hover:bg-black/5",
+                )}
+              >
+                <Icon className="h-4 w-4" /> {f.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {forma === "particular" && (
+          <div className="mt-3 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {pagamentos.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPagamento(p.id)}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                    pagamento === p.id
+                      ? "border-brand-400 bg-brand-50 text-brand-700"
+                      : "border-line text-muted hover:bg-black/5",
+                  )}
+                >
+                  {p.label}
+                </button>
+              ))}
+              <EmBreve label="Em breve — cobrança via PSP (Pix/cartão/boleto)" />
+            </div>
+            <p className="text-xs text-muted">
+              A forma de pagamento é registrada no check-out; a cobrança
+              eletrônica junto ao PSP será habilitada em breve.
+            </p>
+          </div>
+        )}
+        {forma === "convenio" && (
+          <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+            Será gerada uma guia TISS para inclusão em lote do convênio.
+          </p>
+        )}
+        {forma === "empresa" && (
+          <div className="mt-3 flex flex-col gap-3">
+            <p className="rounded-lg bg-purple-50 px-3 py-2 text-xs text-purple-700">
+              Faturamento consolidado em fatura mensal da empresa conveniada.
+              Informe os dados da NF e os prazos de pagamento.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-xs text-muted">
+                Número da NF
+                <Input
+                  type="text"
+                  value={nfNumero}
+                  onChange={(e) => setNfNumero(e.target.value)}
+                  placeholder="Ex.: 000123"
+                  aria-label="Número da nota fiscal"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-muted">
+                Emissão da NF
+                <Input
+                  type="date"
+                  value={nfEmissao}
+                  onChange={(e) => setNfEmissao(e.target.value)}
+                  aria-label="Data de emissão da nota fiscal"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-muted">
+                Vencimento
+                <Input
+                  type="date"
+                  value={nfVencimento}
+                  onChange={(e) => setNfVencimento(e.target.value)}
+                  aria-label="Vencimento da fatura"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-muted">
+                Prazos / condições
+                <Input
+                  type="text"
+                  value={nfPrazos}
+                  onChange={(e) => setNfPrazos(e.target.value)}
+                  placeholder="Ex.: 30/60/90 dias"
+                  aria-label="Prazos e condições de pagamento"
+                />
+              </label>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}

@@ -1,0 +1,316 @@
+"use server";
+
+import { z } from "zod";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { isDemoMode } from "@/lib/supabase/config";
+import { getCurrentUser, getRole } from "@/lib/auth";
+import { requireClinic } from "@/lib/tenant";
+
+export type ActionState = { error?: string; ok?: boolean } | undefined;
+
+const idSchema = z.string().min(1, "Paciente inválido.");
+
+/** Revalida as rotas afetadas por uma mudança na fila. */
+function revalidateFila() {
+  revalidatePath("/fila");
+  revalidatePath("/dashboard");
+}
+
+/** Atualiza o status (e campos extras) de uma entrada da fila via cliente de servidor (RLS staff). */
+async function updateQueueStatus(
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<ActionState> {
+  if (isDemoMode()) return { ok: true };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("queue_entries")
+    .update(patch)
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+
+  revalidateFila();
+  return { ok: true };
+}
+
+/**
+ * Carimba um marco temporal da fila (called_at/started_at) — BEST-EFFORT.
+ *
+ * Estes campos vêm da migration 0029 (Tempo Médio de Espera REAL). Se a
+ * migration ainda não foi aplicada, a coluna não existe e o UPDATE falha —
+ * mas o ERRO É IGNORADO de propósito para NÃO quebrar a transição de status
+ * (que já foi persistida antes). Quando a 0029 estiver aplicada, o marco é
+ * gravado e alimenta o BI.
+ */
+async function stampQueueTime(
+  id: string,
+  field: "called_at" | "started_at",
+): Promise<void> {
+  if (isDemoMode()) return;
+  try {
+    const supabase = await createClient();
+    // Erro (ex.: coluna ausente pré-0029) é silenciado: marco é best-effort.
+    await supabase
+      .from("queue_entries")
+      .update({ [field]: new Date().toISOString() })
+      .eq("id", id);
+  } catch {
+    // Silêncio proposital: o status já mudou; o marco é só para o BI.
+  }
+}
+
+/**
+ * Carimba appointments.check_in = agora no agendamento vinculado — BEST-EFFORT.
+ *
+ * É a chegada REAL do paciente (migration 0047). Alimenta o BI de Tempo Médio
+ * de Espera via agenda (getTempoEsperaAgendaBI = starts_at − check_in). Só grava
+ * se ainda estiver vazio (primeiro check-in vence; reentradas não sobrescrevem).
+ * Erro (ex.: coluna ausente pré-0047) é silenciado para não quebrar o check-in,
+ * que já foi persistido na fila. RLS de appointments (clinic_id) cobre o escopo.
+ */
+async function stampAppointmentCheckIn(appointmentId: string): Promise<void> {
+  if (isDemoMode()) return;
+  try {
+    const supabase = await createClient();
+    await supabase
+      .from("appointments")
+      .update({ check_in: new Date().toISOString() })
+      .eq("id", appointmentId)
+      .is("check_in", null);
+  } catch {
+    // Silêncio proposital: o check-in já foi registrado; o carimbo é só p/ BI.
+  }
+}
+
+/** Chamar paciente: aguardando → chamado. Carimba called_at (BI espera). */
+export async function chamarPaciente(id: string): Promise<ActionState> {
+  const parsed = idSchema.safeParse(id);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  const res = await updateQueueStatus(parsed.data, { status: "chamado" });
+  if (res?.ok) await stampQueueTime(parsed.data, "called_at");
+  return res;
+}
+
+/** Atender paciente: → em_atendimento. Carimba started_at (BI espera). */
+export async function atenderPaciente(id: string): Promise<ActionState> {
+  const parsed = idSchema.safeParse(id);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  const res = await updateQueueStatus(parsed.data, { status: "em_atendimento" });
+  if (res?.ok) await stampQueueTime(parsed.data, "started_at");
+  return res;
+}
+
+const desistirSchema = z.object({
+  id: idSchema,
+  motivo: z.string().trim().min(1, "Informe o motivo da desistência."),
+});
+
+// ── Check-in via totem ───────────────────────────────────────────────
+const checkInSchema = z.object({
+  appointmentId: z.string().uuid("Agendamento inválido.").optional(),
+  patientId: z.string().uuid("Paciente inválido.").nullish(),
+  patientName: z.string().trim().min(1, "Nome do paciente é obrigatório."),
+  priority: z.enum(["normal", "preferencial", "urgente"]).default("normal"),
+  specialty: z.string().trim().nullish(),
+  insurance: z.string().trim().nullish(),
+  professionalId: z.string().uuid("Profissional inválido.").nullish(),
+});
+
+export type CheckInTotemInput = z.input<typeof checkInSchema>;
+
+export type CheckInTotemResult = {
+  ok?: boolean;
+  error?: string;
+  ticketCode?: string;
+};
+
+/**
+ * Gera a senha (ticket_code): prefixo "P" p/ preferencial, senão "A",
+ * + número sequencial do dia com 3 dígitos. Ex.: A001, P001.
+ */
+function genTicketCode(priority: string, seq: number): string {
+  const prefix = priority === "preferencial" ? "P" : "A";
+  return `${prefix}${String(seq).padStart(3, "0")}`;
+}
+
+/** Início (00:00) e fim (24:00) do dia atual em ISO. */
+function todayRangeISO(): { startISO: string; endISO: string } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { startISO: start.toISOString(), endISO: end.toISOString() };
+}
+
+/**
+ * Check-in no totem: cria a entrada na fila (status "aguardando", arrived_at=now),
+ * vinculando ao agendamento quando houver. Gera e retorna a SENHA (ticket_code).
+ * Em modo demo, gera a senha localmente sem tocar no banco.
+ */
+export async function checkInTotem(
+  input: CheckInTotemInput,
+): Promise<CheckInTotemResult> {
+  const parsed = checkInSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+  const data = parsed.data;
+
+  if (isDemoMode()) {
+    // Sem banco no modo demo: senha sequencial fictícia (3 dígitos).
+    const seq = Math.floor(Math.random() * 900) + 100;
+    return { ok: true, ticketCode: genTicketCode(data.priority, seq) };
+  }
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+  const { startISO, endISO } = todayRangeISO();
+
+  // Sequencial do dia = nº de senhas já emitidas hoje + 1.
+  const { count, error: countError } = await supabase
+    .from("queue_entries")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", startISO)
+    .lt("created_at", endISO);
+
+  if (countError) return { error: "Não foi possível gerar a senha." };
+
+  const ticketCode = genTicketCode(data.priority, (count ?? 0) + 1);
+
+  const { error } = await supabase.from("queue_entries").insert({
+    clinic_id: clinicId,
+    ticket_code: ticketCode,
+    patient_id: data.patientId ?? null,
+    patient_name: data.patientName,
+    priority: data.priority,
+    professional_id: data.professionalId ?? null,
+    specialty: data.specialty ?? null,
+    insurance: data.insurance ?? null,
+    status: "aguardando",
+    arrived_at: new Date().toISOString(),
+    appointment_id: data.appointmentId ?? null,
+  });
+
+  if (error) return { error: "Não foi possível registrar o check-in." };
+
+  // Carimba a chegada real no agendamento vinculado (BI de tempo de espera).
+  if (data.appointmentId) await stampAppointmentCheckIn(data.appointmentId);
+
+  revalidateFila();
+  return { ok: true, ticketCode };
+}
+
+// ── Dados de Atendimento (persistência da Fila — escopo 4.2) ─────────
+const atendimentoSchema = z.object({
+  // IDs vêm do FilaItem; string solta (não uuid) p/ não quebrar o modo demo,
+  // onde os ids são mocks. A FK do banco valida a integridade no caso real.
+  queueEntryId: z.string().trim().min(1).nullish(),
+  patientId: z.string().trim().min(1).nullish(),
+  patientName: z.string().trim().max(200).nullish(),
+  medico: z.string().trim().max(120).nullish(),
+  especialidade: z.string().trim().max(120).nullish(),
+  encaminhamento: z.string().trim().max(120).nullish(),
+  carater: z.enum(["urgencia", "eletivo"]).nullish(),
+  procedencia: z.string().trim().max(120).nullish(),
+  centroCusto: z.string().trim().max(120).nullish(),
+  origem: z.string().trim().max(120).nullish(),
+  dataEntrada: z.string().trim().max(10).nullish(),
+  privadoLiberdade: z.boolean().default(false),
+  gestante: z.boolean().default(false),
+  // Convênio obrigatório (mesma regra do form: plano é exigido).
+  convenio: z.string().trim().min(1, "Convênio obrigatório.").max(120),
+  plano: z.string().trim().min(1, "Selecione o plano do convênio.").max(120),
+  carteira: z.string().trim().max(60).nullish(),
+  validade: z.string().trim().max(10).nullish(),
+  validador: z.string().trim().max(120).nullish(),
+  respOMesmo: z.boolean().default(false),
+  respNome: z.string().trim().max(200).nullish(),
+  respDocumento: z.string().trim().max(60).nullish(),
+  respParentesco: z.string().trim().max(60).nullish(),
+  observacoes: z.string().trim().max(2000).nullish(),
+});
+
+export type AtendimentoInput = z.input<typeof atendimentoSchema>;
+
+/** Normaliza string vazia/só-espaço → null (não gravar "" em colunas opcionais). */
+function emptyToNull(v: string | null | undefined): string | null {
+  const t = v?.trim();
+  return t ? t : null;
+}
+
+/**
+ * Persiste a ficha de "Dados de Atendimento" da Fila em attendance_records
+ * (multitenant + RLS staff). É registro ADMINISTRATIVO da recepção, não dado
+ * clínico. Valida na borda (Zod), exige clínica ativa e papel de staff. Em
+ * modo demo, valida e retorna ok sem tocar no banco.
+ */
+export async function salvarAtendimento(
+  input: AtendimentoInput,
+): Promise<ActionState> {
+  const parsed = atendimentoSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  const d = parsed.data;
+
+  if (isDemoMode()) return { ok: true };
+
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada." };
+
+  // Gate de staff (admin/medico/recepcao). RLS é a 2ª camada; aqui é explícito.
+  const role = await getRole();
+  if (role !== "admin" && role !== "medico" && role !== "recepcao") {
+    return { error: "Acesso restrito à equipe da clínica." };
+  }
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("attendance_records").insert({
+    clinic_id: clinicId,
+    queue_entry_id: emptyToNull(d.queueEntryId),
+    patient_id: emptyToNull(d.patientId),
+    patient_name: emptyToNull(d.patientName),
+    medico: emptyToNull(d.medico),
+    especialidade: emptyToNull(d.especialidade),
+    encaminhamento: emptyToNull(d.encaminhamento),
+    carater: d.carater ?? null,
+    procedencia: emptyToNull(d.procedencia),
+    centro_custo: emptyToNull(d.centroCusto),
+    origem: emptyToNull(d.origem),
+    data_entrada: emptyToNull(d.dataEntrada),
+    privado_liberdade: d.privadoLiberdade,
+    gestante: d.gestante,
+    convenio: d.convenio,
+    plano: d.plano,
+    carteira: emptyToNull(d.carteira),
+    validade: emptyToNull(d.validade),
+    validador: emptyToNull(d.validador),
+    resp_o_mesmo: d.respOMesmo,
+    resp_nome: emptyToNull(d.respNome),
+    resp_documento: emptyToNull(d.respDocumento),
+    resp_parentesco: emptyToNull(d.respParentesco),
+    observacoes: emptyToNull(d.observacoes),
+    created_by: current.userId,
+  });
+
+  if (error) return { error: "Não foi possível salvar o atendimento." };
+
+  revalidateFila();
+  return { ok: true };
+}
+
+/** Registrar desistência: → desistencia + motivo. */
+export async function desistirPaciente(
+  id: string,
+  motivo: string,
+): Promise<ActionState> {
+  const parsed = desistirSchema.safeParse({ id, motivo });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  return updateQueueStatus(parsed.data.id, {
+    status: "desistencia",
+    cancel_reason: parsed.data.motivo,
+  });
+}

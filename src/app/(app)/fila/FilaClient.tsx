@@ -1,0 +1,309 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  Clock,
+  Stethoscope,
+  User,
+  CreditCard,
+  PhoneCall,
+  Search,
+  Filter,
+  CalendarClock,
+  Ticket,
+} from "lucide-react";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { type FilaItem } from "@/lib/data/queue";
+import { AcoesPacienteModal } from "./AcoesPacienteModal";
+import { DadosAtendimentoModal } from "./DadosAtendimentoModal";
+import { DesistenciaModal } from "./DesistenciaModal";
+import { CheckInModal } from "./CheckInModal";
+
+type ModalKind = "acoes" | "atendimento" | "desistencia" | null;
+
+/** Opções do filtro de status (valor = statusRaw do banco). */
+const STATUS_OPCOES = [
+  { value: "todos", label: "Todos os Status" },
+  { value: "aguardando", label: "Aguardando" },
+  { value: "chamado", label: "Chamado" },
+  { value: "em_atendimento", label: "Em Atendimento" },
+  { value: "finalizado", label: "Finalizado" },
+  { value: "desistencia", label: "Desistência" },
+];
+
+export function FilaClient({
+  fila,
+  agendados = [],
+}: {
+  fila: FilaItem[];
+  agendados?: FilaItem[];
+}) {
+  const [selected, setSelected] = useState<FilaItem | null>(null);
+  const [modal, setModal] = useState<ModalKind>(null);
+
+  // Check-in (totem/recepção)
+  const [checkInAlvo, setCheckInAlvo] = useState<FilaItem | null>(null);
+  const [checkInOpen, setCheckInOpen] = useState(false);
+
+  // Busca + filtro
+  const [query, setQuery] = useState("");
+  const [statusFiltro, setStatusFiltro] = useState("todos");
+
+  const termo = query.trim().toLowerCase();
+
+  const filaFiltrada = useMemo(() => {
+    return fila.filter((item) => {
+      const casaTexto =
+        termo === "" ||
+        item.paciente.toLowerCase().includes(termo) ||
+        item.codigo.toLowerCase().includes(termo);
+      const casaStatus =
+        statusFiltro === "todos" || item.statusRaw === statusFiltro;
+      return casaTexto && casaStatus;
+    });
+  }, [fila, termo, statusFiltro]);
+
+  // Agendados só aparecem quando o filtro está em "todos" (não têm status de fila);
+  // a busca textual continua valendo.
+  const agendadosFiltrados = useMemo(() => {
+    if (statusFiltro !== "todos") return [];
+    return agendados.filter(
+      (item) => termo === "" || item.paciente.toLowerCase().includes(termo),
+    );
+  }, [agendados, termo, statusFiltro]);
+
+  function abrir(item: FilaItem) {
+    setSelected(item);
+    setModal("acoes");
+  }
+
+  function fechar() {
+    setModal(null);
+    setSelected(null);
+  }
+
+  function abrirCheckIn(item: FilaItem) {
+    setCheckInAlvo(item);
+    setCheckInOpen(true);
+  }
+
+  function fecharCheckIn() {
+    setCheckInOpen(false);
+    setCheckInAlvo(null);
+  }
+
+  function onStatusChange(statusRaw: string) {
+    setSelected((s) => (s ? { ...s, statusRaw } : s));
+  }
+
+  return (
+    <>
+      {/* Agendados (aguardando chegada) */}
+      {agendadosFiltrados.length > 0 && (
+        <section className="mt-6">
+          <div className="mb-3 flex items-center gap-2">
+            <CalendarClock className="h-5 w-5 text-muted" />
+            <h2 className="font-semibold text-ink">
+              Agendados — aguardando chegada
+            </h2>
+            <span className="rounded-full bg-muted-surface px-2 py-0.5 text-xs font-medium text-muted">
+              {agendadosFiltrados.length}
+            </span>
+          </div>
+
+          <Stagger className="flex flex-col gap-3">
+            {agendadosFiltrados.map((item) => (
+              <FadeInUp key={item.id}>
+                <Card className="border-dashed p-4">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <span className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-muted-surface text-muted">
+                      <CalendarClock className="h-5 w-5" />
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-ink">
+                          {item.paciente}
+                        </h3>
+                        {item.tags?.map((tag) => (
+                          <Badge key={tag.label} status={tag.status}>
+                            {tag.label}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-4 w-4" /> {item.hora}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Stethoscope className="h-4 w-4" />{" "}
+                          {item.especialidade}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <User className="h-4 w-4" /> {item.medico}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <CreditCard className="h-4 w-4" /> {item.convenio}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => abrirCheckIn(item)}
+                      className="flex h-10 flex-none items-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-1"
+                    >
+                      <Ticket className="h-4 w-4" />
+                      Check-in / Emitir Senha
+                    </button>
+                  </div>
+                </Card>
+              </FadeInUp>
+            ))}
+          </Stagger>
+        </section>
+      )}
+
+      {/* Busca + filtro (funcionais) */}
+      <Card className="mt-6 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Input
+              type="search"
+              aria-label="Buscar paciente por nome ou senha"
+              placeholder="Buscar por nome ou senha..."
+              className="pl-9"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="relative sm:w-56">
+            <Filter className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Select
+              aria-label="Filtrar por status"
+              className="pl-9"
+              value={statusFiltro}
+              onChange={(e) => setStatusFiltro(e.target.value)}
+            >
+              {STATUS_OPCOES.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      </Card>
+
+      {/* Fila ativa */}
+      {filaFiltrada.length === 0 ? (
+        <Card className="mt-4 p-10 text-center">
+          <p className="text-sm text-muted">
+            Nenhum paciente encontrado para os filtros aplicados.
+          </p>
+        </Card>
+      ) : (
+        <Stagger className="mt-4 flex flex-col gap-3">
+          {filaFiltrada.map((item) => (
+            <FadeInUp key={item.id}>
+              <Card
+                interactive
+                role="button"
+                tabIndex={0}
+                onClick={() => abrir(item)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    abrir(item);
+                  }
+                }}
+                className="cursor-pointer p-4"
+              >
+                <div className="flex items-center gap-4">
+                  <span className="flex h-14 w-14 flex-none items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-white">
+                    {item.codigo}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-ink">
+                        {item.paciente}
+                      </h3>
+                      {item.tags?.map((tag) => (
+                        <Badge key={tag.label} status={tag.status}>
+                          {tag.label}
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-4 w-4" /> {item.hora}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Stethoscope className="h-4 w-4" /> {item.especialidade}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <User className="h-4 w-4" /> {item.medico}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <CreditCard className="h-4 w-4" /> {item.convenio}
+                      </span>
+                    </div>
+                  </div>
+
+                  <Badge status={item.status.tone} className="flex-none">
+                    {item.status.tone === "active" ? (
+                      <PhoneCall className="h-3 w-3" />
+                    ) : (
+                      <Clock className="h-3 w-3" />
+                    )}
+                    {item.status.label}
+                  </Badge>
+                </div>
+              </Card>
+            </FadeInUp>
+          ))}
+        </Stagger>
+      )}
+
+      {selected && (
+        <>
+          <AcoesPacienteModal
+            item={selected}
+            open={modal === "acoes"}
+            onClose={fechar}
+            onStatusChange={onStatusChange}
+            onAtender={() => setModal("atendimento")}
+            onDesistir={() => setModal("desistencia")}
+          />
+          <DadosAtendimentoModal
+            item={selected}
+            open={modal === "atendimento"}
+            onClose={fechar}
+            onVoltar={() => setModal("acoes")}
+          />
+          <DesistenciaModal
+            item={selected}
+            open={modal === "desistencia"}
+            onClose={fechar}
+            onStatusChange={onStatusChange}
+          />
+        </>
+      )}
+
+      {checkInOpen && checkInAlvo && (
+        <CheckInModal
+          key={checkInAlvo.id}
+          agendado={checkInAlvo}
+          open={checkInOpen}
+          onClose={fecharCheckIn}
+        />
+      )}
+    </>
+  );
+}

@@ -1,0 +1,117 @@
+{
+  "bodyFont": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+  "inputs": [
+    {
+      "type": "text",
+      "name": "",
+      "id": "usuario",
+      "placeholder": ""
+    },
+    {
+      "type": "password",
+      "name": "",
+      "id": "senha",
+      "placeholder": ""
+    }
+  ],
+  "selects": [
+    {
+      "name": "",
+      "id": "",
+      "options": [
+        "Clínica 1",
+        "Clínica 2",
+        "Clínica 3",
+        "Clínica Centro"
+      ]
+    }
+  ],
+  "buttons": [
+    {
+      "text": "",
+      "tag": "BUTTON",
+      "color": "rgba(0, 0, 0, 0.5)",
+      "background": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none",
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "borderRadius": "4px",
+      "boxShadow": "none"
+    },
+    {
+      "text": "",
+      "tag": "BUTTON",
+      "color": "rgba(0, 0, 0, 0.5)",
+      "background": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none",
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "borderRadius": "4px",
+      "boxShadow": "none"
+    },
+    {
+      "text": "Selecione a clínica",
+      "tag": "BUTTON",
+      "color": "rgb(113, 113, 122)",
+      "background": "rgb(255, 255, 255)",
+      "backgroundImage": "none",
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "borderRadius": "8px",
+      "boxShadow": "none"
+    },
+    {
+      "text": "Entrar",
+      "tag": "BUTTON",
+      "color": "rgb(255, 255, 255)",
+      "background": "rgb(13, 184, 194)",
+      "backgroundImage": "none",
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "500",
+      "borderRadius": "8px",
+      "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0"
+    }
+  ],
+  "gradients": [
+    {
+      "tag": "DIV",
+      "text": "AGI\ncare\n\nSistema de Gestão Clínica Inte",
+      "color": "rgb(28, 28, 30)",
+      "background": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "linear-gradient(to right bottom in oklab, rgb(13, 184, 194) 0%, rgb(141, 225, 236) 50%, rgb(11, 224, 174) 100%)",
+      "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "borderRadius": "0px",
+      "boxShadow": "none"
+    }
+  ],
+  "h1": {
+    "tag": "H1",
+    "text": "AGI\ncare",
+    "color": "rgb(28, 28, 30)",
+    "background": "rgba(0, 0, 0, 0)",
+    "backgroundImage": "none",
+    "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+    "fontSize": "30px",
+    "fontWeight": "700",
+    "borderRadius": "0px",
+    "boxShadow": "none"
+  },
+  "h2": {
+    "tag": "H2",
+    "text": "Login",
+    "color": "rgb(26, 26, 26)",
+    "background": "rgba(0, 0, 0, 0)",
+    "backgroundImage": "none",
+    "fontFamily": "Inter, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
+    "fontSize": "24px",
+    "fontWeight": "400",
+    "borderRadius": "0px",
+    "boxShadow": "none"
+  }
+}
