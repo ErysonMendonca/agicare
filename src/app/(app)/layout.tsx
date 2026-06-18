@@ -1,6 +1,8 @@
 import { Sidebar } from "@/components/app/Sidebar";
 import { Topbar } from "@/components/app/Topbar";
 import { PageTransition } from "@/components/app/PageTransition";
+import { MotionProvider } from "@/components/app/MotionProvider";
+import { Toaster } from "@/components/ui/Toaster";
 import { getCurrentUser } from "@/lib/auth";
 import { getMyPermissions } from "@/lib/permissions";
 import { getMenuCounters, getNotificacoes } from "@/lib/data/dashboard";
@@ -38,25 +40,28 @@ export default async function AppLayout({
   );
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        user={user}
-        permissions={permissions}
-        counters={counters}
-        logoUrl={settings.branding.logoUrl}
-      />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar
+    <MotionProvider>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar
           user={user}
           permissions={permissions}
           counters={counters}
-          notificacoes={notificacoesVisiveis}
+          logoUrl={settings.branding.logoUrl}
         />
-        <main className="flex-1 overflow-y-auto p-6">
-          <PageTransition>{children}</PageTransition>
-        </main>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar
+            user={user}
+            permissions={permissions}
+            counters={counters}
+            notificacoes={notificacoesVisiveis}
+          />
+          <main className="flex-1 overflow-y-auto p-6">
+            <PageTransition>{children}</PageTransition>
+          </main>
+        </div>
       </div>
-    </div>
+      <Toaster />
+    </MotionProvider>
   );
 }
 
