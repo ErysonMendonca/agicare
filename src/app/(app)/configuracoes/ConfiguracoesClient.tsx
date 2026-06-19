@@ -38,6 +38,8 @@ import { uploadLogo } from "@/lib/actions/branding";
 import { changePassword } from "@/lib/actions/account";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
 import type { ClinicSettings } from "@/lib/data/settings";
+import type { AnamneseTemplate } from "@/lib/data/anamnese-templates.shared";
+import { AnamneseBuilder } from "./AnamneseBuilder";
 
 const tabs = [
   "Geral",
@@ -45,11 +47,18 @@ const tabs = [
   "Segurança",
   "Backup",
   "Marca",
+  "Anamnese",
 ] as const;
 
 type Tab = (typeof tabs)[number];
 
-export function ConfiguracoesClient({ settings }: { settings: ClinicSettings }) {
+export function ConfiguracoesClient({
+  settings,
+  anamneseTemplates,
+}: {
+  settings: ClinicSettings;
+  anamneseTemplates: AnamneseTemplate[];
+}) {
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
     salvarConfiguracoes,
@@ -467,12 +476,14 @@ export function ConfiguracoesClient({ settings }: { settings: ClinicSettings }) 
           </Card>
         </TabPane>
 
-        <div className="mt-6 flex justify-end">
-          <Button type="submit" variant="primary" disabled={pending}>
-            <Save className="h-4 w-4" />
-            {pending ? "Salvando..." : "Salvar Alterações"}
-          </Button>
-        </div>
+        {tabAtiva !== "Anamnese" && (
+          <div className="mt-6 flex justify-end">
+            <Button type="submit" variant="primary" disabled={pending}>
+              <Save className="h-4 w-4" />
+              {pending ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </div>
+        )}
       </form>
 
       {/* Troca da PRÓPRIA senha — formulário independente (fora do form de
@@ -481,6 +492,12 @@ export function ConfiguracoesClient({ settings }: { settings: ClinicSettings }) 
         <div className="mt-6">
           <AlterarSenhaCard policy={settings.security.passwordPolicy} />
         </div>
+      )}
+
+      {/* Construtor de anamnese — salvamento próprio (Server Action dedicada),
+          por isso vive fora do form de configurações. */}
+      {tabAtiva === "Anamnese" && (
+        <AnamneseBuilder templates={anamneseTemplates} />
       )}
     </>
   );
