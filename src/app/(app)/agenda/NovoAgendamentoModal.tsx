@@ -8,8 +8,9 @@ import {
   Stethoscope,
   CalendarDays,
   Clock,
-  MapPin,
+  Timer,
   Info,
+  UserPlus,
   ChevronLeft,
   ChevronRight,
   Check,
@@ -29,12 +30,25 @@ import { type Profissional } from "@/lib/data/professionals";
 import {
   createAppointment,
   listSlots,
+  listSlotsBySpecialty,
   enviarComprovante,
   type Slot,
 } from "@/lib/actions/appointments";
+import { criarPacienteAvulso } from "@/lib/actions/pacientes";
 
 const TIPOS = ["Consulta", "Retorno", "Exame", "Procedimento"];
-const CONSULTORIO = "Consultório 03 — 2º andar";
+/** Durações (min) ofertadas; a duração da escala é injetada dinamicamente. */
+const DURACOES = [15, 30, 45, 60];
+
+/** Soma `mins` a "HH:mm" e devolve "HH:mm" (clamp em 24h). */
+function horaFim(hhmm: string, mins: number): string {
+  if (!hhmm) return "";
+  const [h, m] = hhmm.split(":").map(Number);
+  const tot = (h || 0) * 60 + (m || 0) + mins;
+  return `${String(Math.floor(tot / 60) % 24).padStart(2, "0")}:${String(
+    tot % 60,
+  ).padStart(2, "0")}`;
+}
 
 type Passo = 1 | 2 | 3 | 4;
 
@@ -62,8 +76,15 @@ export function NovoAgendamentoModal({
   const [tipo, setTipo] = useState(TIPOS[0]);
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
   const [hora, setHora] = useState("");
+  const [duracao, setDuracao] = useState(30);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [protocolo, setProtocolo] = useState("");
+
+  // Paciente avulso (cadastro rápido durante o agendamento).
+  const [modoAvulso, setModoAvulso] = useState(false);
+  const [avulsoNome, setAvulsoNome] = useState("");
+  const [avulsoTel, setAvulsoTel] = useState("");
+  const [avulsoCpf, setAvulsoCpf] = useState("");
 
   // QR Code REAL do comprovante (gerado do protocolo, sem rede). Vazio até
   // haver protocolo válido (passo 4).
@@ -107,6 +128,17 @@ export function NovoAgendamentoModal({
   const paciente = pacientes.find((p) => p.id === pacienteId) ?? null;
   const profissional = profissionais.find((p) => p.id === profissionalId) ?? null;
 
+  // Inclui a duração da escala (se diferente das padrão) nas opções do select.
+  const duracaoOpcoes = useMemo(
+    () => Array.from(new Set([...DURACOES, duracao])).sort((a, b) => a - b),
+    [duracao],
+  );
+
+  // Rótulo legível do paciente escolhido (cadastrado ou avulso).
+  const pacienteLabel = modoAvulso
+    ? avulsoNome.trim() || "Paciente avulso"
+    : paciente?.nome ?? "—";
+
   function reset() {
     setPasso(1);
     setBusca("");
@@ -116,8 +148,13 @@ export function NovoAgendamentoModal({
     setTipo(TIPOS[0]);
     setData(new Date().toISOString().slice(0, 10));
     setHora("");
+    setDuracao(30);
     setSlots([]);
     setProtocolo("");
+    setModoAvulso(false);
+    setAvulsoNome("");
+    setAvulsoTel("");
+    setAvulsoCpf("");
   }
 
   function fechar() {
@@ -126,26 +163,56 @@ export function NovoAgendamentoModal({
   }
 
   function irParaHorarios() {
-    if (!pacienteId) return toast.error("Selecione o paciente.");
-    if (!profissionalId) return toast.error("Selecione o profissional.");
+    if (modoAvulso) {
+      if (!avulsoNome.trim() || !avulsoTel.trim() || !avulsoCpf.trim())
+        return toast.error("Preencha nome, telefone e CPF do paciente avulso.");
+    } else if (!pacienteId) {
+      return toast.error("Selecione o paciente.");
+    }
+    if (!profissionalId && !especialidade)
+      return toast.error("Selecione o profissional ou ao menos a especialidade.");
     if (!data) return toast.error("Informe a data do atendimento.");
     setHora("");
     startSlots(async () => {
-      const result = await listSlots(profissionalId, data);
-      setSlots(result);
+      // Com profissional: grade da escala dele. Sem profissional: grade
+      // agregada da escala da especialidade (atribuição posterior).
+      const grid = profissionalId
+        ? await listSlots(profissionalId, data)
+        : await listSlotsBySpecialty(especialidade, data);
+      setSlots(grid.slots);
+      setDuracao(grid.slotMinutes);
       setPasso(2);
     });
   }
 
   function confirmar() {
     startTransition(async () => {
+      // Paciente avulso: cadastra primeiro e usa o id retornado.
+      let patientId = pacienteId;
+      if (modoAvulso) {
+        const novo = await criarPacienteAvulso({
+          nome: avulsoNome.trim(),
+          telefone: avulsoTel.trim(),
+          cpf: avulsoCpf.trim(),
+        });
+        if (!novo?.ok || !novo.patientId) {
+          toast.error(
+            novo?.error ?? "Não foi possível cadastrar o paciente avulso.",
+          );
+          return;
+        }
+        patientId = novo.patientId;
+        setPacienteId(novo.patientId);
+      }
+
       const res = await createAppointment({
-        patient_id: pacienteId,
+        patient_id: patientId,
         professional_id: profissionalId,
         specialty: especialidade,
         service_type: tipo,
         date: data,
         time: hora,
+        slot_minutes: duracao,
       });
       if (res?.ok) {
         setProtocolo(res.protocol ?? "—");
@@ -172,7 +239,10 @@ export function NovoAgendamentoModal({
         channel,
         protocol: protocolo,
         patient_id: pacienteId,
-        to: channel === "sms" ? paciente?.telefone ?? "" : paciente?.email ?? "",
+        to:
+          channel === "sms"
+            ? paciente?.telefone ?? avulsoTel ?? ""
+            : paciente?.email ?? "",
       });
       if (res?.ok) {
         toast.success(
@@ -203,47 +273,107 @@ export function NovoAgendamentoModal({
 
       {passo === 1 && (
         <div className="space-y-4">
-          <div>
-            <span className="mb-1.5 block text-sm font-medium text-ink">
-              Buscar Paciente
-            </span>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          {/* Alterna entre paciente já cadastrado e cadastro avulso rápido. */}
+          <div
+            role="tablist"
+            aria-label="Origem do paciente"
+            className="grid grid-cols-2 gap-1 rounded-xl bg-muted-surface p-1"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!modoAvulso}
+              onClick={() => setModoAvulso(false)}
+              className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                !modoAvulso
+                  ? "bg-white text-brand-700 shadow-sm"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              <Search className="h-4 w-4" />
+              Paciente cadastrado
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={modoAvulso}
+              onClick={() => setModoAvulso(true)}
+              className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                modoAvulso
+                  ? "bg-white text-brand-700 shadow-sm"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              <UserPlus className="h-4 w-4" />
+              Paciente avulso
+            </button>
+          </div>
+
+          {modoAvulso ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Input
-                placeholder="Nome ou CPF..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="pl-9"
+                label="Nome completo"
+                placeholder="Nome do paciente"
+                value={avulsoNome}
+                onChange={(e) => setAvulsoNome(e.target.value)}
+                className="sm:col-span-2"
+              />
+              <Input
+                label="Telefone"
+                placeholder="(00) 00000-0000"
+                value={avulsoTel}
+                onChange={(e) => setAvulsoTel(e.target.value)}
+              />
+              <Input
+                label="CPF"
+                placeholder="000.000.000-00"
+                value={avulsoCpf}
+                onChange={(e) => setAvulsoCpf(e.target.value)}
               />
             </div>
-            <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
-              {pacientesFiltrados.length === 0 ? (
-                <li className="rounded-lg bg-muted-surface px-3 py-2 text-sm text-muted">
-                  Nenhum paciente encontrado.
-                </li>
-              ) : (
-                pacientesFiltrados.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      type="button"
-                      onClick={() => setPacienteId(p.id)}
-                      className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                        pacienteId === p.id
-                          ? "border-brand-400 bg-brand-50 text-brand-700"
-                          : "border-line bg-white text-ink hover:bg-muted-surface"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted" />
-                        {p.nome}
-                      </span>
-                      <span className="text-xs text-muted">{p.cpf || "—"}</span>
-                    </button>
+          ) : (
+            <div>
+              <span className="mb-1.5 block text-sm font-medium text-ink">
+                Buscar Paciente
+              </span>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                <Input
+                  placeholder="Nome ou CPF..."
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                {pacientesFiltrados.length === 0 ? (
+                  <li className="rounded-lg bg-muted-surface px-3 py-2 text-sm text-muted">
+                    Nenhum paciente encontrado.
                   </li>
-                ))
-              )}
-            </ul>
-          </div>
+                ) : (
+                  pacientesFiltrados.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => setPacienteId(p.id)}
+                        className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                          pacienteId === p.id
+                            ? "border-brand-400 bg-brand-50 text-brand-700"
+                            : "border-line bg-white text-ink hover:bg-muted-surface"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted" />
+                          {p.nome}
+                        </span>
+                        <span className="text-xs text-muted">{p.cpf || "—"}</span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select
@@ -260,11 +390,11 @@ export function NovoAgendamentoModal({
               ))}
             </Select>
             <Select
-              label="Profissional"
+              label="Profissional (opcional)"
               value={profissionalId}
               onChange={(e) => setProfissionalId(e.target.value)}
             >
-              <option value="">Selecione o profissional</option>
+              <option value="">A definir (por especialidade)</option>
               {profFiltrados.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nome}
@@ -292,10 +422,38 @@ export function NovoAgendamentoModal({
 
       {passo === 2 && (
         <div>
-          <p className="mb-3 flex items-center gap-1.5 text-sm text-muted">
-            <CalendarDays className="h-4 w-4" />
-            {dataFmt} · {profissional?.nome ?? "—"}
-          </p>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <p className="flex items-center gap-1.5 text-sm text-muted">
+              <CalendarDays className="h-4 w-4" />
+              {dataFmt} ·{" "}
+              {profissional?.nome ??
+                (especialidade ? `${especialidade} (a definir)` : "—")}
+            </p>
+            <label className="flex items-center gap-2 text-sm text-muted">
+              <Timer className="h-4 w-4" />
+              <span className="whitespace-nowrap">Duração</span>
+              <Select
+                aria-label="Duração do atendimento"
+                value={String(duracao)}
+                onChange={(e) => setDuracao(Number(e.target.value))}
+                className="min-w-28"
+              >
+                {duracaoOpcoes.map((d) => (
+                  <option key={d} value={d}>
+                    {d} min
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </div>
+          {hora && (
+            <p className="mb-3 text-xs text-muted">
+              Intervalo:{" "}
+              <span className="font-medium text-ink">
+                {hora} – {horaFim(hora, duracao)}
+              </span>
+            </p>
+          )}
           {slotPending ? (
             <p className="py-10 text-center text-sm text-muted">
               Carregando horários...
@@ -350,24 +508,25 @@ export function NovoAgendamentoModal({
             <ResumoLinha
               icon={<User className="h-4 w-4" />}
               label="Paciente"
-              valor={paciente?.nome ?? "—"}
+              valor={pacienteLabel}
             />
             <ResumoLinha
               icon={<Stethoscope className="h-4 w-4" />}
               label="Profissional"
-              valor={`${profissional?.nome ?? "—"}${
-                especialidade ? ` · ${especialidade}` : ""
-              }`}
+              valor={
+                profissional
+                  ? `${profissional.nome}${
+                      especialidade ? ` · ${especialidade}` : ""
+                    }`
+                  : especialidade
+                    ? `${especialidade} · A definir`
+                    : "—"
+              }
             />
             <ResumoLinha
               icon={<CalendarDays className="h-4 w-4" />}
-              label="Data e Hora"
-              valor={`${dataFmt} às ${hora}`}
-            />
-            <ResumoLinha
-              icon={<MapPin className="h-4 w-4" />}
-              label="Consultório"
-              valor={CONSULTORIO}
+              label="Data e Horário"
+              valor={`${dataFmt} · ${hora} – ${horaFim(hora, duracao)} (${duracao} min)`}
               last
             />
           </div>

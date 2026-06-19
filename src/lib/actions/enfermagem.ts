@@ -10,7 +10,9 @@ import { requireClinic } from "@/lib/tenant";
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
 function revalidate() {
-  revalidatePath("/enfermagem");
+  // Enfermagem virou aba do prontuário; revalida toda a árvore do prontuário.
+  // (Os clients também chamam router.refresh() após cada ação.)
+  revalidatePath("/prontuario", "layout");
 }
 
 /** Nome do profissional logado (desnormalizado nos registros de enfermagem). */

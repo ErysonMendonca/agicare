@@ -15,6 +15,12 @@ export type AgendaActionState =
 /** Slot de horário exibido na grade de seleção (passo 2 do agendamento). */
 export type Slot = { hora: string; ocupado: boolean };
 
+/**
+ * Grade de horários + a duração padrão do slot (slot_minutes da escala).
+ * A UI usa `slotMinutes` como duração default do agendamento.
+ */
+export type SlotGrid = { slots: Slot[]; slotMinutes: number };
+
 /** Revalida as rotas afetadas por mudanças na agenda. */
 function revalidateAgenda() {
   revalidatePath("/agenda");
@@ -44,16 +50,26 @@ function gerarProtocolo(): string {
 // ════════════════════════════════════════════════════════════════
 // Novo agendamento
 // ════════════════════════════════════════════════════════════════
-const createSchema = z.object({
-  patient_id: z.string().min(1, "Selecione o paciente."),
-  professional_id: z.string().min(1, "Selecione o profissional."),
-  specialty: z.string().trim().optional().or(z.literal("")),
-  service_type: z.string().trim().optional().or(z.literal("")),
-  date: z.string().min(1, "Informe a data."),
-  time: z.string().min(1, "Selecione o horário."),
-  slot_minutes: z.coerce.number().int().positive().default(30),
-  reason: z.string().trim().optional().or(z.literal("")),
-});
+const createSchema = z
+  .object({
+    patient_id: z.string().min(1, "Selecione o paciente."),
+    professional_id: z.string().trim().optional().or(z.literal("")),
+    specialty: z.string().trim().optional().or(z.literal("")),
+    service_type: z.string().trim().optional().or(z.literal("")),
+    date: z.string().min(1, "Informe a data."),
+    time: z.string().min(1, "Selecione o horário."),
+    slot_minutes: z.coerce.number().int().positive().default(30),
+    reason: z.string().trim().optional().or(z.literal("")),
+  })
+  // Profissional é opcional (agendamento por especialidade). Sem profissional,
+  // a especialidade passa a ser obrigatória para classificar o atendimento.
+  .refine(
+    (d) => Boolean(d.professional_id?.trim()) || Boolean(d.specialty?.trim()),
+    {
+      message: "Selecione o profissional ou ao menos a especialidade.",
+      path: ["professional_id"],
+    },
+  );
 
 export type CreateAppointmentInput = z.input<typeof createSchema>;
 
@@ -78,7 +94,8 @@ export async function createAppointment(
   const { error } = await supabase.from("appointments").insert({
     clinic_id: clinicId,
     patient_id: d.patient_id,
-    professional_id: d.professional_id,
+    professional_id: d.professional_id?.trim() || null,
+    specialty: d.specialty?.trim() || null,
     starts_at: startsAt,
     ends_at: endsAt,
     status: "agendado",
@@ -159,9 +176,13 @@ export async function trocarProfissional(
 ): Promise<AgendaActionState> {
   const parsed = trocarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  return updateAppointment(parsed.data.id, {
+  const patch: Record<string, unknown> = {
     professional_id: parsed.data.professional_id,
-  });
+  };
+  // Sincroniza a especialidade do agendamento com a do profissional atribuído
+  // (relevante p/ agendamentos criados por especialidade, antes "A definir").
+  if (parsed.data.specialty?.trim()) patch.specialty = parsed.data.specialty.trim();
+  return updateAppointment(parsed.data.id, patch);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -425,20 +446,79 @@ function gradePadrao(): string[] {
   return gerarHorarios("08:00", "18:00", 30);
 }
 
+/** "HH:mm" → minutos desde meia-noite. */
+function horaToMin(t: string): number {
+  const [h, m] = t.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+/** ISO → minutos desde meia-noite (hora local), coerente com isoToHora. */
+function isoToMin(iso: string): number {
+  const d = new Date(iso);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/** Intervalo ocupado [inícioMin, fimMin). */
+type Intervalo = [number, number];
+
+/**
+ * Deriva os intervalos ocupados [início, fim) dos agendamentos não-cancelados,
+ * usando a DURAÇÃO real (`ends_at`). Sem `ends_at`, assume `slotMinutes`.
+ */
+function ocupacaoIntervalos(
+  ags: Array<{ starts_at: unknown; ends_at?: unknown; status?: unknown }>,
+  slotMinutes: number,
+): Intervalo[] {
+  const out: Intervalo[] = [];
+  for (const a of ags) {
+    if (a.status === "cancelado") continue;
+    const ini = isoToMin(a.starts_at as string);
+    const fim = a.ends_at ? isoToMin(a.ends_at as string) : ini + slotMinutes;
+    out.push([ini, fim > ini ? fim : ini + slotMinutes]);
+  }
+  return out;
+}
+
+/** Um slot [hora, hora+slotMinutes) sobrepõe algum intervalo ocupado? */
+function sobrepoe(
+  hora: string,
+  slotMinutes: number,
+  intervalos: Intervalo[],
+): boolean {
+  const ini = horaToMin(hora);
+  const fim = ini + slotMinutes;
+  return intervalos.some(([i, f]) => i < fim && ini < f);
+}
+
+/** Quantos intervalos ocupados sobrepõem o slot [hora, hora+slotMinutes)? */
+function contarSobrepostos(
+  hora: string,
+  slotMinutes: number,
+  intervalos: Intervalo[],
+): number {
+  const ini = horaToMin(hora);
+  const fim = ini + slotMinutes;
+  return intervalos.reduce((n, [i, f]) => (i < fim && ini < f ? n + 1 : n), 0);
+}
+
 /**
  * Lista os horários (grade) para um profissional numa data, marcando ocupados.
  * Demo: grade padrão com alguns horários simulados como ocupados.
  * Real: deriva de `schedules` (dia da semana) + ocupação por `appointments`/`schedule_blocks`.
+ * Devolve também `slotMinutes` (duração padrão da escala) p/ a UI.
  */
 export async function listSlots(
   professionalId: string,
   dateISO: string,
-): Promise<Slot[]> {
-  if (!professionalId || !dateISO) return [];
+): Promise<SlotGrid> {
+  if (!professionalId || !dateISO) return { slots: [], slotMinutes: 30 };
 
   if (isDemoMode()) {
     const ocupados = new Set(["09:00", "10:30", "11:00", "14:30", "16:00"]);
-    return gradePadrao().map((hora) => ({ hora, ocupado: ocupados.has(hora) }));
+    return {
+      slots: gradePadrao().map((hora) => ({ hora, ocupado: ocupados.has(hora) })),
+      slotMinutes: 30,
+    };
   }
 
   const supabase = await createClient();
@@ -455,21 +535,22 @@ export async function listSlots(
     Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false,
   );
 
+  const slotMinutes = escala ? Number(escala.slot_minutes) || 30 : 30;
   const horarios = escala
     ? gerarHorarios(
         String(escala.start_time).slice(0, 5),
         String(escala.end_time).slice(0, 5),
-        Number(escala.slot_minutes) || 30,
+        slotMinutes,
       )
     : gradePadrao();
 
-  // Ocupação: agendamentos do dia + bloqueios.
+  // Ocupação: agendamentos do dia (considerando a DURAÇÃO real) + bloqueios.
   const dayStart = toIso(dateISO, "00:00");
   const dayEnd = addMinutes(toIso(dateISO, "00:00"), 24 * 60);
 
   const { data: ags } = await supabase
     .from("appointments")
-    .select("starts_at, status")
+    .select("starts_at, ends_at, status")
     .eq("professional_id", professionalId)
     .gte("starts_at", dayStart)
     .lt("starts_at", dayEnd);
@@ -480,17 +561,94 @@ export async function listSlots(
     .eq("professional_id", professionalId)
     .eq("block_date", dateISO);
 
-  const ocupados = new Set<string>();
-  for (const a of ags ?? []) {
-    if (a.status === "cancelado") continue;
-    const d = new Date(a.starts_at as string);
-    ocupados.add(
-      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
-    );
-  }
-  for (const b of blocks ?? []) {
-    ocupados.add(String(b.start_time).slice(0, 5));
+  // Intervalos [início, fim) ocupados — um slot é ocupado se sobrepõe qualquer
+  // intervalo (não basta bater a hora de início: agendamentos longos cobrem
+  // vários slots da grade) ou se está bloqueado.
+  const intervalos = ocupacaoIntervalos(ags ?? [], slotMinutes);
+  const bloqueados = new Set<string>();
+  for (const b of blocks ?? []) bloqueados.add(String(b.start_time).slice(0, 5));
+
+  return {
+    slots: horarios.map((hora) => ({
+      hora,
+      ocupado: bloqueados.has(hora) || sobrepoe(hora, slotMinutes, intervalos),
+    })),
+    slotMinutes,
+  };
+}
+
+/**
+ * Variante por ESPECIALIDADE (agendamento sem profissional definido).
+ * Grade derivada das escalas (`schedules`) da especialidade ativas no dia.
+ * Ocupação é AGREGADA: por slot, conta agendamentos não-cancelados da
+ * especialidade (coluna `appointments.specialty`) no dia; marca como ocupado
+ * quando atinge a capacidade (nº de profissionais ativos da especialidade).
+ * Ponto de atenção: é um modelo de capacidade aproximado — agendamentos já
+ * atribuídos a um profissional só contam aqui se tiverem `specialty` gravada.
+ */
+export async function listSlotsBySpecialty(
+  specialty: string,
+  dateISO: string,
+): Promise<SlotGrid> {
+  if (!specialty || !dateISO) return { slots: [], slotMinutes: 30 };
+
+  if (isDemoMode()) {
+    const ocupados = new Set(["09:00", "11:00", "15:00"]);
+    return {
+      slots: gradePadrao().map((hora) => ({ hora, ocupado: ocupados.has(hora) })),
+      slotMinutes: 30,
+    };
   }
 
-  return horarios.map((hora) => ({ hora, ocupado: ocupados.has(hora) }));
+  const supabase = await createClient();
+  const weekday = new Date(`${dateISO}T00:00:00`).getDay();
+
+  const { data: escalas } = await supabase
+    .from("schedules")
+    .select("slot_minutes, weekdays, start_time, end_time, active")
+    .eq("specialty", specialty)
+    .eq("active", true);
+
+  const escala = (escalas ?? []).find((e) =>
+    Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false,
+  );
+
+  const slotMinutes = escala ? Number(escala.slot_minutes) || 30 : 30;
+  const horarios = escala
+    ? gerarHorarios(
+        String(escala.start_time).slice(0, 5),
+        String(escala.end_time).slice(0, 5),
+        slotMinutes,
+      )
+    : gradePadrao();
+
+  // Capacidade = profissionais ativos da especialidade (mín. 1).
+  const { count: profCount } = await supabase
+    .from("professionals")
+    .select("id", { count: "exact", head: true })
+    .eq("specialty", specialty)
+    .eq("active", true);
+  const capacity = Math.max(1, profCount ?? 1);
+
+  const dayStart = toIso(dateISO, "00:00");
+  const dayEnd = addMinutes(toIso(dateISO, "00:00"), 24 * 60);
+
+  const { data: ags } = await supabase
+    .from("appointments")
+    .select("starts_at, ends_at, status")
+    .eq("specialty", specialty)
+    .gte("starts_at", dayStart)
+    .lt("starts_at", dayEnd);
+
+  // Conta agendamentos que SOBREPÕEM cada slot (considera a duração real), não
+  // só os que começam exatamente na hora do slot. Ocupado ao atingir a capacidade.
+  const intervalos = ocupacaoIntervalos(ags ?? [], slotMinutes);
+
+  return {
+    slots: horarios.map((hora) => ({
+      hora,
+      ocupado: contarSobrepostos(hora, slotMinutes, intervalos) >= capacity,
+    })),
+    slotMinutes,
+  };
 }

@@ -2,12 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Printer, Ticket, UserCheck } from "lucide-react";
+import { Printer, Ticket, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { type FilaItem } from "@/lib/data/queue";
 import { checkInTotem } from "@/lib/actions/queue";
+import { completarCadastroAvulso } from "@/lib/actions/pacientes";
 import { FichaImpressao } from "./FichaImpressao";
 
 type Prioridade = "normal" | "preferencial" | "urgente";
@@ -53,6 +55,16 @@ export function CheckInModal({
   const [senha, setSenha] = useState<string | null>(null);
   const [emitidoEm, setEmitidoEm] = useState<Date | null>(null);
 
+  // Paciente AVULSO (0049): cadastro mínimo pendente → completar antes do check-in.
+  const avulso = agendado?.registrationComplete === false && !!agendado?.patientId;
+
+  // Campos do complemento de cadastro (só usados quando avulso).
+  const [nome, setNome] = useState(agendado?.paciente ?? "");
+  const [nascimento, setNascimento] = useState("");
+  const [email, setEmail] = useState("");
+  const [convenio, setConvenio] = useState("");
+  const [plano, setPlano] = useState("");
+
   // O componente é montado a cada abertura (com key no pai), então o estado
   // inicial já nasce limpo — sem necessidade de reset via efeito.
   if (!agendado) return null;
@@ -60,13 +72,29 @@ export function CheckInModal({
   function confirmar() {
     if (!agendado) return;
     startTransition(async () => {
+      // Avulso: completa o cadastro (registration_complete=true) ANTES do check-in.
+      if (avulso && agendado.patientId) {
+        const comp = await completarCadastroAvulso({
+          id: agendado.patientId,
+          full_name: nome,
+          birth_date: nascimento,
+          email: email || undefined,
+          convenio: convenio || undefined,
+          plan: plano || undefined,
+        });
+        if (!comp.ok) {
+          toast.error(comp.error ?? "Não foi possível completar o cadastro.");
+          return;
+        }
+      }
+
       const res = await checkInTotem({
         appointmentId: agendado.appointmentId ?? undefined,
         patientId: agendado.patientId,
-        patientName: agendado.paciente,
+        patientName: avulso ? nome : agendado.paciente,
         priority: prioridade,
         specialty: limpar(agendado.especialidade),
-        insurance: limpar(agendado.convenio),
+        insurance: avulso ? convenio || null : limpar(agendado.convenio),
       });
 
       if (res?.ticketCode) {
@@ -95,7 +123,9 @@ export function CheckInModal({
       subtitle={
         emitida
           ? "Imprima a ficha e oriente o paciente a aguardar a chamada."
-          : "Confirme a prioridade para emitir a senha de atendimento."
+          : avulso
+            ? "Cadastro pendente: complete os dados do paciente para emitir a senha."
+            : "Confirme a prioridade para emitir a senha de atendimento."
       }
       footer={
         emitida ? (
@@ -115,7 +145,11 @@ export function CheckInModal({
             </Button>
             <Button variant="primary" onClick={confirmar} disabled={pending}>
               <UserCheck className="h-4 w-4" />
-              {pending ? "Emitindo…" : "Confirmar e Emitir Senha"}
+              {pending
+                ? "Emitindo…"
+                : avulso
+                  ? "Completar e Emitir Senha"
+                  : "Confirmar e Emitir Senha"}
             </Button>
           </>
         )
@@ -139,6 +173,57 @@ export function CheckInModal({
           </span>
         </div>
       </div>
+
+      {!emitida && avulso && (
+        <fieldset className="mt-5">
+          <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium text-ink">
+            <UserPlus className="h-4 w-4 text-brand-500" />
+            Complementar cadastro
+          </legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input
+              id="avulso-nome"
+              label="Nome completo *"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              placeholder="Nome do paciente"
+            />
+            <Input
+              id="avulso-nascimento"
+              label="Data de nascimento *"
+              type="date"
+              value={nascimento}
+              onChange={(e) => setNascimento(e.target.value)}
+            />
+            <Input
+              id="avulso-email"
+              label="E-mail"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="opcional"
+            />
+            <Input
+              id="avulso-convenio"
+              label="Convênio"
+              value={convenio}
+              onChange={(e) => setConvenio(e.target.value)}
+              placeholder="Particular, Unimed…"
+            />
+            {convenio.trim() &&
+              convenio.trim().toLowerCase() !== "sus" &&
+              convenio.trim().toLowerCase() !== "particular" && (
+                <Input
+                  id="avulso-plano"
+                  label="Plano *"
+                  value={plano}
+                  onChange={(e) => setPlano(e.target.value)}
+                  placeholder="Plano do convênio"
+                />
+              )}
+          </div>
+        </fieldset>
+      )}
 
       {!emitida ? (
         <fieldset className="mt-5">

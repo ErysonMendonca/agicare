@@ -24,6 +24,12 @@ export type FilaItem = {
   appointmentId?: string | null;
   /** true = paciente agendado que ainda NÃO fez check-in (não está na fila). */
   agendado?: boolean;
+  /**
+   * Cadastro do paciente completo? `false` = paciente AVULSO (criado só com
+   * Nome/Telefone/CPF no agendamento, 0049) — exige completar o cadastro no
+   * check-in. `undefined`/`true` = completo. Só é populado para agendados.
+   */
+  registrationComplete?: boolean;
 };
 
 /** Mapeia status do banco → rótulo + tom do Badge. */
@@ -215,6 +221,8 @@ const MOCK_AGENDADOS: FilaItem[] = [
     priorityRaw: "normal",
     appointmentId: "mock-ag-1",
     agendado: true,
+    // Demo: paciente avulso (cadastro mínimo) p/ exercitar o complemento no check-in.
+    registrationComplete: false,
   },
   {
     id: "mock-ag-2",
@@ -284,7 +292,7 @@ export async function listAgendadosHoje(opts?: {
     const { data, error } = await supabase
       .from("appointments")
       .select(
-        "id, starts_at, patient_id, status, patients(full_name), professionals(specialty, profiles(full_name))",
+        "id, starts_at, patient_id, status, specialty, patients(full_name, registration_complete), professionals(specialty, profiles(full_name))",
       )
       .gte("starts_at", startISO)
       .lt("starts_at", endISO)
@@ -302,7 +310,10 @@ export async function listAgendadosHoje(opts?: {
         return !(pid && jaNaFila.has(pid));
       })
       .map((r) => {
-        const patient = one<{ full_name: string | null }>(r.patients);
+        const patient = one<{
+          full_name: string | null;
+          registration_complete: boolean | null;
+        }>(r.patients);
         const professional = one<{
           specialty: string | null;
           profiles: { full_name: string | null } | null;
@@ -317,7 +328,9 @@ export async function listAgendadosHoje(opts?: {
           codigo: "—",
           paciente: patient?.full_name ?? "—",
           hora: formatHora(r.starts_at as string | null),
-          especialidade: professional?.specialty ?? "—",
+          // Agendamento por especialidade (sem profissional): usa appointments.specialty.
+          especialidade:
+            professional?.specialty ?? (r.specialty as string | null) ?? "—",
           medico: profProfile?.full_name ?? "—",
           convenio: "—",
           status: mapStatus("agendado"),
@@ -325,6 +338,8 @@ export async function listAgendadosHoje(opts?: {
           priorityRaw: "normal",
           appointmentId: r.id as string,
           agendado: true,
+          // Avulso (0049): cadastro pendente até ser completado no check-in.
+          registrationComplete: patient?.registration_complete !== false,
         } satisfies FilaItem;
       })
       .filter((item) => !opts?.specialty || item.especialidade === opts.specialty);

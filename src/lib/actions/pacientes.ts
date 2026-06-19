@@ -174,6 +174,181 @@ export async function createPacienteCompleto(
   return { ok: true, patientId: novo.id as string, clinicId };
 }
 
+// ── Paciente AVULSO (cadastro mínimo no agendamento — 0049) ─────────
+// LGPD: no agendamento avulso guardamos só o dado MÍNIMO (Nome/Telefone/CPF).
+// O cadastro fica `registration_complete=false` e é COMPLETADO no check-in.
+const avulsoSchema = z.object({
+  nome: z.string().trim().min(2, "Informe o nome do paciente."),
+  telefone: z.string().trim().min(8, "Informe um telefone válido."),
+  cpf: z
+    .string()
+    .trim()
+    .min(1, "Informe o CPF.")
+    .refine(isValidCPF, "CPF inválido (dígito verificador)."),
+});
+
+/**
+ * Cria um paciente AVULSO (cadastro mínimo) para o agendamento avulso.
+ * Anti-duplicidade: se já existir paciente com o mesmo CPF na clínica, REUSA
+ * (retorna o id existente, sem duplicar) — espelha o índice único 0046.
+ * Guarda só Nome/Telefone/CPF e `registration_complete=false`; o restante é
+ * preenchido no check-in (completarCadastroAvulso). Demo: simula sucesso.
+ *
+ * Assinatura é contrato com o módulo de Agenda — não alterar sem alinhar.
+ */
+export async function criarPacienteAvulso(input: {
+  nome: string;
+  telefone: string;
+  cpf: string;
+}): Promise<{ ok?: boolean; patientId?: string; error?: string }> {
+  const parsed = avulsoSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+  const d = parsed.data;
+
+  if (isDemoMode()) {
+    return { ok: true, patientId: `demo-avulso-${Date.now()}` };
+  }
+
+  const guard = await requirePacientesAccess();
+  if ("error" in guard) return { error: guard.error };
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+
+  // Anti-duplicidade: reusa o paciente da clínica com o mesmo CPF (só-dígitos).
+  const existenteId = await acharPacientePorCpf(supabase, clinicId, d.cpf);
+  if (existenteId) return { ok: true, patientId: existenteId };
+
+  const { data: novo, error } = await supabase
+    .from("patients")
+    .insert({
+      clinic_id: clinicId,
+      full_name: d.nome,
+      phone: d.telefone,
+      cpf: d.cpf,
+      registration_complete: false,
+    })
+    .select("id")
+    .single();
+
+  if (error || !novo) {
+    // Corrida no índice único 0046 (outro request gravou o mesmo CPF) → reusa.
+    if (error?.code === "23505") {
+      const id = await acharPacientePorCpf(supabase, clinicId, d.cpf);
+      if (id) return { ok: true, patientId: id };
+      return { error: "CPF já cadastrado nesta clínica." };
+    }
+    return { error: "Não foi possível criar o paciente." };
+  }
+
+  revalidatePath("/pacientes");
+  return { ok: true, patientId: novo.id as string };
+}
+
+// Completar cadastro do avulso (no check-in): preenche os campos faltantes e
+// marca registration_complete=true. Nome + nascimento são o mínimo p/ concluir.
+const completarAvulsoSchema = z
+  .object({
+    id: z.string().trim().min(1, "Paciente inválido."),
+    full_name: z.string().trim().min(2, "Informe o nome completo."),
+    birth_date: z.string().trim().min(1, "Informe a data de nascimento."),
+    email: z.string().trim().email("E-mail inválido.").optional().or(z.literal("")),
+    convenio: texto,
+    plan: texto,
+    phone: texto,
+    cpf: texto,
+  })
+  .refine((d) => !d.cpf || isValidCPF(d.cpf), {
+    message: "CPF inválido (dígito verificador).",
+    path: ["cpf"],
+  })
+  .refine(
+    (d) =>
+      !d.convenio ||
+      d.convenio.toLowerCase() === "sus" ||
+      d.convenio.toLowerCase() === "particular" ||
+      !!d.plan,
+    { message: "Convênio (não-SUS) exige o plano.", path: ["plan"] },
+  );
+
+/**
+ * Completa o cadastro de um paciente AVULSO no check-in: grava os campos
+ * informados e seta `registration_complete=true`. É UPDATE PARCIAL — só toca
+ * nas colunas enviadas (não zera o que não veio no formulário, ao contrário do
+ * updatePaciente, que é o overwrite completo das 3 abas). Reusa as guardas/
+ * helpers do módulo (requirePacientesAccess, anti-duplicidade de CPF). Demo:
+ * simula sucesso.
+ */
+export async function completarCadastroAvulso(input: {
+  id: string;
+  full_name: string;
+  birth_date: string;
+  email?: string;
+  convenio?: string;
+  plan?: string;
+  phone?: string;
+  cpf?: string;
+}): Promise<{ ok?: boolean; patientId?: string; error?: string }> {
+  const parsed = completarAvulsoSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+  const d = parsed.data;
+
+  if (isDemoMode()) return { ok: true, patientId: d.id };
+
+  const guard = await requirePacientesAccess();
+  if ("error" in guard) return { error: guard.error };
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+
+  // Se o CPF for ajustado aqui, não pode colidir com OUTRO paciente da clínica.
+  if (d.cpf) {
+    const dup = await acharDuplicadoExcluindo(
+      supabase,
+      clinicId,
+      { cpf: d.cpf, cns: "" },
+      d.id,
+    );
+    if (dup) return { error: dup };
+  }
+
+  const patch: Record<string, unknown> = {
+    registration_complete: true,
+    full_name: d.full_name,
+    birth_date: d.birth_date,
+  };
+  if (d.email) patch.email = d.email;
+  if (d.convenio) patch.convenio = d.convenio;
+  if (d.plan) patch.plan = d.plan;
+  if (d.phone) patch.phone = d.phone;
+  if (d.cpf) patch.cpf = d.cpf;
+
+  const { data: upd, error } = await supabase
+    .from("patients")
+    .update(patch)
+    .eq("id", d.id)
+    .eq("clinic_id", clinicId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "23505") {
+      return { error: "CPF já cadastrado para outro paciente nesta clínica." };
+    }
+    return { error: "Não foi possível completar o cadastro." };
+  }
+  if (!upd) return { error: "Paciente não encontrado nesta clínica." };
+
+  revalidatePath("/pacientes");
+  revalidatePath(`/pacientes/${d.id}`);
+  revalidatePath("/fila");
+  return { ok: true, patientId: d.id };
+}
+
 const obitoSchema = z.object({
   id: z.string().min(1, "Paciente inválido."),
   death_date: z.string().trim().min(1, "Informe a data do óbito."),
@@ -515,6 +690,41 @@ async function acharDuplicadoExcluindo(
 
   const nome = (colide.full_name as string | null) ?? "outro paciente";
   return `CPF/CNS já cadastrado para ${nome} nesta clínica.`;
+}
+
+/**
+ * Anti-duplicidade do AVULSO: acha o id do paciente da clínica com o mesmo CPF
+ * (comparado por dígitos, com e sem máscara). Retorna o id ou null. Mesma
+ * normalização/sanitização do `.or()` da busca do cadastro. Em demo nem chega
+ * aqui (a action retorna antes).
+ */
+async function acharPacientePorCpf(
+  supabase: ServerSupabase,
+  clinicId: string,
+  cpfRaw: string,
+): Promise<string | null> {
+  const cpf = (cpfRaw ?? "").replace(/\D/g, "");
+  if (!cpf) return null;
+
+  const safe = (v: string) => (v ?? "").replace(/[(),]/g, "");
+  const ors = new Set<string>();
+  ors.add(`cpf.eq.${cpf}`);
+  ors.add(`cpf.eq.${formatCpf(cpf)}`);
+  const raw = safe(cpfRaw);
+  if (raw) ors.add(`cpf.eq.${raw}`);
+
+  const { data, error } = await supabase
+    .from("patients")
+    .select("id, cpf")
+    .eq("clinic_id", clinicId)
+    .or([...ors].join(","))
+    .limit(10);
+  if (error || !data) return null;
+
+  const found = data.find(
+    (p) => ((p.cpf as string | null) ?? "").replace(/\D/g, "") === cpf,
+  );
+  return found ? (found.id as string) : null;
 }
 
 // ── Anexo de prontuário manual (Storage: bucket `prontuarios`) ──────

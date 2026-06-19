@@ -19,7 +19,6 @@ export type ModuleSlug =
   | "pacientes"
   | "agenda"
   | "prontuario"
-  | "enfermagem"
   | "procedimentos"
   | "laboratorio"
   | "estoque"
@@ -46,7 +45,6 @@ export const MODULES: ModuleSlug[] = [
   "pacientes",
   "agenda",
   "prontuario",
-  "enfermagem",
   "procedimentos",
   "laboratorio",
   "estoque",
@@ -64,7 +62,6 @@ export const MODULE_LABELS: Record<ModuleSlug, string> = {
   pacientes: "Pacientes",
   agenda: "Agenda",
   prontuario: "Prontuário",
-  enfermagem: "Enfermagem",
   procedimentos: "Procedimentos",
   laboratorio: "Laboratório",
   estoque: "Estoque",

@@ -53,7 +53,12 @@ const ABAS: Array<{ key: TabKey; label: string; icon: LucideIcon }> = [
   { key: "sae", label: "SAE", icon: Brain },
 ];
 
-export function EnfermagemClient({
+/**
+ * Enfermagem dentro do prontuário do paciente. Reaproveita os 8 tabs do módulo
+ * (mesma pasta). O paciente é fixo (vem do prontuário), então `pacientes` é uma
+ * lista de 1 item que pré-seleciona o paciente nos formulários dos tabs.
+ */
+export function EnfermagemProntuarioClient({
   pacientes,
   sinais,
   anotacoes,
@@ -80,13 +85,19 @@ export function EnfermagemClient({
 
   return (
     <>
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div
+        role="tablist"
+        aria-label="Seções de enfermagem"
+        className="flex flex-wrap gap-2"
+      >
         {ABAS.map(({ key, label, icon: Icone }) => {
           const ativa = aba === key;
           return (
             <button
               key={key}
               type="button"
+              role="tab"
+              aria-selected={ativa}
               onClick={() => setAba(key)}
               className={
                 ativa

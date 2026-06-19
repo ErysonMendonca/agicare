@@ -1,22 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   CalendarSearch,
   User,
   Stethoscope,
+  UserPlus,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import {
   type Atendimento,
   type AppointmentStatus,
 } from "@/lib/data/appointments";
 import { type Profissional } from "@/lib/data/professionals";
+import { trocarProfissional } from "@/lib/actions/appointments";
 import { AgendaItemActions } from "./AgendaItemActions";
 
 /** Opções de status do filtro (rótulos pt-BR alinhados ao data layer). */
@@ -169,7 +175,16 @@ export function AgendaList({
                       </div>
                     </div>
                     <div className="flex items-center gap-2 self-start sm:self-center">
+                      {!a.profissionalId && (
+                        <Badge status="warn">A definir</Badge>
+                      )}
                       <Badge status={a.badge}>{a.statusLabel}</Badge>
+                      {!a.profissionalId && (
+                        <AtribuirProfissional
+                          atendimento={a}
+                          profissionais={profissionais}
+                        />
+                      )}
                       <AgendaItemActions
                         atendimento={a}
                         profissionais={profissionais}
@@ -182,6 +197,126 @@ export function AgendaList({
           </Card>
         </FadeInUp>
       </Stagger>
+    </>
+  );
+}
+
+/**
+ * Atribui um profissional a um agendamento criado por especialidade
+ * (sem profissional). Reaproveita a Server Action `trocarProfissional`.
+ * A lista de profissionais é filtrada pela especialidade do agendamento
+ * (quando conhecida; caso contrário oferece todos).
+ */
+function AtribuirProfissional({
+  atendimento,
+  profissionais,
+}: {
+  atendimento: Atendimento;
+  profissionais: Profissional[];
+}) {
+  const router = useRouter();
+  const [aberto, setAberto] = useState(false);
+  const [profissionalId, setProfissionalId] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const temEspecialidade =
+    Boolean(atendimento.especialidade) && atendimento.especialidade !== "—";
+
+  const opcoes = useMemo(() => {
+    if (!temEspecialidade) return profissionais;
+    const filtrados = profissionais.filter(
+      (p) => p.especialidade === atendimento.especialidade,
+    );
+    return filtrados.length > 0 ? filtrados : profissionais;
+  }, [profissionais, atendimento.especialidade, temEspecialidade]);
+
+  const profEscolhido = profissionais.find((p) => p.id === profissionalId) ?? null;
+
+  function confirmar() {
+    if (!profissionalId) {
+      toast.error("Selecione o profissional.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await trocarProfissional({
+        id: atendimento.id,
+        professional_id: profissionalId,
+        specialty: profEscolhido?.especialidade ?? atendimento.especialidade,
+      });
+      if (res?.ok) {
+        toast.success("Profissional atribuído.");
+        setAberto(false);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível atribuir o profissional.");
+      }
+    });
+  }
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setAberto(true)}
+        title="Atribuir profissional"
+      >
+        <UserPlus className="h-3.5 w-3.5" />
+        Atribuir
+      </Button>
+
+      <Modal
+        open={aberto}
+        onClose={() => setAberto(false)}
+        title="Atribuir Profissional"
+        subtitle={atendimento.paciente}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAberto(false)}>
+              Fechar
+            </Button>
+            <Button variant="primary" onClick={confirmar} disabled={pending}>
+              <UserPlus className="h-4 w-4" />
+              {pending ? "Atribuindo..." : "Atribuir"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Agendamento de{" "}
+            <span className="font-medium text-ink">{atendimento.paciente}</span> em{" "}
+            <span className="font-medium text-ink">
+              {atendimento.data} às {atendimento.hora}
+            </span>
+            {temEspecialidade ? (
+              <>
+                {" "}
+                ·{" "}
+                <span className="font-medium text-ink">
+                  {atendimento.especialidade}
+                </span>
+              </>
+            ) : null}
+            .
+          </p>
+          <Select
+            label="Profissional"
+            value={profissionalId}
+            onChange={(e) => setProfissionalId(e.target.value)}
+          >
+            <option value="">Selecione o profissional</option>
+            {opcoes.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+                {p.especialidade && p.especialidade !== "—"
+                  ? ` · ${p.especialidade}`
+                  : ""}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </Modal>
     </>
   );
 }
