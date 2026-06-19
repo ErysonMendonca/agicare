@@ -45,6 +45,15 @@
   --color-status-danger: #dc2626;  /* urgente (error) */
   --color-status-warn: #d97706;    /* preferencial (warning) */
 
+  /* KPI tones (StatCard) — cor POR SIGNIFICADO; fg legível + bg suave.
+     neutral=contagem/total · success=positivo/financeiro · info=tempo/agendado
+     · warn=atenção · danger=crítico. Dark sobrescrito em html.dark. */
+  --color-kpi-neutral: #0a7d88;  --color-kpi-neutral-bg: #cdeef0;  --color-kpi-neutral-solid: #0a96a3;
+  --color-kpi-success: #07795b;  --color-kpi-success-bg: #cfeee1;  --color-kpi-success-solid: #0a8f6e;
+  --color-kpi-info: #1d4ed8;     --color-kpi-info-bg: #dde7ff;     --color-kpi-info-solid: #2563eb;
+  --color-kpi-warn: #b45309;     --color-kpi-warn-bg: #ffe8cc;     --color-kpi-warn-solid: #c2660a;
+  --color-kpi-danger: #b91c1c;   --color-kpi-danger-bg: #fbd9d9;   --color-kpi-danger-solid: #c81e1e;
+
   --radius-card: 12px;
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
 }
@@ -70,6 +79,13 @@ html.dark {
   --color-ink: #e8f0f0;           /* foreground */
   --color-muted: #93a8a8;         /* muted-foreground */
   --color-neutral: #6b7d7d;
+
+  /* KPI tones — fg mais claro + bg tint escuro p/ contraste no surface dark */
+  --color-kpi-neutral: #5fdce0;  --color-kpi-neutral-bg: #14403f;
+  --color-kpi-success: #2fd9a8;  --color-kpi-success-bg: #123d31;
+  --color-kpi-info: #93b4ff;     --color-kpi-info-bg: #1b3057;
+  --color-kpi-warn: #f0a93a;     --color-kpi-warn-bg: #3d3015;
+  --color-kpi-danger: #f47878;   --color-kpi-danger-bg: #43201f;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
 }

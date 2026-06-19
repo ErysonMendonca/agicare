@@ -40,7 +40,7 @@ export default async function AgendaPage() {
             icon={<CalendarDays className="h-5 w-5" />}
             value={kpis.total}
             label="Total de Agendamentos"
-            tone="brand"
+            tone="neutral"
           />
         </FadeInUp>
         <FadeInUp>
@@ -48,7 +48,7 @@ export default async function AgendaPage() {
             icon={<Clock className="h-5 w-5" />}
             value={kpis.agendados}
             label="Agendados"
-            tone="blue"
+            tone="info"
           />
         </FadeInUp>
         <FadeInUp>
@@ -56,7 +56,7 @@ export default async function AgendaPage() {
             icon={<CheckCircle2 className="h-5 w-5" />}
             value={kpis.confirmados}
             label="Confirmados"
-            tone="green"
+            tone="success"
           />
         </FadeInUp>
         <FadeInUp>
@@ -64,7 +64,7 @@ export default async function AgendaPage() {
             icon={<Activity className="h-5 w-5" />}
             value={kpis.emAtendimento}
             label="Em Atendimento"
-            tone="orange"
+            tone="info"
           />
         </FadeInUp>
         <FadeInUp>
@@ -72,7 +72,7 @@ export default async function AgendaPage() {
             icon={<CheckCheck className="h-5 w-5" />}
             value={kpis.finalizados}
             label="Finalizados"
-            tone="purple"
+            tone="success"
           />
         </FadeInUp>
       </Stagger>

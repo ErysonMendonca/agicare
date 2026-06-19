@@ -36,7 +36,7 @@ export default async function ProfissionaisPage() {
             icon={<Users className="h-5 w-5" />}
             value={String(total)}
             label="Total de Profissionais"
-            tone="brand"
+            tone="neutral"
           />
         </FadeInUp>
         <FadeInUp>
@@ -44,7 +44,7 @@ export default async function ProfissionaisPage() {
             icon={<Stethoscope className="h-5 w-5" />}
             value={String(clinica)}
             label="Equipe Clínica"
-            tone="blue"
+            tone="neutral"
           />
         </FadeInUp>
         <FadeInUp>
@@ -52,7 +52,7 @@ export default async function ProfissionaisPage() {
             icon={<Briefcase className="h-5 w-5" />}
             value={String(administrativa)}
             label="Equipe Administrativa"
-            tone="purple"
+            tone="neutral"
           />
         </FadeInUp>
         <FadeInUp>
@@ -60,7 +60,7 @@ export default async function ProfissionaisPage() {
             icon={<CircleCheck className="h-5 w-5" />}
             value={String(ativos)}
             label="Profissionais Ativos"
-            tone="green"
+            tone="success"
           />
         </FadeInUp>
       </Stagger>

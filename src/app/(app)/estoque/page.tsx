@@ -74,7 +74,7 @@ export default async function EstoquePage() {
             icon={<Boxes className="h-5 w-5" />}
             value={String(totalProdutos)}
             label="Total de Produtos"
-            tone="brand"
+            tone="neutral"
           />
         </FadeInUp>
         <FadeInUp>
@@ -82,7 +82,7 @@ export default async function EstoquePage() {
             icon={<ClipboardList className="h-5 w-5" />}
             value={String(solicitacoesPendentes)}
             label="Solicitações Pendentes"
-            tone="orange"
+            tone="warn"
           />
         </FadeInUp>
         <FadeInUp>
@@ -90,7 +90,7 @@ export default async function EstoquePage() {
             icon={<AlertCircle className="h-5 w-5" />}
             value={String(totalCriticos)}
             label="Itens Críticos"
-            tone="brand"
+            tone="danger"
           />
         </FadeInUp>
         <FadeInUp>
@@ -98,7 +98,7 @@ export default async function EstoquePage() {
             icon={<ShoppingCart className="h-5 w-5" />}
             value={String(comprasPendentes)}
             label="Compras Pendentes"
-            tone="green"
+            tone="warn"
           />
         </FadeInUp>
       </Stagger>

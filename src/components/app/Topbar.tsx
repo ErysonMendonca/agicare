@@ -7,6 +7,7 @@ import {
   Bell,
   Search,
   PanelLeftClose,
+  Menu,
   Package,
   Users,
   ReceiptText,
@@ -15,6 +16,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { initials } from "@/lib/utils";
 import { NAV_GROUPS } from "./nav";
+import { useUIStore } from "@/lib/store/ui";
 import type { PermissionMap } from "@/lib/permissions.shared";
 import type { Notificacao, NotifTipo } from "@/lib/data/dashboard";
 
@@ -47,6 +49,8 @@ export function Topbar({
   notificacoes?: Notificacao[];
 }) {
   const router = useRouter();
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const inputRef = useRef<HTMLInputElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -121,8 +125,18 @@ export function Topbar({
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-4 border-b border-line bg-surface px-5">
-      <button className="text-muted hover:text-ink" aria-label="Recolher menu">
-        <PanelLeftClose className="h-5 w-5" />
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        className="rounded-lg p-1 text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        aria-label={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+        aria-expanded={!sidebarCollapsed}
+      >
+        {sidebarCollapsed ? (
+          <Menu className="h-5 w-5" />
+        ) : (
+          <PanelLeftClose className="h-5 w-5" />
+        )}
       </button>
 
       <div className="relative max-w-md flex-1">

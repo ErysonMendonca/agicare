@@ -99,8 +99,8 @@ export default function LoginPage() {
               <input
                 id="usuario"
                 name="usuario"
-                defaultValue="João"
-                className="h-10 w-full rounded-lg border border-line bg-white px-3 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                placeholder="Digite seu usuário"
+                className="h-10 w-full rounded-lg border border-line bg-white px-3 text-sm placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
             </label>
 
@@ -111,8 +111,8 @@ export default function LoginPage() {
                   id="senha"
                   name="senha"
                   type={showPwd ? "text" : "password"}
-                  defaultValue="123456"
-                  className="h-10 w-full rounded-lg border border-line bg-white px-3 pr-10 text-sm focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  placeholder="Digite sua senha"
+                  className="h-10 w-full rounded-lg border border-line bg-white px-3 pr-10 text-sm placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 />
                 <button
                   type="button"
@@ -137,11 +137,6 @@ export default function LoginPage() {
           </form>
         )}
 
-        <p className="mt-5 text-center text-xs text-muted">
-          <span className="font-medium text-brand-600">Demo:</span> Use qualquer nome
-          (ex: João) com senha{" "}
-          <span className="font-medium text-brand-600">123456</span>
-        </p>
       </div>
 
       <div className="mt-6 text-center text-xs text-white/80">

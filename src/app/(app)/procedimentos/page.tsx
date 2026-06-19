@@ -180,7 +180,7 @@ export default async function ProcedimentosPage() {
             icon={<ClipboardList className="h-5 w-5" />}
             value={String(total)}
             label="Total de Procedimentos"
-            tone="brand"
+            tone="neutral"
           />
         </FadeInUp>
         <FadeInUp>
@@ -188,7 +188,7 @@ export default async function ProcedimentosPage() {
             icon={<CheckCircle2 className="h-5 w-5" />}
             value={String(ativos)}
             label="Procedimentos Ativos"
-            tone="green"
+            tone="success"
           />
         </FadeInUp>
         <FadeInUp>
@@ -196,7 +196,7 @@ export default async function ProcedimentosPage() {
             icon={<DollarSign className="h-5 w-5" />}
             value={moedaBR(ticketMedio)}
             label="Ticket Médio"
-            tone="blue"
+            tone="success"
           />
         </FadeInUp>
         <FadeInUp>
@@ -204,7 +204,7 @@ export default async function ProcedimentosPage() {
             icon={<TrendingUp className="h-5 w-5" />}
             value={`${Math.round(margemMedia)}%`}
             label="Margem Média"
-            tone="purple"
+            tone="success"
           />
         </FadeInUp>
       </Stagger>

@@ -68,7 +68,7 @@ export default async function EnfermagemPage() {
             icon={<HeartPulse className="h-5 w-5" />}
             value={String(sinais.length)}
             label="Aférições Registradas"
-            tone="brand"
+            tone="neutral"
           />
         </FadeInUp>
         <FadeInUp>
@@ -76,7 +76,7 @@ export default async function EnfermagemPage() {
             icon={<ClipboardCheck className="h-5 w-5" />}
             value={String(cuidadosPendentes)}
             label="Cuidados Pendentes"
-            tone="orange"
+            tone="warn"
           />
         </FadeInUp>
         <FadeInUp>
@@ -84,7 +84,7 @@ export default async function EnfermagemPage() {
             icon={<Droplets className="h-5 w-5" />}
             value={`${saldoHidrico > 0 ? "+" : ""}${saldoHidrico} ml`}
             label="Saldo Hídrico (24h)"
-            tone={saldoHidrico >= 0 ? "blue" : "purple"}
+            tone={saldoHidrico >= 0 ? "success" : "warn"}
           />
         </FadeInUp>
         <FadeInUp>
@@ -92,7 +92,7 @@ export default async function EnfermagemPage() {
             icon={<Activity className="h-5 w-5" />}
             value={String(sae.length)}
             label="Diagnósticos SAE"
-            tone="green"
+            tone="neutral"
           />
         </FadeInUp>
       </Stagger>
