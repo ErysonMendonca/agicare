@@ -8,8 +8,13 @@ import {
   User,
   Stethoscope,
   UserPlus,
+  Clock,
+  CheckCircle2,
+  Activity,
+  CheckCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -42,14 +47,27 @@ const STATUS_OPCOES: { value: AppointmentStatus; label: string }[] = [
 export function AgendaList({
   atendimentos,
   profissionais,
+  kpis,
 }: {
   atendimentos: Atendimento[];
   profissionais: Profissional[];
+  kpis: {
+    total: number;
+    agendados: number;
+    confirmados: number;
+    emAtendimento: number;
+    finalizados: number;
+  };
 }) {
   const [busca, setBusca] = useState("");
   const [data, setData] = useState("");
   const [profissional, setProfissional] = useState("");
   const [status, setStatus] = useState("");
+
+  // Clicar numa KPI filtra a tabela pelo status; clicar na ativa (ou na Total)
+  // limpa o filtro. Compartilha o MESMO estado do Select de status.
+  const toggleStatus = (valor: string) =>
+    setStatus((atual) => (atual === valor ? "" : valor));
 
   // Profissionais que aparecem na agenda (nomes presentes nos atendimentos).
   const profissionaisOpcoes = useMemo(() => {
@@ -77,6 +95,59 @@ export function AgendaList({
 
   return (
     <>
+      <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <FadeInUp>
+          <StatCard
+            icon={<CalendarDays className="h-5 w-5" />}
+            value={kpis.total}
+            label="Total de Agendamentos"
+            tone="neutral"
+            onClick={() => setStatus("")}
+            active={status === ""}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<Clock className="h-5 w-5" />}
+            value={kpis.agendados}
+            label="Agendados"
+            tone="info"
+            onClick={() => toggleStatus("agendado")}
+            active={status === "agendado"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<CheckCircle2 className="h-5 w-5" />}
+            value={kpis.confirmados}
+            label="Confirmados"
+            tone="success"
+            onClick={() => toggleStatus("confirmado")}
+            active={status === "confirmado"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<Activity className="h-5 w-5" />}
+            value={kpis.emAtendimento}
+            label="Em Atendimento"
+            tone="info"
+            onClick={() => toggleStatus("em_atendimento")}
+            active={status === "em_atendimento"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<CheckCheck className="h-5 w-5" />}
+            value={kpis.finalizados}
+            label="Finalizados"
+            tone="success"
+            onClick={() => toggleStatus("concluido")}
+            active={status === "concluido"}
+          />
+        </FadeInUp>
+      </Stagger>
+
       <Card className="mt-6 p-5">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Input

@@ -11,7 +11,9 @@ import {
   Filter,
   CalendarClock,
   Ticket,
+  Users,
 } from "lucide-react";
+import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
@@ -38,9 +40,16 @@ const STATUS_OPCOES = [
 export function FilaClient({
   fila,
   agendados = [],
+  kpis,
 }: {
   fila: FilaItem[];
   agendados?: FilaItem[];
+  kpis?: {
+    aguardando: number;
+    chamados: number;
+    emAtendimento: number;
+    total: number;
+  };
 }) {
   const [selected, setSelected] = useState<FilaItem | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
@@ -52,6 +61,11 @@ export function FilaClient({
   // Busca + filtro
   const [query, setQuery] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("todos");
+
+  // Clicar numa KPI filtra a fila pelo status; clicar na ativa (ou na Total)
+  // volta para "todos". Compartilha o MESMO estado do Select de status.
+  const toggleStatus = (valor: string) =>
+    setStatusFiltro((atual) => (atual === valor ? "todos" : valor));
 
   const termo = query.trim().toLowerCase();
 
@@ -102,6 +116,51 @@ export function FilaClient({
 
   return (
     <>
+      {kpis && (
+        <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <FadeInUp>
+            <StatCard
+              icon={<Clock className="h-5 w-5" />}
+              value={String(kpis.aguardando)}
+              label="Aguardando"
+              tone="info"
+              onClick={() => toggleStatus("aguardando")}
+              active={statusFiltro === "aguardando"}
+            />
+          </FadeInUp>
+          <FadeInUp>
+            <StatCard
+              icon={<PhoneCall className="h-5 w-5" />}
+              value={String(kpis.chamados)}
+              label="Chamados"
+              tone="info"
+              onClick={() => toggleStatus("chamado")}
+              active={statusFiltro === "chamado"}
+            />
+          </FadeInUp>
+          <FadeInUp>
+            <StatCard
+              icon={<Users className="h-5 w-5" />}
+              value={String(kpis.emAtendimento)}
+              label="Em Atendimento"
+              tone="info"
+              onClick={() => toggleStatus("em_atendimento")}
+              active={statusFiltro === "em_atendimento"}
+            />
+          </FadeInUp>
+          <FadeInUp>
+            <StatCard
+              icon={<Users className="h-5 w-5" />}
+              value={String(kpis.total)}
+              label="Total"
+              tone="neutral"
+              onClick={() => setStatusFiltro("todos")}
+              active={statusFiltro === "todos"}
+            />
+          </FadeInUp>
+        </Stagger>
+      )}
+
       {/* Agendados (aguardando chegada) */}
       {agendadosFiltrados.length > 0 && (
         <section className="mt-6">

@@ -10,11 +10,17 @@ import {
   ClipboardCheck,
   Receipt,
   ShieldCheck,
+  Lock,
+  Layers,
+  Clock,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
+import { StatCard } from "@/components/ui/StatCard";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { cn } from "@/lib/utils";
 import {
@@ -45,11 +51,15 @@ export function FaturamentoClient({
   guias,
   lotes,
   gestor,
+  kpis,
+  valorTotalLabel,
 }: {
   eventos: Evento[];
   guias: GuiaTISS[];
   lotes: LoteTISS[];
   gestor: boolean;
+  kpis: { total: number; pendentes: number; faturados: number; glosados: number };
+  valorTotalLabel: string;
 }) {
   const [aba, setAba] = useState<Aba>("eventos");
   const [selected, setSelected] = useState<Evento | null>(null);
@@ -78,8 +88,75 @@ export function FaturamentoClient({
     });
   }, [eventos, busca, tipoFiltro, statusFiltro]);
 
+  /** Toggle do filtro de status via KPI (clicar no ativo limpa). */
+  const toggleStatus = (f: StatusFiltro) =>
+    setStatusFiltro((prev) => (prev === f ? null : f));
+
   return (
     <>
+      {/* KPIs clicáveis → filtram a lista de eventos pelo status. */}
+      <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <FadeInUp>
+          <StatCard
+            icon={<Layers className="h-5 w-5" />}
+            value={kpis.total}
+            label="Total de Eventos"
+            tone="neutral"
+            onClick={() => setStatusFiltro(null)}
+            active={statusFiltro === null}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<Clock className="h-5 w-5" />}
+            value={kpis.pendentes}
+            label="Pendentes"
+            tone="warn"
+            onClick={() => toggleStatus("Pendentes")}
+            active={statusFiltro === "Pendentes"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<CheckCircle2 className="h-5 w-5" />}
+            value={kpis.faturados}
+            label="Faturados"
+            tone="success"
+            onClick={() => toggleStatus("Faturados")}
+            active={statusFiltro === "Faturados"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<XCircle className="h-5 w-5" />}
+            value={kpis.glosados}
+            label="Glosados"
+            tone="danger"
+            onClick={() => toggleStatus("Glosados")}
+            active={statusFiltro === "Glosados"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          {gestor ? (
+            <StatCard
+              icon={<DollarSign className="h-5 w-5" />}
+              value={valorTotalLabel}
+              label="Valor Total"
+              tone="success"
+            />
+          ) : (
+            <Card className="flex flex-col justify-center p-5">
+              <div className="flex items-center gap-2 text-sm text-muted">
+                <Lock className="h-4 w-4" /> Valor Total
+              </div>
+              <div className="mt-3 text-base font-medium text-muted">
+                Restrito ao gestor
+              </div>
+            </Card>
+          )}
+        </FadeInUp>
+      </Stagger>
+
       {/* Abas */}
       <div className="mt-6 inline-flex rounded-xl border border-line bg-surface p-1">
         <button

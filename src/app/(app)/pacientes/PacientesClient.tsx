@@ -18,9 +18,13 @@ import {
   Copy,
   HeartCrack,
   Pencil,
+  Users,
+  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
+import { StatCard } from "@/components/ui/StatCard";
+import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -71,7 +75,18 @@ function esc(value: string): string {
  * exportação CSV — tudo no client, sobre os dados vindos por props do server.
  * "Ver Ficha" leva para a ficha de detalhe; CadSus é um stub (sem integração).
  */
-export function PacientesClient({ pacientes }: { pacientes: PacienteRow[] }) {
+export function PacientesClient({
+  pacientes,
+  kpis,
+}: {
+  pacientes: PacienteRow[];
+  kpis: {
+    total: number;
+    ativos: number;
+    comAlergias: number;
+    emTratamento: number;
+  };
+}) {
   const router = useRouter();
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState<StatusFiltro>("todos");
@@ -234,6 +249,49 @@ export function PacientesClient({ pacientes }: { pacientes: PacienteRow[] }) {
 
   return (
     <>
+      {/* KPIs: Total e Ativos filtram a tabela (toggle). "Com Alergias" e
+          "Em Tratamento" não são valores do filtro de status → informativos. */}
+      <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <FadeInUp>
+          <StatCard
+            icon={<Users className="h-5 w-5" />}
+            value={kpis.total}
+            label="Total de Pacientes"
+            tone="neutral"
+            onClick={() => setStatus("todos")}
+            active={status === "todos"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<Activity className="h-5 w-5" />}
+            value={kpis.ativos}
+            label="Pacientes Ativos"
+            tone="success"
+            onClick={() =>
+              setStatus((prev) => (prev === "ativos" ? "todos" : "ativos"))
+            }
+            active={status === "ativos"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<AlertCircle className="h-5 w-5" />}
+            value={kpis.comAlergias}
+            label="Com Alergias"
+            tone="warn"
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<Link2 className="h-5 w-5" />}
+            value={kpis.emTratamento}
+            label="Em Tratamento"
+            tone="info"
+          />
+        </FadeInUp>
+      </Stagger>
+
       <Card className="mt-6 p-5">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div className="md:col-span-2">
