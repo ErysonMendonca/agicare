@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import {
   FlaskConical,
   AlertTriangle,
+  Clock,
+  TrendingUp,
   Search,
   SlidersHorizontal,
   DollarSign,
@@ -22,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -212,11 +215,19 @@ export function LaboratorioClient({
   finance,
   resumo,
   gestor,
+  kpis,
 }: {
   casos: CasoLab[];
   finance: LabFinanceRow[];
   resumo: LabFinanceResumo;
   gestor: boolean;
+  kpis: {
+    total: number;
+    emAndamento: number;
+    pendencias: number;
+    finalizados: number;
+    urgentes: number;
+  };
 }) {
   const [view, setView] = useState<"lista" | "kanban">("lista");
   const [financeiroAberto, setFinanceiroAberto] = useState(false);
@@ -264,6 +275,11 @@ export function LaboratorioClient({
     });
   }, [casos, busca, statusFiltro, tipoFiltro, dataInicial, dataFinal]);
 
+  // Clicar numa KPI filtra os casos pelo status; clicar na ativa (ou na Total)
+  // volta para "todos-status". Compartilha o MESMO estado do Select de status.
+  const toggleStatus = (valor: string) =>
+    setStatusFiltro((atual) => (atual === valor ? "todos-status" : valor));
+
   const filtrosAtivos =
     busca.trim() !== "" ||
     statusFiltro !== "todos-status" ||
@@ -295,6 +311,59 @@ export function LaboratorioClient({
 
   return (
     <>
+      <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <FadeInUp>
+          <StatCard
+            icon={<FlaskConical className="h-5 w-5" />}
+            value={String(kpis.total)}
+            label="Total de Casos"
+            tone="neutral"
+            onClick={() => setStatusFiltro("todos-status")}
+            active={statusFiltro === "todos-status"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<Clock className="h-5 w-5" />}
+            value={String(kpis.emAndamento)}
+            label="Em Andamento"
+            tone="info"
+            onClick={() => toggleStatus("em-andamento")}
+            active={statusFiltro === "em-andamento"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<AlertTriangle className="h-5 w-5" />}
+            value={String(kpis.pendencias)}
+            label="Pendências"
+            tone="warn"
+            onClick={() => toggleStatus("pendencia")}
+            active={statusFiltro === "pendencia"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<CheckCircle2 className="h-5 w-5" />}
+            value={String(kpis.finalizados)}
+            label="Finalizados"
+            tone="success"
+            onClick={() => toggleStatus("finalizado")}
+            active={statusFiltro === "finalizado"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<TrendingUp className="h-5 w-5" />}
+            value={String(kpis.urgentes)}
+            label="Urgentes"
+            tone="danger"
+            onClick={() => toggleStatus("urgente")}
+            active={statusFiltro === "urgente"}
+          />
+        </FadeInUp>
+      </Stagger>
+
       {/* Filtros + toggle de visualização */}
       <Card className="mt-6 p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
