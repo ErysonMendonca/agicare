@@ -1,4 +1,6 @@
 import { getSettings } from "@/lib/data/settings";
+import { listAttendanceOptions } from "@/lib/data/attendance-options";
+import { isGestor } from "@/lib/auth";
 import { requireView } from "@/lib/permissions";
 import { listAnamneseTemplates } from "@/lib/data/anamnese-templates";
 import { ConfiguracoesClient } from "./ConfiguracoesClient";

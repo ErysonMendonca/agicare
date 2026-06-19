@@ -5,27 +5,43 @@ import { Plus, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { type Paciente } from "@/lib/data/patients";
 import { type Profissional } from "@/lib/data/professionals";
+import { type Escala } from "@/lib/data/schedules";
 import { NovoAgendamentoModal } from "./NovoAgendamentoModal";
 import { EscalaHorariosModal } from "./EscalaHorariosModal";
+import { EscalaListaModal } from "./EscalaListaModal";
 
-type ModalKind = "agendamento" | "escala" | null;
+type ModalKind = "agendamento" | "escala-lista" | "escala-form" | null;
 
 /**
- * Ações do cabeçalho da Agenda: abre o wizard de Novo Agendamento e a
- * configuração de Escala de Horários. Recebe os dados do servidor por props.
+ * Ações do cabeçalho da Agenda: abre o wizard de Novo Agendamento e a gestão
+ * de Escalas (listar/filtrar → criar ou editar). Dados vêm do servidor por props.
  */
 export function AgendaActions({
   pacientes,
   profissionais,
+  escalas,
 }: {
   pacientes: Paciente[];
   profissionais: Profissional[];
+  escalas: Escala[];
 }) {
   const [modal, setModal] = useState<ModalKind>(null);
+  // Escala em edição; undefined → o form de escala abre em modo criação.
+  const [escalaEdit, setEscalaEdit] = useState<Escala | undefined>(undefined);
+
+  function abrirCriacao() {
+    setEscalaEdit(undefined);
+    setModal("escala-form");
+  }
+
+  function abrirEdicao(escala: Escala) {
+    setEscalaEdit(escala);
+    setModal("escala-form");
+  }
 
   return (
     <>
-      <Button variant="outline" onClick={() => setModal("escala")}>
+      <Button variant="outline" onClick={() => setModal("escala-lista")}>
         <CalendarRange className="h-4 w-4" /> Escala de Horários
       </Button>
       <Button variant="primary" onClick={() => setModal("agendamento")}>
@@ -38,10 +54,21 @@ export function AgendaActions({
         pacientes={pacientes}
         profissionais={profissionais}
       />
+
+      <EscalaListaModal
+        open={modal === "escala-lista"}
+        onClose={() => setModal(null)}
+        escalas={escalas}
+        profissionais={profissionais}
+        onNova={abrirCriacao}
+        onEditar={abrirEdicao}
+      />
+
       <EscalaHorariosModal
-        open={modal === "escala"}
+        open={modal === "escala-form"}
         onClose={() => setModal(null)}
         profissionais={profissionais}
+        escalaParaEditar={escalaEdit}
       />
     </>
   );

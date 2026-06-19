@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { type FilaItem } from "@/lib/data/queue";
+import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options";
 import { AcoesPacienteModal } from "./AcoesPacienteModal";
 import { DadosAtendimentoModal } from "./DadosAtendimentoModal";
 import { DesistenciaModal } from "./DesistenciaModal";
@@ -40,10 +41,12 @@ const STATUS_OPCOES = [
 export function FilaClient({
   fila,
   agendados = [],
+  attendanceOptions,
   kpis,
 }: {
   fila: FilaItem[];
   agendados?: FilaItem[];
+  attendanceOptions?: AttendanceOptionsByCategory;
   kpis?: {
     aguardando: number;
     chamados: number;
@@ -345,6 +348,7 @@ export function FilaClient({
             open={modal === "atendimento"}
             onClose={fechar}
             onVoltar={() => setModal("acoes")}
+            options={attendanceOptions}
           />
           <DesistenciaModal
             item={selected}

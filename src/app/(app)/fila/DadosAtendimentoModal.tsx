@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { ChevronLeft, Save, Printer } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronLeft, Save, Printer, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -9,29 +9,64 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { salvarAtendimento } from "@/lib/actions/queue";
 import { type FilaItem } from "@/lib/data/queue";
+import type {
+  AttendanceOption,
+  AttendanceOptionsByCategory,
+} from "@/lib/data/attendance-options";
 
-/** Opções fixas (réplica do sistema de referência). */
-const ORIGEM = ["1 - RECEPÇÃO", "2 - PRONTO ATENDIMENTO", "3 - INTERNAÇÃO"];
-const MEDICOS = ["1 - MÉDICO PADRÃO", "2 - DRA. MARINA SOUZA", "3 - DR. CARLOS EDUARDO"];
-const ESPECIALIDADES = ["1 - MÉDICO CLÍNICO", "2 - CARDIOLOGIA", "3 - ORTOPEDIA"];
-const ENCAMINHAMENTO = ["1 - PRIMEIRA CONSULTA", "2 - RETORNO", "3 - URGÊNCIA"];
-const CARATER = ["1 - URGÊNCIA/EMERGÊNCIA", "2 - ELETIVO"];
-const PROCEDENCIA = ["9 - AMBULATÓRIO-CONS", "1 - DOMICÍLIO", "2 - OUTRA UNIDADE"];
-const CENTRO_CUSTO = ["187 - RECEPÇÃO PRINCIPAL", "190 - PRONTO ATENDIMENTO"];
-const CONVENIOS = ["SUS", "Unimed", "Particular", "Bradesco Saúde", "Amil"];
-const PLANOS = ["Ambulatorial", "Hospitalar", "Completo"];
-const PARENTESCO = ["Pai", "Mãe", "Cônjuge", "Filho(a)", "Outro"];
+// ════════════════════════════════════════════════════════════════
+// Opções fixas (réplica do sistema de referência) — usadas como FALLBACK
+// quando a clínica ainda não parametrizou as opções em /configuracoes.
+// ════════════════════════════════════════════════════════════════
+const FALLBACK: Record<string, string[]> = {
+  origem: ["1 - RECEPÇÃO", "2 - PRONTO ATENDIMENTO", "3 - INTERNAÇÃO"],
+  medico: ["1 - MÉDICO PADRÃO", "2 - DRA. MARINA SOUZA", "3 - DR. CARLOS EDUARDO"],
+  especialidade: ["1 - MÉDICO CLÍNICO", "2 - CARDIOLOGIA", "3 - ORTOPEDIA"],
+  encaminhamento: ["1 - PRIMEIRA CONSULTA", "2 - RETORNO", "3 - URGÊNCIA"],
+  carater: ["1 - URGÊNCIA/EMERGÊNCIA", "2 - ELETIVO"],
+  procedencia: ["9 - AMBULATÓRIO-CONS", "1 - DOMICÍLIO", "2 - OUTRA UNIDADE"],
+  centro_custo: ["187 - RECEPÇÃO PRINCIPAL", "190 - PRONTO ATENDIMENTO"],
+  convenio: ["SUS", "Unimed", "Particular", "Bradesco Saúde", "Amil"],
+  plano: ["Ambulatorial", "Hospitalar", "Completo"],
+  parentesco: ["Pai", "Mãe", "Cônjuge", "Filho(a)", "Outro"],
+};
+
+/** Resolve as opções de uma categoria, caindo no fallback quando vazio. */
+function resolveOptions(
+  options: AttendanceOptionsByCategory | undefined,
+  category: string,
+): AttendanceOption[] {
+  const list = options?.[category];
+  if (list && list.length > 0) return list;
+  return (FALLBACK[category] ?? []).map((label) => ({
+    id: `fb-${category}-${label}`,
+    label,
+    value: label,
+  }));
+}
+
+type DraftShape = {
+  fields: Record<string, string>;
+  plano: string;
+  privado: boolean;
+  gestante: boolean;
+  oMesmo: boolean;
+  respNome: string;
+};
 
 export function DadosAtendimentoModal({
   item,
   open,
   onClose,
   onVoltar,
+  options,
 }: {
   item: FilaItem;
   open: boolean;
   onClose: () => void;
   onVoltar: () => void;
+  /** Opções parametrizáveis (de fila/page.tsx → FilaClient). Fallback se vazio. */
+  options?: AttendanceOptionsByCategory;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [plano, setPlano] = useState("");
@@ -41,26 +76,137 @@ export function DadosAtendimentoModal({
   const [gestante, setGestante] = useState(false);
   const [pending, setPending] = useState(false);
 
+  // Não-perder-ao-fechar: dirty + diálogo de confirmação + rascunho local.
+  const [dirty, setDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const draftKey = `draft:atendimento:${item.id}`;
+
+  // Listas de opções (parametrizadas ou fallback) — value = grava o selecionado.
+  const oOrigem = resolveOptions(options, "origem");
+  const oMedico = resolveOptions(options, "medico");
+  const oEspec = resolveOptions(options, "especialidade");
+  const oEncam = resolveOptions(options, "encaminhamento");
+  const oCarater = resolveOptions(options, "carater");
+  const oProced = resolveOptions(options, "procedencia");
+  const oCentro = resolveOptions(options, "centro_custo");
+  const oConv = resolveOptions(options, "convenio");
+  const oPlano = resolveOptions(options, "plano");
+  const oParent = resolveOptions(options, "parentesco");
+
+  /** Snapshot completo do formulário (campos + estados controlados). */
+  const snapshot = useCallback((): DraftShape => {
+    const fields: Record<string, string> = {};
+    const form = formRef.current;
+    if (form) {
+      for (const [k, v] of new FormData(form).entries()) {
+        if (typeof v === "string") fields[k] = v;
+      }
+    }
+    return { fields, plano, privado, gestante, oMesmo, respNome };
+  }, [plano, privado, gestante, oMesmo, respNome]);
+
+  const persist = useCallback(() => {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(snapshot()));
+    } catch {
+      /* localStorage indisponível — ignora silenciosamente */
+    }
+  }, [draftKey, snapshot]);
+
+  const clearDraft = useCallback(() => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      /* ignore */
+    }
+  }, [draftKey]);
+
+  // Restaura o rascunho ao (re)abrir o modal deste paciente.
+  useEffect(() => {
+    if (!open) return;
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(draftKey);
+    } catch {
+      raw = null;
+    }
+    if (!raw) return;
+    try {
+      const d = JSON.parse(raw) as Partial<DraftShape>;
+      const fields = d.fields ?? {};
+      // Aplica o rascunho após o paint inicial (fora do corpo do efeito, p/
+      // evitar setState síncrono — restaura controlados + campos do DOM).
+      requestAnimationFrame(() => {
+        if (typeof d.plano === "string") setPlano(d.plano);
+        if (typeof d.privado === "boolean") setPrivado(d.privado);
+        if (typeof d.gestante === "boolean") setGestante(d.gestante);
+        if (typeof d.oMesmo === "boolean") setOMesmo(d.oMesmo);
+        if (typeof d.respNome === "string") setRespNome(d.respNome);
+        const form = formRef.current;
+        if (form) {
+          for (const [k, v] of Object.entries(fields)) {
+            const el = form.elements.namedItem(k) as
+              | HTMLInputElement
+              | HTMLSelectElement
+              | HTMLTextAreaElement
+              | null;
+            if (el && "value" in el) el.value = v;
+          }
+        }
+        setDirty(true);
+      });
+    } catch {
+      /* rascunho corrompido — ignora */
+    }
+    // Só queremos rodar quando o modal abre para este paciente.
+  }, [open, draftKey]);
+
+  // Persiste mudanças dos estados controlados enquanto sujo.
+  useEffect(() => {
+    if (!open || !dirty) return;
+    persist();
+  }, [open, dirty, plano, privado, gestante, oMesmo, respNome, persist]);
+
+  function markDirty() {
+    setDirty(true);
+    persist();
+  }
+
   function toggleOMesmo() {
     setOMesmo((v) => {
       const next = !v;
       setRespNome(next ? item.paciente : "");
       return next;
     });
+    setDirty(true);
   }
 
   /** Lê os campos não-controlados do form (defaultValue) por `name`. */
   function readForm(name: string): string {
-    const v = formRef.current
-      ? new FormData(formRef.current).get(name)
-      : null;
+    const v = formRef.current ? new FormData(formRef.current).get(name) : null;
     return typeof v === "string" ? v : "";
   }
 
-  /** Mapeia o rótulo do caráter ("1 - URGÊNCIA/…"/"2 - ELETIVO") → enum do banco. */
-  function mapCarater(label: string): "urgencia" | "eletivo" | undefined {
-    if (!label) return undefined;
-    return /URG/i.test(label) ? "urgencia" : "eletivo";
+  /** Mapeia o valor do caráter → enum do banco. */
+  function mapCarater(value: string): "urgencia" | "eletivo" | undefined {
+    if (!value) return undefined;
+    return /urg/i.test(value) ? "urgencia" : "eletivo";
+  }
+
+  /** Fecha pedindo confirmação se houver alterações não salvas. */
+  const handleClose = useCallback(() => {
+    if (dirty) {
+      setConfirmClose(true);
+      return;
+    }
+    onClose();
+  }, [dirty, onClose]);
+
+  function descartarEFechar() {
+    clearDraft();
+    setDirty(false);
+    setConfirmClose(false);
+    onClose();
   }
 
   async function salvar(imprimir: boolean) {
@@ -102,7 +248,9 @@ export function DadosAtendimentoModal({
       toast.error(res.error);
       return;
     }
-    // Só imprime DEPOIS de gravar com sucesso.
+    // Salvou com sucesso → limpa o rascunho e zera o "dirty".
+    clearDraft();
+    setDirty(false);
     toast.success(
       imprimir ? "Atendimento salvo. Gerando impressão…" : "Atendimento salvo.",
     );
@@ -111,188 +259,283 @@ export function DadosAtendimentoModal({
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={`Dados de Atendimento - ${item.paciente}`}
-      className="max-w-2xl"
-      footer={
-        <>
-          <Button
-            variant="outline"
-            onClick={onVoltar}
-            className="mr-auto"
-            disabled={pending}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Voltar
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => salvar(false)}
-            disabled={pending}
-          >
-            <Save className="h-4 w-4" />
-            Salvar
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => salvar(true)}
-            disabled={pending}
-          >
-            <Printer className="h-4 w-4" />
-            Salvar e Imprimir
-          </Button>
-        </>
-      }
-    >
-      <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
-      {/* Cabeçalho do atendimento */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div>
-          <span className="mb-1.5 block text-sm font-medium text-ink">Registro</span>
-          <span className="inline-flex h-10 items-center rounded-lg bg-brand-50 px-3 text-sm font-semibold text-brand-600">
-            AUTO
-          </span>
-        </div>
-        <Input
-          type="date"
-          name="data_entrada"
-          label="Data e Hora da Entrada"
-          defaultValue={new Date().toISOString().slice(0, 10)}
-        />
-        <Select name="origem" label="Origem Atendimento" defaultValue={ORIGEM[0]}>
-          {ORIGEM.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
-        </Select>
-        <div className="flex flex-col justify-center gap-2">
-          <Toggle label="Privado de Liberdade?" checked={privado} onChange={setPrivado} />
-          <Toggle label="Gestante?" checked={gestante} onChange={setGestante} />
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Select name="medico" label="Médico" defaultValue={MEDICOS[0]}>
-          {MEDICOS.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
-        </Select>
-        <Select name="especialidade" label="Especialidade" defaultValue={ESPECIALIDADES[0]}>
-          {ESPECIALIDADES.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
-        </Select>
-        <Select name="encaminhamento" label="Encaminhamento de Atendimento" defaultValue={ENCAMINHAMENTO[0]}>
-          {ENCAMINHAMENTO.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
-        </Select>
-        <Select name="carater" label="Caráter de Atendimento" defaultValue={CARATER[0]}>
-          {CARATER.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
-        </Select>
-        <Select name="procedencia" label="Local Procedência" defaultValue={PROCEDENCIA[0]}>
-          {PROCEDENCIA.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
-        </Select>
-        <Select name="centro_custo" label="Centro de Custo" defaultValue={CENTRO_CUSTO[0]}>
-          {CENTRO_CUSTO.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
-        </Select>
-      </div>
-
-      {/* Dados do Convênio */}
-      <fieldset className="mt-5 rounded-xl border border-line p-4">
-        <legend className="px-1 text-sm font-semibold text-muted">
-          Dados do Convênio
-        </legend>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Select name="convenio" label="Convênio *" defaultValue={item.convenio || CONVENIOS[0]}>
-            {CONVENIOS.map((o) => (
-              <option key={o}>{o}</option>
-            ))}
-          </Select>
-          <Select
-            label="Plano *"
-            value={plano}
-            onChange={(e) => setPlano(e.target.value)}
-          >
-            <option value="" disabled>
-              Selecione o plano
-            </option>
-            {PLANOS.map((o) => (
-              <option key={o}>{o}</option>
-            ))}
-          </Select>
-          <Input name="carteira" label="Número da Carteirinha" placeholder="Número da carteirinha" />
-          <Input type="date" name="validade" label="Validade da Carteirinha" />
-          <label className="block sm:col-span-2">
-            <span className="mb-1.5 block text-sm font-medium text-ink">
-              Validador de Convênio
-            </span>
-            <Input name="validador" placeholder="Código do validador" />
-            <span className="mt-1 block text-xs text-muted">
-              Digite o código do validador fornecido pelo convênio
-            </span>
-          </label>
-        </div>
-      </fieldset>
-
-      {/* Responsável */}
-      <fieldset className="mt-5 rounded-xl border border-line p-4">
-        <legend className="px-1 text-sm font-semibold text-muted">Responsável</legend>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-ink">Nome</span>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Nome do responsável"
-                disabled={oMesmo}
-                value={respNome}
-                onChange={(e) => setRespNome(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={toggleOMesmo}
-                className={`h-10 flex-none rounded-lg px-3 text-sm font-semibold transition-colors ${
-                  oMesmo
-                    ? "bg-brand-500 text-white"
-                    : "border border-line text-ink hover:bg-muted-surface"
-                }`}
-              >
-                O MESMO
-              </button>
+    <>
+      <Modal
+        open={open}
+        onClose={handleClose}
+        title={`Dados de Atendimento - ${item.paciente}`}
+        className="max-w-2xl"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={onVoltar}
+              className="mr-auto"
+              disabled={pending}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+            <Button variant="primary" onClick={() => salvar(false)} disabled={pending}>
+              <Save className="h-4 w-4" />
+              Salvar
+            </Button>
+            <Button variant="primary" onClick={() => salvar(true)} disabled={pending}>
+              <Printer className="h-4 w-4" />
+              Salvar e Imprimir
+            </Button>
+          </>
+        }
+      >
+        <form
+          ref={formRef}
+          onSubmit={(e) => e.preventDefault()}
+          onInput={markDirty}
+        >
+          {/* Cabeçalho do atendimento */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <span className="mb-1.5 block text-sm font-medium text-ink">Registro</span>
+              <span className="inline-flex h-10 items-center rounded-lg bg-brand-50 px-3 text-sm font-semibold text-brand-600">
+                AUTO
+              </span>
             </div>
-          </label>
-          <Input name="resp_documento" label="Documento" placeholder="CPF ou RG" />
-          <Select name="resp_parentesco" label="Grau Parentesco" defaultValue="">
-            <option value="" disabled>
-              Informe o(a) parentesco
-            </option>
-            {PARENTESCO.map((o) => (
-              <option key={o}>{o}</option>
-            ))}
-          </Select>
-        </div>
-      </fieldset>
+            <Input
+              type="date"
+              name="data_entrada"
+              label="Data e Hora da Entrada"
+              defaultValue={new Date().toISOString().slice(0, 10)}
+            />
+            <Select
+              name="origem"
+              label="Origem Atendimento"
+              defaultValue={oOrigem[0]?.value}
+            >
+              {oOrigem.map((o) => (
+                <option key={o.id} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+            <div className="flex flex-col justify-center gap-2">
+              <Toggle
+                label="Privado de Liberdade?"
+                checked={privado}
+                onChange={(v) => {
+                  setPrivado(v);
+                  setDirty(true);
+                }}
+              />
+              <Toggle
+                label="Gestante?"
+                checked={gestante}
+                onChange={(v) => {
+                  setGestante(v);
+                  setDirty(true);
+                }}
+              />
+            </div>
+          </div>
 
-      {/* Observação */}
-      <label htmlFor="obs-atendimento" className="mt-5 block">
-        <span className="mb-1.5 block text-sm font-medium text-ink">Observação</span>
-        <textarea
-          id="obs-atendimento"
-          name="observacoes"
-          rows={3}
-          placeholder="Observações sobre o atendimento..."
-          className="w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-        />
-      </label>
-      </form>
-    </Modal>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Select name="medico" label="Médico" defaultValue={oMedico[0]?.value}>
+              {oMedico.map((o) => (
+                <option key={o.id} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              name="especialidade"
+              label="Especialidade"
+              defaultValue={oEspec[0]?.value}
+            >
+              {oEspec.map((o) => (
+                <option key={o.id} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              name="encaminhamento"
+              label="Encaminhamento de Atendimento"
+              defaultValue={oEncam[0]?.value}
+            >
+              {oEncam.map((o) => (
+                <option key={o.id} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              name="carater"
+              label="Caráter de Atendimento"
+              defaultValue={oCarater[0]?.value}
+            >
+              {oCarater.map((o) => (
+                <option key={o.id} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              name="procedencia"
+              label="Local Procedência"
+              defaultValue={oProced[0]?.value}
+            >
+              {oProced.map((o) => (
+                <option key={o.id} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              name="centro_custo"
+              label="Centro de Custo"
+              defaultValue={oCentro[0]?.value}
+            >
+              {oCentro.map((o) => (
+                <option key={o.id} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          {/* Dados do Convênio */}
+          <fieldset className="mt-5 rounded-xl border border-line p-4">
+            <legend className="px-1 text-sm font-semibold text-muted">
+              Dados do Convênio
+            </legend>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Select
+                name="convenio"
+                label="Convênio *"
+                defaultValue={item.convenio || oConv[0]?.value}
+              >
+                {oConv.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                label="Plano *"
+                value={plano}
+                onChange={(e) => {
+                  setPlano(e.target.value);
+                  setDirty(true);
+                }}
+              >
+                <option value="" disabled>
+                  Selecione o plano
+                </option>
+                {oPlano.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Input name="carteira" label="Número da Carteirinha" placeholder="Número da carteirinha" />
+              <Input type="date" name="validade" label="Validade da Carteirinha" />
+              <label className="block sm:col-span-2">
+                <span className="mb-1.5 block text-sm font-medium text-ink">
+                  Validador de Convênio
+                </span>
+                <Input name="validador" placeholder="Código do validador" />
+                <span className="mt-1 block text-xs text-muted">
+                  Digite o código do validador fornecido pelo convênio
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          {/* Responsável */}
+          <fieldset className="mt-5 rounded-xl border border-line p-4">
+            <legend className="px-1 text-sm font-semibold text-muted">Responsável</legend>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium text-ink">Nome</span>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Nome do responsável"
+                    disabled={oMesmo}
+                    value={respNome}
+                    onChange={(e) => {
+                      setRespNome(e.target.value);
+                      setDirty(true);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={toggleOMesmo}
+                    className={`h-10 flex-none rounded-lg px-3 text-sm font-semibold transition-colors ${
+                      oMesmo
+                        ? "bg-brand-500 text-white"
+                        : "border border-line text-ink hover:bg-muted-surface"
+                    }`}
+                  >
+                    O MESMO
+                  </button>
+                </div>
+              </label>
+              <Input name="resp_documento" label="Documento" placeholder="CPF ou RG" />
+              <Select name="resp_parentesco" label="Grau Parentesco" defaultValue="">
+                <option value="" disabled>
+                  Informe o(a) parentesco
+                </option>
+                {oParent.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </fieldset>
+
+          {/* Observação */}
+          <label htmlFor="obs-atendimento" className="mt-5 block">
+            <span className="mb-1.5 block text-sm font-medium text-ink">Observação</span>
+            <textarea
+              id="obs-atendimento"
+              name="observacoes"
+              rows={3}
+              placeholder="Observações sobre o atendimento..."
+              className="w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+        </form>
+      </Modal>
+
+      {/* Confirmação ao fechar com alterações não salvas (não-perder). */}
+      <Modal
+        open={confirmClose}
+        onClose={() => setConfirmClose(false)}
+        title="Descartar alterações?"
+        className="max-w-md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmClose(false)}>
+              Continuar atendimento
+            </Button>
+            <Button variant="danger" onClick={descartarEFechar}>
+              Descartar
+            </Button>
+          </>
+        }
+      >
+        <div className="flex items-start gap-3">
+          <span className="inline-flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+            <AlertTriangle className="h-5 w-5" />
+          </span>
+          <p className="text-sm text-muted">
+            Você tem alterações não salvas neste atendimento. Um rascunho foi
+            guardado neste navegador e será restaurado ao reabrir. Deseja
+            continuar preenchendo ou descartar e fechar?
+          </p>
+        </div>
+      </Modal>
+    </>
   );
 }
 

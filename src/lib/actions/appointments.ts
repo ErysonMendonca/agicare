@@ -237,6 +237,52 @@ export async function createSchedule(
   return { ok: true, protocol: code };
 }
 
+/** Patch de edição de escala: mesmos campos editáveis, mais o `active`. */
+const escalaUpdateSchema = escalaSchema.extend({
+  active: z.boolean().default(true),
+});
+
+export type EscalaUpdateInput = z.input<typeof escalaUpdateSchema>;
+
+/** Atualiza uma escala de horários existente (RLS escopa por clínica). */
+export async function updateSchedule(
+  id: string,
+  input: EscalaUpdateInput,
+): Promise<AgendaActionState> {
+  const idParsed = idSchema.safeParse(id);
+  if (!idParsed.success) return { error: idParsed.error.issues[0]?.message };
+
+  const parsed = escalaUpdateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+
+  if (isDemoMode()) return { ok: true };
+
+  const d = parsed.data;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("schedules")
+    .update({
+      description: d.description,
+      professional_id: d.professional_id || null,
+      specialty: d.specialty || null,
+      service_type: d.service_type || null,
+      slot_minutes: d.slot_minutes,
+      overbook_limit: d.overbook_limit,
+      weekdays: d.weekdays,
+      start_time: d.start_time,
+      end_time: d.end_time,
+      active: d.active,
+    })
+    .eq("id", idParsed.data);
+
+  if (error) return { error: error.message };
+
+  revalidateAgenda();
+  return { ok: true };
+}
+
 // ════════════════════════════════════════════════════════════════
 // Bloqueios de horário (escala) — persistência em schedule_blocks
 // ════════════════════════════════════════════════════════════════

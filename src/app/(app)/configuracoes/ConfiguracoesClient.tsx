@@ -41,7 +41,7 @@ import type { ClinicSettings } from "@/lib/data/settings";
 import type { AnamneseTemplate } from "@/lib/data/anamnese-templates.shared";
 import { AnamneseBuilder } from "./AnamneseBuilder";
 
-const tabs = [
+const BASE_TABS = [
   "Geral",
   "Notificações",
   "Segurança",
@@ -50,7 +50,7 @@ const tabs = [
   "Anamnese",
 ] as const;
 
-type Tab = (typeof tabs)[number];
+const ATENDIMENTO_TAB = "Dados de Atendimento";
 
 export function ConfiguracoesClient({
   settings,
@@ -485,6 +485,12 @@ export function ConfiguracoesClient({
           </div>
         )}
       </form>
+
+      {/* Dados de Atendimento — parametrização (gestor). Fora do form de
+          configurações: usa Server Actions próprias com revalidate. */}
+      {gestor && tabAtiva === ATENDIMENTO_TAB && (
+        <AtendimentoOpcoes options={attendanceOptions} />
+      )}
 
       {/* Troca da PRÓPRIA senha — formulário independente (fora do form de
           configurações, que é gestor-only). Vive na aba Segurança. */}

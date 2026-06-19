@@ -1,6 +1,10 @@
 import { isGestor } from "@/lib/auth";
 import { requireView } from "@/lib/permissions";
-import { getRelatoriosData } from "@/lib/data/relatorios";
+import {
+  getRelatoriosData,
+  getUtilizacaoAtendimentoBI,
+} from "@/lib/data/relatorios";
+import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { parseRelatoriosFiltros } from "@/lib/data/relatorios-filtros";
 import { listProfessionals } from "@/lib/data/professionals";
 import { getAccessLogs, getConsentLogs } from "@/lib/data/audit";
@@ -41,16 +45,27 @@ export default async function RelatoriosPage({
     ),
   ].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-  const [data, tempoEspera, tempoEsperaSemana, origem, epidemio, financeiroBI] =
-    await Promise.all([
-      getRelatoriosData(gestor, filtros),
-      getTempoEsperaBI(filtros),
-      getTempoEsperaSemanaBI(filtros),
-      getOrigemPacientesBI(filtros),
-      getEpidemiologicoBI(filtros),
-      // Financeiro (BI) só é calculado/serializado para gestor (gate no servidor).
-      getFinanceiroBI(gestor, filtros),
-    ]);
+  const [
+    data,
+    tempoEspera,
+    tempoEsperaSemana,
+    origem,
+    epidemio,
+    financeiroBI,
+    utilizacao,
+    opcoesAtendimento,
+  ] = await Promise.all([
+    getRelatoriosData(gestor, filtros),
+    getTempoEsperaBI(filtros),
+    getTempoEsperaSemanaBI(filtros),
+    getOrigemPacientesBI(filtros),
+    getEpidemiologicoBI(filtros),
+    // Financeiro (BI) só é calculado/serializado para gestor (gate no servidor).
+    getFinanceiroBI(gestor, filtros),
+    getUtilizacaoAtendimentoBI(filtros),
+    // Opções parametrizadas: cruzadas com o BI para apontar as "sem uso".
+    listAttendanceOptions(),
+  ]);
 
   // Auditoria (Conformidade LGPD): trilha só é lida/serializada para gestor.
   // Para não-gestor as listas saem vazias e nem chegam ao payload do client.
@@ -69,6 +84,8 @@ export default async function RelatoriosPage({
       origem={origem}
       epidemio={epidemio}
       financeiroBI={financeiroBI}
+      utilizacao={utilizacao}
+      opcoesAtendimento={opcoesAtendimento}
       filtros={filtros}
       opcoesProfissionais={opcoesProfissionais}
       opcoesEspecialidades={opcoesEspecialidades}
