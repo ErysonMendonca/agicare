@@ -345,16 +345,20 @@ export function EscalaHorariosModal({
             <div className="flex flex-wrap gap-2">
               {DIAS.map((d) => {
                 const on = dias.includes(d.n);
+                const isWeekend = d.n === 0 || d.n === 6;
+                const estado = on
+                  ? isWeekend
+                    ? "bg-status-danger text-white"
+                    : "bg-brand-500 text-white"
+                  : isWeekend
+                    ? "border border-weekend/60 text-weekend hover:bg-weekend/10"
+                    : "border border-line text-ink hover:bg-muted-surface";
                 return (
                   <button
                     key={d.n}
                     type="button"
                     onClick={() => toggleDia(d.n)}
-                    className={`h-10 w-12 rounded-lg text-sm font-semibold transition-colors ${
-                      on
-                        ? "bg-brand-500 text-white"
-                        : "border border-line text-ink hover:bg-muted-surface"
-                    }`}
+                    className={`h-10 w-12 rounded-lg text-sm font-semibold transition-colors ${estado}`}
                   >
                     {d.label}
                   </button>

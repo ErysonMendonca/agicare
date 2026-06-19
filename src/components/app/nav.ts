@@ -11,7 +11,6 @@ import {
   Receipt,
   BarChart3,
   Settings,
-  HeartPulse,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -49,7 +48,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Pacientes", href: "/pacientes", icon: Users, module: "pacientes" },
       { label: "Agenda", href: "/agenda", icon: CalendarDays, module: "agenda" },
       { label: "Prontuário", href: "/prontuario", icon: FileText, module: "prontuario" },
-      { label: "Enfermagem", href: "/enfermagem", icon: HeartPulse, module: "enfermagem" },
       { label: "Procedimentos", href: "/procedimentos", icon: Stethoscope, gestorOnly: true, module: "procedimentos" },
       { label: "Laboratório", href: "/laboratorio", icon: FlaskConical, module: "laboratorio" },
       { label: "Estoque", href: "/estoque", icon: Boxes, badge: 3, module: "estoque" },

@@ -149,7 +149,7 @@ export async function listAppointments(): Promise<Atendimento[]> {
   let query = supabase
     .from("appointments")
     .select(
-      "id, starts_at, reason, status, professional_id, patients(full_name, cpf), professionals(specialty, profiles(full_name))",
+      "id, starts_at, reason, status, professional_id, specialty, patients(full_name, cpf), professionals(specialty, profiles(full_name))",
     )
     .order("starts_at", { ascending: true });
 
@@ -198,7 +198,9 @@ export async function listAppointments(): Promise<Atendimento[]> {
       cpf: (patient?.cpf ?? "").replace(/\D/g, ""),
       profissional: profProfile?.full_name ?? "—",
       profissionalId: (r.professional_id as string | null) ?? "",
-      especialidade: professional?.specialty ?? "—",
+      // Agendamento por especialidade (sem profissional): usa appointments.specialty.
+      especialidade:
+        professional?.specialty ?? (r.specialty as string | null) ?? "—",
       data: dataFmt,
       dataISO,
       hora,

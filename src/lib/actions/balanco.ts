@@ -47,6 +47,6 @@ export async function abrirCicloBalanco(
   });
   if (error) return { error: error.message };
 
-  revalidatePath("/enfermagem");
+  revalidatePath("/prontuario", "layout");
   return { ok: true };
 }

@@ -89,7 +89,9 @@ const MOCK_VITAIS: SinalVital[] = [
   },
 ];
 
-export async function listSinaisVitais(): Promise<SinalVital[]> {
+export async function listSinaisVitais(
+  patientId: string,
+): Promise<SinalVital[]> {
   if (isDemoMode()) return MOCK_VITAIS;
 
   const supabase = await createClient();
@@ -98,6 +100,7 @@ export async function listSinaisVitais(): Promise<SinalVital[]> {
     .select(
       "*, patients(full_name), profiles(full_name)",
     )
+    .eq("patient_id", patientId)
     .order("recorded_at", { ascending: false })
     .limit(50);
 
@@ -159,13 +162,16 @@ const MOCK_ANOTACOES: AnotacaoEnfermagem[] = [
   },
 ];
 
-export async function listAnotacoes(): Promise<AnotacaoEnfermagem[]> {
+export async function listAnotacoes(
+  patientId: string,
+): Promise<AnotacaoEnfermagem[]> {
   if (isDemoMode()) return MOCK_ANOTACOES;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("nursing_notes")
     .select("*, patients(full_name)")
+    .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -185,12 +191,13 @@ export async function listAnotacoes(): Promise<AnotacaoEnfermagem[]> {
 }
 
 /** Próximo código sequencial ANO-NNN (base para o formulário). */
-export async function nextAnotacaoCode(): Promise<string> {
+export async function nextAnotacaoCode(patientId: string): Promise<string> {
   if (isDemoMode()) return "ANO-003";
   const supabase = await createClient();
   const { count } = await supabase
     .from("nursing_notes")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("patient_id", patientId);
   return `ANO-${String((count ?? 0) + 1).padStart(3, "0")}`;
 }
 
@@ -253,13 +260,14 @@ const MOCK_CUIDADOS: Cuidado[] = [
   },
 ];
 
-export async function listCuidados(): Promise<Cuidado[]> {
+export async function listCuidados(patientId: string): Promise<Cuidado[]> {
   if (isDemoMode()) return MOCK_CUIDADOS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("care_checks")
     .select("*, patients(full_name)")
+    .eq("patient_id", patientId)
     .order("scheduled_at", { ascending: true })
     .limit(100);
 
@@ -322,13 +330,16 @@ const MOCK_BALANCO: BalancoHidrico = {
   saldo: 230,
 };
 
-export async function getBalancoHidrico(): Promise<BalancoHidrico | null> {
+export async function getBalancoHidrico(
+  patientId: string,
+): Promise<BalancoHidrico | null> {
   if (isDemoMode()) return MOCK_BALANCO;
 
   const supabase = await createClient();
   const { data: bal } = await supabase
     .from("fluid_balance")
     .select("*, patients(full_name)")
+    .eq("patient_id", patientId)
     .order("cycle_start", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -401,13 +412,16 @@ const MOCK_EVOLUCOES: EvolucaoEnfermagem[] = [
   },
 ];
 
-export async function listEvolucoes(): Promise<EvolucaoEnfermagem[]> {
+export async function listEvolucoes(
+  patientId: string,
+): Promise<EvolucaoEnfermagem[]> {
   if (isDemoMode()) return MOCK_EVOLUCOES;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("nursing_evolutions")
     .select("*, patients(full_name)")
+    .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -468,13 +482,16 @@ const MOCK_ESCALAS: EscalaRegistro[] = [
   },
 ];
 
-export async function listEscalas(): Promise<EscalaRegistro[]> {
+export async function listEscalas(
+  patientId: string,
+): Promise<EscalaRegistro[]> {
   if (isDemoMode()) return MOCK_ESCALAS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("assessment_scales")
     .select("*, patients(full_name)")
+    .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -532,15 +549,16 @@ const MOCK_PROCEDIMENTOS: ProcedimentoEnfermagem[] = [
   },
 ];
 
-export async function listProcedimentosEnfermagem(): Promise<
-  ProcedimentoEnfermagem[]
-> {
+export async function listProcedimentosEnfermagem(
+  patientId: string,
+): Promise<ProcedimentoEnfermagem[]> {
   if (isDemoMode()) return MOCK_PROCEDIMENTOS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("nursing_procedures")
     .select("*, patients(full_name)")
+    .eq("patient_id", patientId)
     .order("performed_at", { ascending: false })
     .limit(50);
 
@@ -590,13 +608,14 @@ const MOCK_SAE: RegistroSae[] = [
   },
 ];
 
-export async function listSae(): Promise<RegistroSae[]> {
+export async function listSae(patientId: string): Promise<RegistroSae[]> {
   if (isDemoMode()) return MOCK_SAE;
 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("sae_records")
     .select("*, patients(full_name)")
+    .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(50);
 
