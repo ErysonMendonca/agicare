@@ -39,7 +39,9 @@ import { changePassword } from "@/lib/actions/account";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
 import type { ClinicSettings } from "@/lib/data/settings";
 import type { AnamneseTemplate } from "@/lib/data/anamnese-templates.shared";
+import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 import { AnamneseBuilder } from "./AnamneseBuilder";
+import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
 
 const BASE_TABS = [
   "Geral",
@@ -52,13 +54,21 @@ const BASE_TABS = [
 
 const ATENDIMENTO_TAB = "Dados de Atendimento";
 
+type Tab = (typeof BASE_TABS)[number] | typeof ATENDIMENTO_TAB;
+
 export function ConfiguracoesClient({
   settings,
   anamneseTemplates,
+  attendanceOptions,
+  gestor,
 }: {
   settings: ClinicSettings;
   anamneseTemplates: AnamneseTemplate[];
+  attendanceOptions: AttendanceOptionsByCategory;
+  gestor: boolean;
 }) {
+  // "Dados de Atendimento" só aparece para o gestor (parametrização).
+  const tabs: Tab[] = gestor ? [...BASE_TABS, ATENDIMENTO_TAB] : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
     salvarConfiguracoes,
