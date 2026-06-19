@@ -1,3 +1,5 @@
+"use client";
+
 import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { CountUp } from "./CountUp";
@@ -24,6 +26,8 @@ export function StatCard({
   change,
   tone = "neutral",
   series,
+  onClick,
+  active = false,
 }: {
   icon: ReactNode;
   value: ReactNode;
@@ -32,6 +36,10 @@ export function StatCard({
   tone?: KpiTone | LegacyTone;
   /** Série opcional de tendência → renderiza um mini-gráfico (Sparkline). */
   series?: number[];
+  /** Se fornecido, o card vira um botão clicável (ex.: filtrar tabela). */
+  onClick?: () => void;
+  /** Realça o card como selecionado (use com onClick). */
+  active?: boolean;
 }) {
   // Fundo saturado do card (tinta semântica forte).
   const cardBg: Record<KpiTone, string> = {
@@ -66,16 +74,26 @@ export function StatCard({
     purple: "info",
     red: "danger",
   };
+  // Ring de "selecionado": cor sólida do tom.
+  const ringActive: Record<KpiTone, string> = {
+    neutral: "ring-2 ring-offset-1 ring-[var(--color-kpi-neutral-solid)]",
+    success: "ring-2 ring-offset-1 ring-[var(--color-kpi-success-solid)]",
+    info: "ring-2 ring-offset-1 ring-[var(--color-kpi-info-solid)]",
+    warn: "ring-2 ring-offset-1 ring-[var(--color-kpi-warn-solid)]",
+    danger: "ring-2 ring-offset-1 ring-[var(--color-kpi-danger-solid)]",
+  };
   const resolved: KpiTone =
     tone in legacy ? legacy[tone as LegacyTone] : (tone as KpiTone);
 
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border border-line p-5 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-        cardBg[resolved],
-      )}
-    >
+  const baseClasses = cn(
+    "rounded-2xl border border-line p-5 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ring-offset-surface",
+    cardBg[resolved],
+    active && ringActive[resolved],
+    active && "shadow-md",
+  );
+
+  const inner = (
+    <>
       <div className="flex items-start justify-between">
         <span
           className={cn(
@@ -110,6 +128,25 @@ export function StatCard({
           className={cn("mt-3 h-7 w-full opacity-80", toneText[resolved])}
         />
       )}
-    </div>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={cn(
+          baseClasses,
+          "w-full cursor-pointer text-left",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-brand-400",
+        )}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return <div className={baseClasses}>{inner}</div>;
 }

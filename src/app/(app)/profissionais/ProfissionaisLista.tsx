@@ -11,6 +11,10 @@ import {
   CalendarClock,
   FileText,
   ShieldCheck,
+  Users,
+  Stethoscope,
+  Briefcase,
+  CircleCheck,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -18,6 +22,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
+import { StatCard } from "@/components/ui/StatCard";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { NovoProfissionalModal, EditarProfissionalModal } from "./NovoProfissionalModal";
 import type { Profissional } from "@/lib/data/professionals";
@@ -55,8 +60,15 @@ const LINK_BTN_MD = `${LINK_BTN_BASE} h-10 gap-2 px-4 text-sm`;
  */
 export function ProfissionaisLista({
   profissionais,
+  kpis,
 }: {
   profissionais: Profissional[];
+  kpis: {
+    total: number;
+    clinica: number;
+    administrativa: number;
+    ativos: number;
+  };
 }) {
   const [aba, setAba] = useState<AbaId>("clinica");
   const [busca, setBusca] = useState("");
@@ -106,8 +118,68 @@ export function ProfissionaisLista({
     });
   }, [profissionais, aba, busca, filtroStatus, filtroEspec]);
 
+  /** KPI "Ativos": filtra por status ativo (toggle), revela o painel e sai de "Perfis". */
+  function toggleAtivos() {
+    setFiltroStatus((prev) => {
+      const next = prev === "ativo" ? "todos" : "ativo";
+      if (next === "ativo") {
+        setMostrarFiltros(true);
+        setAba((a) => (a === "perfis" ? "clinica" : a));
+      }
+      return next;
+    });
+  }
+
   return (
     <>
+      {/* KPIs clicáveis: Clínica/Administrativa trocam a aba; Ativos filtra por
+          status; Total limpa os filtros. */}
+      <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <FadeInUp>
+          <StatCard
+            icon={<Users className="h-5 w-5" />}
+            value={String(kpis.total)}
+            label="Total de Profissionais"
+            tone="neutral"
+            onClick={() => {
+              setFiltroStatus("todos");
+              setFiltroEspec("todas");
+            }}
+            active={filtroStatus === "todos" && filtroEspec === "todas"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<Stethoscope className="h-5 w-5" />}
+            value={String(kpis.clinica)}
+            label="Equipe Clínica"
+            tone="neutral"
+            onClick={() => setAba("clinica")}
+            active={aba === "clinica"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<Briefcase className="h-5 w-5" />}
+            value={String(kpis.administrativa)}
+            label="Equipe Administrativa"
+            tone="neutral"
+            onClick={() => setAba("administrativa")}
+            active={aba === "administrativa"}
+          />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard
+            icon={<CircleCheck className="h-5 w-5" />}
+            value={String(kpis.ativos)}
+            label="Profissionais Ativos"
+            tone="success"
+            onClick={toggleAtivos}
+            active={filtroStatus === "ativo"}
+          />
+        </FadeInUp>
+      </Stagger>
+
       {/* Abas funcionais */}
       <div className="mt-6 flex flex-wrap items-center gap-2">
         {ABAS.map((a) => (

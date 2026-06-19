@@ -1,12 +1,4 @@
-import {
-  Users,
-  Stethoscope,
-  Briefcase,
-  CircleCheck,
-} from "lucide-react";
 import { PageHeader } from "@/components/app/PageHeader";
-import { StatCard } from "@/components/ui/StatCard";
-import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { listProfessionals, isClinico } from "@/lib/data/professionals";
 import { requireView } from "@/lib/permissions";
 import { NovoProfissionalModal } from "./NovoProfissionalModal";
@@ -30,43 +22,11 @@ export default async function ProfissionaisPage() {
         actions={<NovoProfissionalModal triggerLabel="Novo Profissional" />}
       />
 
-      <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <FadeInUp>
-          <StatCard
-            icon={<Users className="h-5 w-5" />}
-            value={String(total)}
-            label="Total de Profissionais"
-            tone="neutral"
-          />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard
-            icon={<Stethoscope className="h-5 w-5" />}
-            value={String(clinica)}
-            label="Equipe Clínica"
-            tone="neutral"
-          />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard
-            icon={<Briefcase className="h-5 w-5" />}
-            value={String(administrativa)}
-            label="Equipe Administrativa"
-            tone="neutral"
-          />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard
-            icon={<CircleCheck className="h-5 w-5" />}
-            value={String(ativos)}
-            label="Profissionais Ativos"
-            tone="success"
-          />
-        </FadeInUp>
-      </Stagger>
-
-      {/* Abas funcionais + lista filtrável (estado no client). */}
-      <ProfissionaisLista profissionais={profissionais} />
+      {/* KPIs clicáveis + abas funcionais + lista filtrável (estado no client). */}
+      <ProfissionaisLista
+        profissionais={profissionais}
+        kpis={{ total, clinica, administrativa, ativos }}
+      />
     </>
   );
 }

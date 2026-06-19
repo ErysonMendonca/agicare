@@ -1,13 +1,4 @@
-import {
-  CalendarDays,
-  Clock,
-  CheckCircle2,
-  Activity,
-  CheckCheck,
-} from "lucide-react";
 import { PageHeader } from "@/components/app/PageHeader";
-import { StatCard } from "@/components/ui/StatCard";
-import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { listAppointments, countByStatus } from "@/lib/data/appointments";
 import { listPatients } from "@/lib/data/patients";
 import { listProfessionals } from "@/lib/data/professionals";
@@ -34,50 +25,11 @@ export default async function AgendaPage() {
         }
       />
 
-      <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <FadeInUp>
-          <StatCard
-            icon={<CalendarDays className="h-5 w-5" />}
-            value={kpis.total}
-            label="Total de Agendamentos"
-            tone="neutral"
-          />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard
-            icon={<Clock className="h-5 w-5" />}
-            value={kpis.agendados}
-            label="Agendados"
-            tone="info"
-          />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard
-            icon={<CheckCircle2 className="h-5 w-5" />}
-            value={kpis.confirmados}
-            label="Confirmados"
-            tone="success"
-          />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard
-            icon={<Activity className="h-5 w-5" />}
-            value={kpis.emAtendimento}
-            label="Em Atendimento"
-            tone="info"
-          />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard
-            icon={<CheckCheck className="h-5 w-5" />}
-            value={kpis.finalizados}
-            label="Finalizados"
-            tone="success"
-          />
-        </FadeInUp>
-      </Stagger>
-
-      <AgendaList atendimentos={atendimentos} profissionais={profissionais} />
+      <AgendaList
+        atendimentos={atendimentos}
+        profissionais={profissionais}
+        kpis={kpis}
+      />
     </>
   );
 }
