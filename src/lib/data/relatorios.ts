@@ -323,3 +323,84 @@ export async function getRelatoriosData(
     ...financeiro,
   };
 }
+
+// ════════════════════════════════════════════════════════════════
+// Utilização das opções de atendimento (BI gerencial) — conta quantas
+// vezes cada valor de cada categoria foi usado em attendance_records, no
+// período (created_at). Serve para o gestor revisar/limpar opções.
+// Escopo por clínica via RLS; respeita só o filtro de período (de/até).
+// ════════════════════════════════════════════════════════════════
+
+/** category (contrato 0050) → coluna em attendance_records. */
+const UTILIZACAO_COLUNAS = {
+  origem: "origem",
+  medico: "medico",
+  especialidade: "especialidade",
+  encaminhamento: "encaminhamento",
+  carater: "carater",
+  procedencia: "procedencia",
+  centro_custo: "centro_custo",
+  convenio: "convenio",
+  plano: "plano",
+  parentesco: "resp_parentesco",
+} as const;
+
+export type UtilizacaoItem = { valor: string; count: number };
+export type UtilizacaoAtendimentoBI = Record<string, UtilizacaoItem[]>;
+
+const UTILIZACAO_DEMO: UtilizacaoAtendimentoBI = {
+  origem: [
+    { valor: "1 - RECEPÇÃO", count: 142 },
+    { valor: "2 - PRONTO ATENDIMENTO", count: 87 },
+    { valor: "3 - INTERNAÇÃO", count: 18 },
+  ],
+  convenio: [
+    { valor: "SUS", count: 121 },
+    { valor: "Unimed", count: 64 },
+    { valor: "Particular", count: 41 },
+  ],
+  carater: [
+    { valor: "eletivo", count: 168 },
+    { valor: "urgencia", count: 79 },
+  ],
+};
+
+/**
+ * Agrega o uso de cada opção por categoria. Retorna, por categoria, a lista
+ * de `{ valor, count }` ordenada do mais usado ao menos usado.
+ * @param filtros Período (de/ate) recorta por created_at; demais campos ignorados.
+ */
+export async function getUtilizacaoAtendimentoBI(
+  filtros: RelatoriosFiltros = {},
+): Promise<UtilizacaoAtendimentoBI> {
+  if (isDemoMode()) return UTILIZACAO_DEMO;
+
+  const supabase = await createClient();
+  const colunas = Object.values(UTILIZACAO_COLUNAS);
+
+  let q = supabase
+    .from("attendance_records")
+    .select(colunas.join(", "));
+  if (filtros.de) q = q.gte("created_at", `${filtros.de}T00:00:00`);
+  if (filtros.ate) q = q.lte("created_at", `${filtros.ate}T23:59:59`);
+
+  const { data, error } = await q;
+  if (error || !data) return {};
+
+  const rows = data as unknown as Record<string, string | null>[];
+  const out: UtilizacaoAtendimentoBI = {};
+
+  for (const [categoria, coluna] of Object.entries(UTILIZACAO_COLUNAS)) {
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const v = row[coluna];
+      if (!v) continue; // ignora null/vazio
+      counts.set(v, (counts.get(v) ?? 0) + 1);
+    }
+    out[categoria] = [...counts.entries()]
+      .map(([valor, count]) => ({ valor, count }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  return out;
+}

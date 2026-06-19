@@ -38,8 +38,10 @@ import { uploadLogo } from "@/lib/actions/branding";
 import { changePassword } from "@/lib/actions/account";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
 import type { ClinicSettings } from "@/lib/data/settings";
+import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options";
+import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
 
-const tabs = [
+const BASE_TABS = [
   "Geral",
   "Notificações",
   "Segurança",
@@ -47,9 +49,21 @@ const tabs = [
   "Marca",
 ] as const;
 
-type Tab = (typeof tabs)[number];
+const ATENDIMENTO_TAB = "Dados de Atendimento";
 
-export function ConfiguracoesClient({ settings }: { settings: ClinicSettings }) {
+type Tab = (typeof BASE_TABS)[number] | typeof ATENDIMENTO_TAB;
+
+export function ConfiguracoesClient({
+  settings,
+  gestor = false,
+  attendanceOptions = {},
+}: {
+  settings: ClinicSettings;
+  gestor?: boolean;
+  attendanceOptions?: AttendanceOptionsByCategory;
+}) {
+  // A aba de parametrização da ficha é só para gestor.
+  const tabs: Tab[] = gestor ? [...BASE_TABS, ATENDIMENTO_TAB] : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
     salvarConfiguracoes,
@@ -467,13 +481,21 @@ export function ConfiguracoesClient({ settings }: { settings: ClinicSettings }) 
           </Card>
         </TabPane>
 
-        <div className="mt-6 flex justify-end">
-          <Button type="submit" variant="primary" disabled={pending}>
-            <Save className="h-4 w-4" />
-            {pending ? "Salvando..." : "Salvar Alterações"}
-          </Button>
-        </div>
+        {tabAtiva !== ATENDIMENTO_TAB && (
+          <div className="mt-6 flex justify-end">
+            <Button type="submit" variant="primary" disabled={pending}>
+              <Save className="h-4 w-4" />
+              {pending ? "Salvando..." : "Salvar Alterações"}
+            </Button>
+          </div>
+        )}
       </form>
+
+      {/* Dados de Atendimento — parametrização (gestor). Fora do form de
+          configurações: usa Server Actions próprias com revalidate. */}
+      {gestor && tabAtiva === ATENDIMENTO_TAB && (
+        <AtendimentoOpcoes options={attendanceOptions} />
+      )}
 
       {/* Troca da PRÓPRIA senha — formulário independente (fora do form de
           configurações, que é gestor-only). Vive na aba Segurança. */}
