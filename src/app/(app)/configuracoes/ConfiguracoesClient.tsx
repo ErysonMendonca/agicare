@@ -38,9 +38,12 @@ import { uploadLogo } from "@/lib/actions/branding";
 import { changePassword } from "@/lib/actions/account";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
 import type { ClinicSettings } from "@/lib/data/settings";
+import type { FlowStage } from "@/lib/data/attendance-flow.shared";
+import { FluxoAtendimento } from "./FluxoAtendimento";
 
 const tabs = [
   "Geral",
+  "Fluxo",
   "Notificações",
   "Segurança",
   "Backup",
@@ -49,7 +52,15 @@ const tabs = [
 
 type Tab = (typeof tabs)[number];
 
-export function ConfiguracoesClient({ settings }: { settings: ClinicSettings }) {
+export function ConfiguracoesClient({
+  settings,
+  stages,
+  isGestor,
+}: {
+  settings: ClinicSettings;
+  stages: FlowStage[];
+  isGestor: boolean;
+}) {
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
     salvarConfiguracoes,
@@ -467,13 +478,19 @@ export function ConfiguracoesClient({ settings }: { settings: ClinicSettings }) 
           </Card>
         </TabPane>
 
-        <div className="mt-6 flex justify-end">
+        <div className={`mt-6 flex justify-end ${tabAtiva === "Fluxo" ? "hidden" : ""}`}>
           <Button type="submit" variant="primary" disabled={pending}>
             <Save className="h-4 w-4" />
             {pending ? "Salvando..." : "Salvar Alterações"}
           </Button>
         </div>
       </form>
+
+      {/* Fluxo de atendimento — editor independente (action própria salvarFluxo,
+          gestor-only). Fora do form de configurações. */}
+      {tabAtiva === "Fluxo" && (
+        <FluxoAtendimento stages={stages} isGestor={isGestor} />
+      )}
 
       {/* Troca da PRÓPRIA senha — formulário independente (fora do form de
           configurações, que é gestor-only). Vive na aba Segurança. */}

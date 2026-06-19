@@ -37,6 +37,8 @@ function mapStatus(status: string): { label: string; tone: Status } {
   switch (status) {
     case "chamado":
       return { label: "Chamado", tone: "active" };
+    case "triagem":
+      return { label: "Em Triagem", tone: "active" };
     case "em_atendimento":
       return { label: "Em Atendimento", tone: "active" };
     case "finalizado":
