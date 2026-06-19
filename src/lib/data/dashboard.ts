@@ -17,6 +17,16 @@ export type DashboardKpis = {
     receitaMensal: KpiChange;
     taxaOcupacao: KpiChange;
   };
+  /**
+   * Séries de tendência (7–8 pontos) p/ os sparklines dos KPIs.
+   * Opcional: no caminho REAL pode vir vazio → o sparkline some.
+   */
+  series?: {
+    pacientesAtivos: number[];
+    consultasHoje: number[];
+    receitaMensal: number[];
+    taxaOcupacao: number[];
+  };
 };
 
 const DEMO: DashboardKpis = {
@@ -29,6 +39,12 @@ const DEMO: DashboardKpis = {
     consultasHoje: { value: "8.2%", positive: true },
     receitaMensal: { value: "15.3%", positive: true },
     taxaOcupacao: { value: "2.4%", positive: false },
+  },
+  series: {
+    pacientesAtivos: [2480, 2535, 2590, 2640, 2705, 2760, 2810, 2847],
+    consultasHoje: [16, 19, 17, 22, 20, 25, 21, 24],
+    receitaMensal: [142, 150, 138, 159, 165, 172, 176, 182],
+    taxaOcupacao: [82, 84, 85, 88, 90, 89, 86, 87.5],
   },
 };
 

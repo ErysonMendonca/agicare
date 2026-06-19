@@ -176,16 +176,16 @@ export default async function ProntuarioPage({
       {/* KPIs */}
       <Stagger className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <FadeInUp>
-          <StatCard icon={<FileText className="h-5 w-5" />} value={String(todos)} label="Todos" tone="blue" />
+          <StatCard icon={<FileText className="h-5 w-5" />} value={String(todos)} label="Todos" tone="neutral" />
         </FadeInUp>
         <FadeInUp>
-          <StatCard icon={<Clock className="h-5 w-5" />} value={String(aguardando)} label="Aguardando Atendimento" tone="green" />
+          <StatCard icon={<Clock className="h-5 w-5" />} value={String(aguardando)} label="Aguardando Atendimento" tone="info" />
         </FadeInUp>
         <FadeInUp>
-          <StatCard icon={<Activity className="h-5 w-5" />} value={String(emAtendimento)} label="Em Atendimento" tone="orange" />
+          <StatCard icon={<Activity className="h-5 w-5" />} value={String(emAtendimento)} label="Em Atendimento" tone="info" />
         </FadeInUp>
         <FadeInUp>
-          <StatCard icon={<CheckCircle2 className="h-5 w-5" />} value={String(realizados)} label="Atendimentos Realizados" tone="brand" />
+          <StatCard icon={<CheckCircle2 className="h-5 w-5" />} value={String(realizados)} label="Atendimentos Realizados" tone="success" />
         </FadeInUp>
       </Stagger>
 

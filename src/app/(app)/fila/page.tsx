@@ -33,7 +33,7 @@ export default async function FilaPage() {
             icon={<Clock className="h-5 w-5" />}
             value={String(aguardando)}
             label="Aguardando"
-            tone="blue"
+            tone="info"
           />
         </FadeInUp>
         <FadeInUp>
@@ -41,7 +41,7 @@ export default async function FilaPage() {
             icon={<PhoneCall className="h-5 w-5" />}
             value={String(chamados)}
             label="Chamados"
-            tone="brand"
+            tone="info"
           />
         </FadeInUp>
         <FadeInUp>
@@ -49,7 +49,7 @@ export default async function FilaPage() {
             icon={<Users className="h-5 w-5" />}
             value={String(emAtendimento)}
             label="Em Atendimento"
-            tone="green"
+            tone="info"
           />
         </FadeInUp>
         <FadeInUp>
@@ -57,7 +57,7 @@ export default async function FilaPage() {
             icon={<Users className="h-5 w-5" />}
             value={String(total)}
             label="Total"
-            tone="purple"
+            tone="neutral"
           />
         </FadeInUp>
       </Stagger>

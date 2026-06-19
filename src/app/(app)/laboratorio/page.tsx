@@ -33,37 +33,37 @@ export default async function LaboratorioPage() {
   const finalizados = casos.filter((c) => c.status === "finalizado").length;
   const urgentes = casos.filter((c) => c.urgente).length;
 
-  // KPIs com cores distintas por tom (brand/blue/orange/green/purple).
+  // KPIs com tom semântico por significado (neutral/info/warn/success/danger).
   const kpis = [
     {
       icon: <FlaskConical className="h-5 w-5" />,
       value: String(total),
       label: "Total de Casos",
-      tone: "brand" as const,
+      tone: "neutral" as const,
     },
     {
       icon: <Clock className="h-5 w-5" />,
       value: String(emAndamento),
       label: "Em Andamento",
-      tone: "blue" as const,
+      tone: "info" as const,
     },
     {
       icon: <AlertTriangle className="h-5 w-5" />,
       value: String(pendencias),
       label: "Pendências",
-      tone: "orange" as const,
+      tone: "warn" as const,
     },
     {
       icon: <CheckCircle2 className="h-5 w-5" />,
       value: String(finalizados),
       label: "Finalizados",
-      tone: "green" as const,
+      tone: "success" as const,
     },
     {
       icon: <TrendingUp className="h-5 w-5" />,
       value: String(urgentes),
       label: "Urgentes",
-      tone: "purple" as const,
+      tone: "danger" as const,
     },
   ];
 

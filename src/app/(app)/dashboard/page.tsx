@@ -72,9 +72,9 @@ export default async function DashboardPage() {
   ];
 
   const alertaCor: Record<AlertaTone, string> = {
-    danger: "text-red-500",
-    warn: "text-orange-500",
-    info: "text-blue-500",
+    danger: "text-status-danger",
+    warn: "text-status-warn",
+    info: "text-status-wait",
   };
 
   return (
@@ -91,7 +91,8 @@ export default async function DashboardPage() {
             value={kpis.pacientesAtivos}
             label="Pacientes Ativos"
             change={kpis.changes.pacientesAtivos}
-            tone="brand"
+            tone="success"
+            series={kpis.series?.pacientesAtivos}
           />
         </FadeInUp>
         <FadeInUp>
@@ -100,7 +101,8 @@ export default async function DashboardPage() {
             value={kpis.consultasHoje}
             label="Consultas Hoje"
             change={kpis.changes.consultasHoje}
-            tone="blue"
+            tone="info"
+            series={kpis.series?.consultasHoje}
           />
         </FadeInUp>
         <FadeInUp>
@@ -110,7 +112,8 @@ export default async function DashboardPage() {
               value={kpis.receitaMensal}
               label="Receita Mensal"
               change={kpis.changes.receitaMensal}
-              tone="green"
+              tone="success"
+              series={kpis.series?.receitaMensal}
             />
           ) : (
             <Card className="flex h-full flex-col justify-center p-5">
@@ -130,7 +133,8 @@ export default async function DashboardPage() {
             value={kpis.taxaOcupacao}
             label="Taxa de Ocupação"
             change={kpis.changes.taxaOcupacao}
-            tone="orange"
+            tone="neutral"
+            series={kpis.series?.taxaOcupacao}
           />
         </FadeInUp>
       </Stagger>

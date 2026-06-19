@@ -3,11 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
+import { motion } from "framer-motion";
 import { cn, initials } from "@/lib/utils";
 import { NAV_GROUPS } from "./nav";
 import { Logo } from "./Logo";
 import { signOut } from "@/lib/actions/auth";
+import { useUIStore } from "@/lib/store/ui";
 import type { PermissionMap } from "@/lib/permissions.shared";
+
+/** Transição suave compartilhada entre a largura da sidebar e o slide do conteúdo. */
+const SIDEBAR_SPRING = { type: "spring", stiffness: 400, damping: 40, mass: 0.9 } as const;
 
 export function Sidebar({
   user,
@@ -24,6 +29,7 @@ export function Sidebar({
   logoUrl?: string | null;
 }) {
   const pathname = usePathname();
+  const collapsed = useUIStore((s) => s.sidebarCollapsed);
 
   /** Badge real por módulo (sobrepõe o badge estático do nav). */
   const badgeFor = (module: string, fallback?: number): number | undefined => {
@@ -33,8 +39,21 @@ export function Sidebar({
   };
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col bg-[#0a3838]">
-      <div className="px-6 py-5">
+    <motion.aside
+      className="h-full shrink-0 overflow-hidden bg-[#0a3838]"
+      initial={false}
+      animate={{ width: collapsed ? 0 : 240 }}
+      transition={SIDEBAR_SPRING}
+      aria-hidden={collapsed}
+    >
+      <motion.div
+        className="flex h-full w-60 flex-col"
+        initial={false}
+        animate={{ x: collapsed ? -240 : 0 }}
+        transition={SIDEBAR_SPRING}
+        inert={collapsed || undefined}
+      >
+        <div className="px-6 py-5">
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -115,7 +134,8 @@ export function Sidebar({
             <LogOut className="h-4 w-4" />
           </button>
         </form>
-      </div>
-    </aside>
+        </div>
+      </motion.div>
+    </motion.aside>
   );
 }
