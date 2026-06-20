@@ -15,6 +15,7 @@ import {
   FileText,
   ChevronRight,
   Lock,
+  ListChecks,
 } from "lucide-react";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card } from "@/components/ui/Card";
@@ -24,7 +25,11 @@ import { Select } from "@/components/ui/Select";
 import { AreaChart, BarChart } from "@/components/ui/Charts";
 import { CountUp } from "@/components/ui/CountUp";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
-import type { RelatoriosData } from "@/lib/data/relatorios";
+import type {
+  RelatoriosData,
+  UtilizacaoAtendimentoBI,
+} from "@/lib/data/relatorios";
+import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options";
 import type { RelatoriosFiltros } from "@/lib/data/relatorios-filtros";
 import type { AccessLogRow, ConsentLogRow } from "@/lib/data/audit";
 import type {
@@ -40,9 +45,24 @@ const abas = [
   { id: "epidemiologico", label: "Epidemiológico", icon: Activity },
   { id: "financeiro", label: "Financeiro (BI)", icon: DollarSign },
   { id: "lgpd", label: "Conformidade LGPD", icon: ShieldCheck },
+  { id: "utilizacao", label: "Utilização", icon: ListChecks },
 ] as const;
 
 type AbaId = (typeof abas)[number]["id"];
+
+/** Ordem + rótulos PT-BR das categorias de utilização (espelha o backend). */
+const CATEGORIAS_UTILIZACAO: { id: string; label: string }[] = [
+  { id: "origem", label: "Origem do Atendimento" },
+  { id: "medico", label: "Médico" },
+  { id: "especialidade", label: "Especialidade" },
+  { id: "encaminhamento", label: "Encaminhamento" },
+  { id: "carater", label: "Caráter do Atendimento" },
+  { id: "procedencia", label: "Local de Procedência" },
+  { id: "centro_custo", label: "Centro de Custo" },
+  { id: "convenio", label: "Convênio" },
+  { id: "plano", label: "Plano" },
+  { id: "parentesco", label: "Grau de Parentesco" },
+];
 
 /** Formata número para moeda brasileira (R$ pt-BR). */
 const moedaBR = (v: number) =>
@@ -234,6 +254,8 @@ export function RelatoriosClient({
   origem,
   epidemio,
   financeiroBI,
+  utilizacao,
+  opcoesAtendimento,
   filtros,
   opcoesProfissionais,
   opcoesEspecialidades,
@@ -247,6 +269,8 @@ export function RelatoriosClient({
   origem: OrigemPacientesBI;
   epidemio: EpidemiologicoBI;
   financeiroBI: FinanceiroBI | null;
+  utilizacao: UtilizacaoAtendimentoBI;
+  opcoesAtendimento: AttendanceOptionsByCategory;
   filtros: RelatoriosFiltros;
   opcoesProfissionais: { id: string; nome: string }[];
   opcoesEspecialidades: string[];
@@ -1297,6 +1321,123 @@ export function RelatoriosClient({
               />
             )}
           </Card>
+        </div>
+      )}
+
+      {/* Utilização — ranking de uso das opções da ficha de atendimento.
+          Cruza o BI ({valor,count}) com as opções parametrizadas para apontar
+          as que ainda não foram usadas (count = 0). */}
+      {aba === "utilizacao" && (
+        <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {(() => {
+            const cards = CATEGORIAS_UTILIZACAO.map((cat) => {
+              const usados = utilizacao[cat.id] ?? [];
+              // Valores que já apareceram em fichas (match por valor OU rótulo).
+              const usadosSet = new Set(usados.map((u) => u.valor));
+              const semUso = (opcoesAtendimento[cat.id] ?? []).filter(
+                (o) => !usadosSet.has(o.value) && !usadosSet.has(o.label),
+              );
+              return { cat, usados, semUso };
+            }).filter((c) => c.usados.length > 0 || c.semUso.length > 0);
+
+            if (cards.length === 0) {
+              return (
+                <Card className="flex flex-col items-center justify-center gap-2 p-12 text-center lg:col-span-2">
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-muted-surface text-muted">
+                    <ListChecks className="h-6 w-6" />
+                  </span>
+                  <p className="text-sm font-medium text-ink">
+                    Sem dados de utilização
+                  </p>
+                  <p className="max-w-xs text-xs text-muted">
+                    O ranking aparece conforme as fichas de atendimento forem
+                    preenchidas com as opções parametrizadas.
+                  </p>
+                </Card>
+              );
+            }
+
+            return cards.map(({ cat, usados, semUso }) => {
+              const max = usados.reduce((m, i) => Math.max(m, i.count), 0);
+              return (
+                <Card key={cat.id} className="overflow-hidden">
+                  <div className="flex items-center justify-between gap-2 p-5">
+                    <div>
+                      <h3 className="font-semibold text-ink">{cat.label}</h3>
+                      <p className="text-sm text-muted">
+                        {usados.length} em uso
+                        {semUso.length > 0 && (
+                          <span className="text-orange-600">
+                            {" "}
+                            · {semUso.length} sem uso
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Exportar utilização de ${cat.label}`}
+                      disabled={usados.length === 0}
+                      onClick={() =>
+                        downloadCSV(
+                          `utilizacao-${cat.id}.csv`,
+                          ["Valor", "Usos"],
+                          usados.map((i) => [i.valor, i.count]),
+                        )
+                      }
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <ul className="space-y-2 border-t border-line p-5">
+                    {usados.length === 0 ? (
+                      <li className="text-sm text-muted">
+                        Nenhuma opção utilizada no período.
+                      </li>
+                    ) : (
+                      usados.map((it) => {
+                        const pct = max > 0 ? Math.round((it.count / max) * 100) : 0;
+                        return (
+                          <li key={it.valor} className="text-sm">
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <span className="truncate text-ink">{it.valor}</span>
+                              <span className="flex-none font-medium text-muted">
+                                {it.count}
+                              </span>
+                            </div>
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-muted-surface">
+                              <div
+                                className="h-full rounded-full bg-brand-500"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                  {semUso.length > 0 && (
+                    <div className="border-t border-line bg-muted-surface/50 px-5 py-3">
+                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+                        Sem uso ({semUso.length})
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {semUso.map((o) => (
+                          <span
+                            key={o.id}
+                            className="inline-flex rounded-md bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-600"
+                          >
+                            {o.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              );
+            });
+          })()}
         </div>
       )}
 

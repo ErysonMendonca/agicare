@@ -24,6 +24,7 @@ import {
   DEFAULT_STAGES,
   type FlowStage,
 } from "@/lib/data/attendance-flow.shared";
+import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options";
 import { AcoesPacienteModal } from "./AcoesPacienteModal";
 import { TriagemModal } from "./TriagemModal";
 import { DadosAtendimentoModal } from "./DadosAtendimentoModal";
@@ -361,6 +362,7 @@ export function FilaClient({
             open={modal === "atendimento"}
             onClose={fechar}
             onVoltar={() => setModal("acoes")}
+            options={attendanceOptions}
           />
           <DesistenciaModal
             item={selected}

@@ -16,8 +16,10 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { type Profissional } from "@/lib/data/professionals";
+import { type Escala } from "@/lib/data/schedules";
 import {
   createSchedule,
+  updateSchedule,
   createBlock,
   removeBlock,
   listBlocks,
@@ -61,13 +63,17 @@ export function EscalaHorariosModal({
   open,
   onClose,
   profissionais,
+  escalaParaEditar,
 }: {
   open: boolean;
   onClose: () => void;
   profissionais: Profissional[];
+  /** Quando presente, o modal abre em modo edição (pré-preenche + updateSchedule). */
+  escalaParaEditar?: Escala;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const editMode = Boolean(escalaParaEditar);
 
   const [aba, setAba] = useState<Aba>("dados");
   const [descricao, setDescricao] = useState("");
@@ -76,6 +82,7 @@ export function EscalaHorariosModal({
   const [tipo, setTipo] = useState(TIPOS[0]);
   const [slotMin, setSlotMin] = useState(30);
   const [encaixe, setEncaixe] = useState(0);
+  const [ativo, setAtivo] = useState(true);
 
   const [dias, setDias] = useState<number[]>([1, 2, 3, 4, 5]);
   const [inicio, setInicio] = useState("08:00");
@@ -87,6 +94,39 @@ export function EscalaHorariosModal({
     new Date().toISOString().slice(0, 10),
   );
   const [blockPending, startBlock] = useTransition();
+
+  // Pré-preenche (modo edição) ou reseta (modo criação) ao abrir.
+  useEffect(() => {
+    if (!open) return;
+    if (escalaParaEditar) {
+      const e = escalaParaEditar;
+      setAba("dados");
+      setDescricao(e.description);
+      setProfissionalId(e.professionalId);
+      setEspecialidade(e.specialty);
+      setTipo(e.serviceType || TIPOS[0]);
+      setSlotMin(e.slotMinutes);
+      setEncaixe(e.overbookLimit);
+      setAtivo(e.active);
+      setDias(e.weekdays);
+      setInicio(e.startTime);
+      setFim(e.endTime);
+      setSlots([]);
+    } else {
+      setAba("dados");
+      setDescricao("");
+      setProfissionalId("");
+      setEspecialidade("");
+      setTipo(TIPOS[0]);
+      setSlotMin(30);
+      setEncaixe(0);
+      setAtivo(true);
+      setDias([1, 2, 3, 4, 5]);
+      setInicio("08:00");
+      setFim("18:00");
+      setSlots([]);
+    }
+  }, [open, escalaParaEditar]);
 
   // Sincroniza os bloqueios persistidos quando há profissional + data + grade.
   useEffect(() => {
@@ -224,7 +264,7 @@ export function EscalaHorariosModal({
       return;
     }
     startTransition(async () => {
-      const res = await createSchedule({
+      const payload = {
         description: descricao,
         professional_id: profissionalId,
         specialty: especialidade,
@@ -234,9 +274,16 @@ export function EscalaHorariosModal({
         weekdays: dias,
         start_time: inicio,
         end_time: fim,
-      });
+      };
+      const res = escalaParaEditar
+        ? await updateSchedule(escalaParaEditar.id, { ...payload, active: ativo })
+        : await createSchedule(payload);
       if (res?.ok) {
-        toast.success(`Escala ${res.protocol ?? ""} salva com sucesso.`);
+        toast.success(
+          escalaParaEditar
+            ? "Escala atualizada com sucesso."
+            : `Escala ${res.protocol ?? ""} salva com sucesso.`,
+        );
         router.refresh();
         onClose();
       } else {
@@ -249,7 +296,9 @@ export function EscalaHorariosModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Configuração de Escala de Horários"
+      title={
+        editMode ? "Editar Escala de Horários" : "Configuração de Escala de Horários"
+      }
       subtitle="Defina a grade de atendimento de um profissional"
       className="max-w-2xl"
       footer={
@@ -259,7 +308,11 @@ export function EscalaHorariosModal({
           </Button>
           <Button variant="primary" onClick={salvar} disabled={pending}>
             <Save className="h-4 w-4" />
-            {pending ? "Salvando..." : "Salvar Escala"}
+            {pending
+              ? "Salvando..."
+              : editMode
+                ? "Salvar Alterações"
+                : "Salvar Escala"}
           </Button>
         </>
       }
@@ -279,7 +332,7 @@ export function EscalaHorariosModal({
           <div>
             <span className="mb-1.5 block text-sm font-medium text-ink">Código</span>
             <span className="inline-flex h-10 items-center rounded-lg bg-brand-50 px-3 text-sm font-semibold text-brand-600">
-              AUTO
+              {escalaParaEditar?.code ?? "AUTO"}
             </span>
           </div>
           <Input
@@ -334,6 +387,17 @@ export function EscalaHorariosModal({
               <option key={t}>{t}</option>
             ))}
           </Select>
+          {editMode && (
+            <label className="flex items-center gap-2 sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={ativo}
+                onChange={(e) => setAtivo(e.target.checked)}
+                className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-500"
+              />
+              <span className="text-sm font-medium text-ink">Escala ativa</span>
+            </label>
+          )}
         </div>
       ) : (
         <div className="space-y-5">

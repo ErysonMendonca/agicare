@@ -20,13 +20,17 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import {
-  getAnamneseBlocos,
   chaveEspecialidade,
   ESPECIALIDADES_ANAMNESE,
-  type CampoAnamnese,
 } from "@/lib/clinico/anamnese-config";
+import {
+  type AnamneseField,
+  type AnamneseTemplate,
+} from "@/lib/data/anamnese-templates.shared";
 import { type AnamneseRegistro } from "@/lib/data/anamnese";
 import { gerarAnamnese } from "@/lib/actions/anamnese";
+import { LousaRascunho } from "@/components/clinico/LousaRascunho";
+import { type AnamneseLousa } from "@/lib/data/anamnese-files";
 
 const textareaCls =
   "w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100";
@@ -35,10 +39,14 @@ export function AnamneseClient({
   patientId,
   anamneses,
   minhaEspecialidade,
+  templates,
+  lousas = [],
 }: {
   patientId: string;
   anamneses: AnamneseRegistro[];
   minhaEspecialidade: string | null;
+  templates: AnamneseTemplate[];
+  lousas?: AnamneseLousa[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -60,7 +68,30 @@ export function AnamneseClient({
   const [consentImagem, setConsentImagem] = useState(false); // opcional
   const [signature, setSignature] = useState("");
 
-  const blocos = useMemo(() => getAnamneseBlocos(specialty), [specialty]);
+  // Mapa especialidade → campos (vem do template salvo no banco ou do fallback).
+  const fieldsBySpecialty = useMemo(() => {
+    const m = new Map<string, AnamneseField[]>();
+    for (const t of templates) m.set(t.specialty, t.fields);
+    return m;
+  }, [templates]);
+
+  // Agrupa os campos da especialidade selecionada por seção (preserva a ordem).
+  const blocos = useMemo(() => {
+    const campos = fieldsBySpecialty.get(specialty) ?? [];
+    const grupos: { titulo: string; campos: AnamneseField[] }[] = [];
+    const indice = new Map<string, number>();
+    for (const campo of campos) {
+      const titulo = campo.section?.trim() || "Anamnese";
+      let i = indice.get(titulo);
+      if (i === undefined) {
+        i = grupos.length;
+        indice.set(titulo, i);
+        grupos.push({ titulo, campos: [] });
+      }
+      grupos[i].campos.push(campo);
+    }
+    return grupos;
+  }, [fieldsBySpecialty, specialty]);
 
   // Regra: só gera quem é da especialidade da ficha (em demo, minha = null → liberado).
   const podeGerar =
@@ -164,6 +195,15 @@ export function AnamneseClient({
         </Stagger>
       )}
 
+      {/* Lousa / rascunho clínico (desenho sobre imagem) */}
+      <div className="mt-6">
+        <LousaRascunho
+          patientId={patientId}
+          lousas={lousas}
+          onSaved={() => router.refresh()}
+        />
+      </div>
+
       {/* Modal de geração */}
       <Modal
         open={form}
@@ -211,20 +251,17 @@ export function AnamneseClient({
               <legend className="px-1 text-sm font-semibold text-ink">
                 {bloco.titulo}
               </legend>
-              {bloco.descricao && (
-                <p className="mb-3 text-xs text-muted">{bloco.descricao}</p>
-              )}
               <div className="space-y-4">
                 {bloco.campos.map((campo) => (
                   <CampoView
-                    key={campo.key}
+                    key={campo.id}
                     campo={campo}
-                    valorTexto={getStr(campo.key)}
-                    valorArray={getArr(campo.key)}
-                    valorBool={getBool(campo.key)}
-                    onTexto={(v) => setValue(campo.key, v)}
-                    onToggle={(opt) => toggleOpcao(campo.key, opt)}
-                    onBool={(v) => setValue(campo.key, v)}
+                    valorTexto={getStr(campo.id)}
+                    valorArray={getArr(campo.id)}
+                    valorBool={getBool(campo.id)}
+                    onTexto={(v) => setValue(campo.id, v)}
+                    onToggle={(opt) => toggleOpcao(campo.id, opt)}
+                    onBool={(v) => setValue(campo.id, v)}
                   />
                 ))}
               </div>
@@ -372,7 +409,7 @@ function CampoView({
   onToggle,
   onBool,
 }: {
-  campo: CampoAnamnese;
+  campo: AnamneseField;
   valorTexto: string;
   valorArray: string[];
   valorBool: boolean;
@@ -385,7 +422,7 @@ function CampoView({
       <div>
         <span className="mb-1.5 block text-sm font-medium text-ink">{campo.label}</span>
         <div className="flex flex-wrap gap-2">
-          {campo.opcoes.map((opt) => {
+          {(campo.options ?? []).map((opt) => {
             const ativo = valorArray.includes(opt);
             return (
               <button
@@ -404,6 +441,26 @@ function CampoView({
           })}
         </div>
       </div>
+    );
+  }
+
+  if (campo.tipo === "select") {
+    return (
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-medium text-ink">{campo.label}</span>
+        <select
+          value={valorTexto}
+          onChange={(e) => onTexto(e.target.value)}
+          className="h-10 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+        >
+          <option value="">Selecione…</option>
+          {(campo.options ?? []).map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      </label>
     );
   }
 

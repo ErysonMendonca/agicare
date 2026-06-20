@@ -40,17 +40,22 @@ import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
 import type { ClinicSettings } from "@/lib/data/settings";
 import type { FlowStage } from "@/lib/data/attendance-flow.shared";
 import { FluxoAtendimento } from "./FluxoAtendimento";
+import type { AnamneseTemplate } from "@/lib/data/anamnese-templates.shared";
+import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
+import { AnamneseBuilder } from "./AnamneseBuilder";
+import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
 
-const tabs = [
+const BASE_TABS = [
   "Geral",
   "Fluxo",
   "Notificações",
   "Segurança",
   "Backup",
   "Marca",
+  "Anamnese",
 ] as const;
 
-type Tab = (typeof tabs)[number];
+const ATENDIMENTO_TAB = "Dados de Atendimento";
 
 export function ConfiguracoesClient({
   settings,
@@ -498,6 +503,12 @@ export function ConfiguracoesClient({
         <div className="mt-6">
           <AlterarSenhaCard policy={settings.security.passwordPolicy} />
         </div>
+      )}
+
+      {/* Construtor de anamnese — salvamento próprio (Server Action dedicada),
+          por isso vive fora do form de configurações. */}
+      {tabAtiva === "Anamnese" && (
+        <AnamneseBuilder templates={anamneseTemplates} />
       )}
     </>
   );

@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/app/PageHeader";
 import { listQueue, listAgendadosHoje } from "@/lib/data/queue";
 import { getAttendanceFlow } from "@/lib/data/attendance-flow";
+import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { requireView } from "@/lib/permissions";
 import { FilaClient } from "./FilaClient";
 
