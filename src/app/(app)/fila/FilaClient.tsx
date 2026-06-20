@@ -20,18 +20,24 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { type FilaItem } from "@/lib/data/queue";
+import {
+  DEFAULT_STAGES,
+  type FlowStage,
+} from "@/lib/data/attendance-flow.shared";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options";
 import { AcoesPacienteModal } from "./AcoesPacienteModal";
+import { TriagemModal } from "./TriagemModal";
 import { DadosAtendimentoModal } from "./DadosAtendimentoModal";
 import { DesistenciaModal } from "./DesistenciaModal";
 import { CheckInModal } from "./CheckInModal";
 
-type ModalKind = "acoes" | "atendimento" | "desistencia" | null;
+type ModalKind = "acoes" | "triagem" | "atendimento" | "desistencia" | null;
 
 /** Opções do filtro de status (valor = statusRaw do banco). */
 const STATUS_OPCOES = [
   { value: "todos", label: "Todos os Status" },
   { value: "aguardando", label: "Aguardando" },
+  { value: "triagem", label: "Em Triagem" },
   { value: "chamado", label: "Chamado" },
   { value: "em_atendimento", label: "Em Atendimento" },
   { value: "finalizado", label: "Finalizado" },
@@ -41,12 +47,12 @@ const STATUS_OPCOES = [
 export function FilaClient({
   fila,
   agendados = [],
-  attendanceOptions,
+  stages = DEFAULT_STAGES,
   kpis,
 }: {
   fila: FilaItem[];
   agendados?: FilaItem[];
-  attendanceOptions?: AttendanceOptionsByCategory;
+  stages?: FlowStage[];
   kpis?: {
     aguardando: number;
     chamados: number;
@@ -337,11 +343,19 @@ export function FilaClient({
         <>
           <AcoesPacienteModal
             item={selected}
+            stages={stages}
             open={modal === "acoes"}
             onClose={fechar}
             onStatusChange={onStatusChange}
+            onTriar={() => setModal("triagem")}
             onAtender={() => setModal("atendimento")}
             onDesistir={() => setModal("desistencia")}
+          />
+          <TriagemModal
+            item={selected}
+            open={modal === "triagem"}
+            onClose={fechar}
+            onStatusChange={onStatusChange}
           />
           <DadosAtendimentoModal
             item={selected}

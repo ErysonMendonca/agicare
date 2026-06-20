@@ -2,10 +2,15 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Monitor, UserCheck, Eye, UserX } from "lucide-react";
+import { Monitor, UserCheck, Eye, UserX, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { type FilaItem } from "@/lib/data/queue";
+import {
+  DEFAULT_STAGES,
+  actionsForEntry,
+  type FlowStage,
+} from "@/lib/data/attendance-flow.shared";
 import { chamarPaciente, atenderPaciente } from "@/lib/actions/queue";
 import { PacienteResumo } from "./PacienteResumo";
 import { tocarBeep } from "./sound";
@@ -14,24 +19,33 @@ const TERMINAIS = ["finalizado", "desistencia"];
 
 export function AcoesPacienteModal({
   item,
+  stages = DEFAULT_STAGES,
   open,
   onClose,
   onStatusChange,
+  onTriar,
   onAtender,
   onDesistir,
 }: {
   item: FilaItem;
+  stages?: FlowStage[];
   open: boolean;
   onClose: () => void;
   onStatusChange: (statusRaw: string) => void;
+  onTriar: () => void;
   onAtender: () => void;
   onDesistir: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
-  const podeChamar = item.statusRaw === "aguardando";
-  const podeAtender = !["em_atendimento", ...TERMINAIS].includes(item.statusRaw);
+  // Ações disponíveis conforme o fluxo configurado da clínica (recepcao →
+  // [triagem] → atendimento). O motor decide o que cabe a partir do status atual.
+  const acoes = actionsForEntry(item.statusRaw, stages);
+  const podeChamar = acoes.includes("chamar");
+  const podeTriar = acoes.includes("triar");
+  // 'atender' do motor cobre tanto chamar→atender quanto a chamada final.
+  const podeAtender = acoes.includes("atender");
   const podeDesistir = !TERMINAIS.includes(item.statusRaw);
 
   function handleChamar() {
@@ -86,6 +100,15 @@ export function AcoesPacienteModal({
           label="Chamar"
           className="bg-brand-500 text-white hover:bg-brand-600 disabled:hover:bg-brand-500"
         />
+        {podeTriar && (
+          <ActionButton
+            onClick={onTriar}
+            disabled={pending}
+            icon={<Stethoscope className="h-5 w-5" />}
+            label="Triar"
+            className="bg-amber-500 text-white hover:bg-amber-600 disabled:hover:bg-amber-500"
+          />
+        )}
         <ActionButton
           onClick={handleAtender}
           disabled={pending || !podeAtender}

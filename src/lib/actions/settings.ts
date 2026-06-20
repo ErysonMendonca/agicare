@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
+import { sanitizeStages } from "@/lib/data/attendance-flow.shared";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -184,6 +185,69 @@ export async function salvarConfiguracoes(
   if (error) return { error };
 
   revalidatePath("/configuracoes");
+  return { ok: true };
+}
+
+// ── Fluxo de atendimento (etapas da fila) ────────────────────────────
+const fluxoSchema = z.object({
+  stages: z
+    .array(z.enum(["recepcao", "triagem", "atendimento"]))
+    .min(1, "Selecione ao menos uma etapa."),
+});
+
+export type SalvarFluxoInput = z.input<typeof fluxoSchema>;
+
+/**
+ * Salva o FLUXO de atendimento da clínica em
+ * `clinic_settings.attendance_flow = { stages: FlowStage[] }`.
+ *
+ * Gestor-only (isGestor) + clínica ativa. As etapas são saneadas por
+ * `sanitizeStages` (ordem canônica recepcao→triagem→atendimento; recepção e
+ * atendimento são obrigatórias; triagem é opcional) — então mesmo um payload
+ * incompleto resulta num fluxo válido. Upsert manual da linha única (com
+ * fallback p/ mono-clínica sem coluna clinic_id, igual a salvarConfiguracoes).
+ */
+export async function salvarFluxo(
+  input: SalvarFluxoInput,
+): Promise<ActionState> {
+  if (!(await isGestor())) return { error: "Acesso restrito ao gestor." };
+
+  const parsed = fluxoSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+
+  // Normaliza: ordem canônica + força etapas obrigatórias.
+  const stages = sanitizeStages(parsed.data.stages);
+
+  if (isDemoMode()) return { ok: true };
+
+  const supabase = await createClient();
+  const clinicId = await requireClinic();
+  const payload = { attendance_flow: { stages }, updated_at: new Date().toISOString() };
+
+  async function persist(withClinicId: boolean): Promise<{ error: string | null }> {
+    const sel = supabase.from("clinic_settings").select("id");
+    const { data: existing } = withClinicId
+      ? await sel.eq("clinic_id", clinicId).limit(1).maybeSingle()
+      : await sel.limit(1).maybeSingle();
+
+    const row = withClinicId ? { ...payload, clinic_id: clinicId } : payload;
+    const { error } = existing?.id
+      ? await supabase.from("clinic_settings").update(payload).eq("id", existing.id)
+      : await supabase.from("clinic_settings").insert(row);
+
+    return { error: error?.message ?? null };
+  }
+
+  let { error } = await persist(true);
+  if (error && /clinic_id/i.test(error)) {
+    ({ error } = await persist(false));
+  }
+  if (error) return { error };
+
+  revalidatePath("/configuracoes");
+  revalidatePath("/fila");
   return { ok: true };
 }
 

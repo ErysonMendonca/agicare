@@ -38,6 +38,8 @@ import { uploadLogo } from "@/lib/actions/branding";
 import { changePassword } from "@/lib/actions/account";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
 import type { ClinicSettings } from "@/lib/data/settings";
+import type { FlowStage } from "@/lib/data/attendance-flow.shared";
+import { FluxoAtendimento } from "./FluxoAtendimento";
 import type { AnamneseTemplate } from "@/lib/data/anamnese-templates.shared";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 import { AnamneseBuilder } from "./AnamneseBuilder";
@@ -45,6 +47,7 @@ import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
 
 const BASE_TABS = [
   "Geral",
+  "Fluxo",
   "Notificações",
   "Segurança",
   "Backup",
@@ -54,21 +57,15 @@ const BASE_TABS = [
 
 const ATENDIMENTO_TAB = "Dados de Atendimento";
 
-type Tab = (typeof BASE_TABS)[number] | typeof ATENDIMENTO_TAB;
-
 export function ConfiguracoesClient({
   settings,
-  anamneseTemplates,
-  attendanceOptions,
-  gestor,
+  stages,
+  isGestor,
 }: {
   settings: ClinicSettings;
-  anamneseTemplates: AnamneseTemplate[];
-  attendanceOptions: AttendanceOptionsByCategory;
-  gestor: boolean;
+  stages: FlowStage[];
+  isGestor: boolean;
 }) {
-  // "Dados de Atendimento" só aparece para o gestor (parametrização).
-  const tabs: Tab[] = gestor ? [...BASE_TABS, ATENDIMENTO_TAB] : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
     salvarConfiguracoes,
@@ -486,20 +483,18 @@ export function ConfiguracoesClient({
           </Card>
         </TabPane>
 
-        {tabAtiva !== "Anamnese" && (
-          <div className="mt-6 flex justify-end">
-            <Button type="submit" variant="primary" disabled={pending}>
-              <Save className="h-4 w-4" />
-              {pending ? "Salvando..." : "Salvar Alterações"}
-            </Button>
-          </div>
-        )}
+        <div className={`mt-6 flex justify-end ${tabAtiva === "Fluxo" ? "hidden" : ""}`}>
+          <Button type="submit" variant="primary" disabled={pending}>
+            <Save className="h-4 w-4" />
+            {pending ? "Salvando..." : "Salvar Alterações"}
+          </Button>
+        </div>
       </form>
 
-      {/* Dados de Atendimento — parametrização (gestor). Fora do form de
-          configurações: usa Server Actions próprias com revalidate. */}
-      {gestor && tabAtiva === ATENDIMENTO_TAB && (
-        <AtendimentoOpcoes options={attendanceOptions} />
+      {/* Fluxo de atendimento — editor independente (action própria salvarFluxo,
+          gestor-only). Fora do form de configurações. */}
+      {tabAtiva === "Fluxo" && (
+        <FluxoAtendimento stages={stages} isGestor={isGestor} />
       )}
 
       {/* Troca da PRÓPRIA senha — formulário independente (fora do form de
