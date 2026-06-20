@@ -38,7 +38,9 @@ import { uploadLogo } from "@/lib/actions/branding";
 import { changePassword } from "@/lib/actions/account";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
 import type { ClinicSettings } from "@/lib/data/settings";
-import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options";
+import type { AnamneseTemplate } from "@/lib/data/anamnese-templates.shared";
+import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
+import { AnamneseBuilder } from "./AnamneseBuilder";
 import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
 
 const BASE_TABS = [
@@ -47,6 +49,7 @@ const BASE_TABS = [
   "Segurança",
   "Backup",
   "Marca",
+  "Anamnese",
 ] as const;
 
 const ATENDIMENTO_TAB = "Dados de Atendimento";
@@ -55,14 +58,16 @@ type Tab = (typeof BASE_TABS)[number] | typeof ATENDIMENTO_TAB;
 
 export function ConfiguracoesClient({
   settings,
-  gestor = false,
-  attendanceOptions = {},
+  anamneseTemplates,
+  attendanceOptions,
+  gestor,
 }: {
   settings: ClinicSettings;
-  gestor?: boolean;
-  attendanceOptions?: AttendanceOptionsByCategory;
+  anamneseTemplates: AnamneseTemplate[];
+  attendanceOptions: AttendanceOptionsByCategory;
+  gestor: boolean;
 }) {
-  // A aba de parametrização da ficha é só para gestor.
+  // "Dados de Atendimento" só aparece para o gestor (parametrização).
   const tabs: Tab[] = gestor ? [...BASE_TABS, ATENDIMENTO_TAB] : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
@@ -481,7 +486,7 @@ export function ConfiguracoesClient({
           </Card>
         </TabPane>
 
-        {tabAtiva !== ATENDIMENTO_TAB && (
+        {tabAtiva !== "Anamnese" && (
           <div className="mt-6 flex justify-end">
             <Button type="submit" variant="primary" disabled={pending}>
               <Save className="h-4 w-4" />
@@ -503,6 +508,12 @@ export function ConfiguracoesClient({
         <div className="mt-6">
           <AlterarSenhaCard policy={settings.security.passwordPolicy} />
         </div>
+      )}
+
+      {/* Construtor de anamnese — salvamento próprio (Server Action dedicada),
+          por isso vive fora do form de configurações. */}
+      {tabAtiva === "Anamnese" && (
+        <AnamneseBuilder templates={anamneseTemplates} />
       )}
     </>
   );
