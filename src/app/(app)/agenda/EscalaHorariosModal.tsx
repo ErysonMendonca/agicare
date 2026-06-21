@@ -40,7 +40,12 @@ const TIPOS = ["Consulta", "Retorno", "Exame", "Procedimento"];
 
 type Aba = "dados" | "horarios";
 /** blockId presente => bloqueio persistido em schedule_blocks. */
-type SlotEscala = { hora: string; bloqueado: boolean; blockId?: string };
+type SlotEscala = {
+  hora: string;
+  bloqueado: boolean;
+  blockId?: string;
+  motivo?: string;
+};
 
 /** Gera horários "HH:mm" entre início e fim com passo em minutos. */
 function gerarHorarios(start: string, end: string, stepMin: number): string[] {
@@ -94,6 +99,9 @@ export function EscalaHorariosModal({
     new Date().toISOString().slice(0, 10),
   );
   const [blockPending, startBlock] = useTransition();
+  // Diálogo de bloqueio: horário-alvo + motivo (obrigatório) antes de persistir.
+  const [bloqueioAlvo, setBloqueioAlvo] = useState<string | null>(null);
+  const [motivoBloqueio, setMotivoBloqueio] = useState("");
 
   // Pré-preenche (modo edição) ou reseta (modo criação) ao abrir.
   useEffect(() => {
@@ -135,13 +143,13 @@ export function EscalaHorariosModal({
     (async () => {
       const blocks = await listBlocks(profissionalId, dataBloqueio);
       if (!ativo) return;
-      const porHora = new Map(blocks.map((b) => [b.hora, b.id]));
+      const porHora = new Map(blocks.map((b) => [b.hora, b]));
       setSlots((cur) =>
         cur.map((s) => {
-          const blockId = porHora.get(s.hora);
-          return blockId
-            ? { ...s, bloqueado: true, blockId }
-            : { ...s, bloqueado: false, blockId: undefined };
+          const b = porHora.get(s.hora);
+          return b
+            ? { ...s, bloqueado: true, blockId: b.id, motivo: b.motivo }
+            : { ...s, bloqueado: false, blockId: undefined, motivo: undefined };
         }),
       );
     })();
@@ -198,10 +206,11 @@ export function EscalaHorariosModal({
   }
 
   /**
-   * Bloqueia/desbloqueia um horário, persistindo em schedule_blocks.
-   * Exige profissional + data selecionados (o bloqueio é por data específica).
+   * Clique num horário. Se já bloqueado → desbloqueia direto. Se livre → abre o
+   * diálogo de motivo (não bloqueia no clique: evita bloqueio acidental e exige
+   * registrar o porquê). Exige profissional + data (o bloqueio é por data).
    */
-  function toggleBloqueio(hora: string) {
+  function aoClicarSlot(hora: string) {
     if (!profissionalId) {
       toast.error("Selecione o profissional para bloquear horários.");
       setAba("dados");
@@ -214,37 +223,60 @@ export function EscalaHorariosModal({
     const slot = slots.find((s) => s.hora === hora);
     if (!slot) return;
 
+    if (slot.bloqueado && slot.blockId) {
+      desbloquear(slot.hora, slot.blockId);
+      return;
+    }
+    // Livre → pede o motivo antes de bloquear.
+    setMotivoBloqueio("");
+    setBloqueioAlvo(hora);
+  }
+
+  /** Remove o bloqueio persistido de um horário. */
+  function desbloquear(hora: string, blockId: string) {
     startBlock(async () => {
-      if (slot.bloqueado && slot.blockId) {
-        // Desbloquear: remove o registro persistido.
-        const res = await removeBlock(slot.blockId);
-        if (res?.ok) {
-          setSlots((cur) =>
-            cur.map((s) =>
-              s.hora === hora ? { ...s, bloqueado: false, blockId: undefined } : s,
-            ),
-          );
-          router.refresh();
-        } else {
-          toast.error(res?.error ?? "Não foi possível desbloquear o horário.");
-        }
-        return;
+      const res = await removeBlock(blockId);
+      if (res?.ok) {
+        setSlots((cur) =>
+          cur.map((s) =>
+            s.hora === hora
+              ? { ...s, bloqueado: false, blockId: undefined, motivo: undefined }
+              : s,
+          ),
+        );
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível desbloquear o horário.");
       }
-      // Bloquear: cria o registro e guarda o id retornado.
+    });
+  }
+
+  /** Confirma o bloqueio do horário-alvo com o motivo informado (obrigatório). */
+  function confirmarBloqueio() {
+    const hora = bloqueioAlvo;
+    if (!hora) return;
+    const motivo = motivoBloqueio.trim();
+    if (motivo.length < 3) {
+      toast.error("Descreva o motivo do bloqueio (mínimo 3 caracteres).");
+      return;
+    }
+    startBlock(async () => {
       const res = await createBlock({
         professional_id: profissionalId,
         date: dataBloqueio,
         time: hora,
-        reason: descricao.trim() || "Bloqueio manual",
+        reason: motivo,
       });
       if (res?.ok) {
         setSlots((cur) =>
           cur.map((s) =>
             s.hora === hora
-              ? { ...s, bloqueado: true, blockId: res.protocol }
+              ? { ...s, bloqueado: true, blockId: res.protocol, motivo }
               : s,
           ),
         );
+        setBloqueioAlvo(null);
+        setMotivoBloqueio("");
         router.refresh();
       } else {
         toast.error(res?.error ?? "Não foi possível bloquear o horário.");
@@ -479,8 +511,9 @@ export function EscalaHorariosModal({
 
           {slots.length > 0 && (
             <p className="text-xs text-muted">
-              Clique num horário para bloquear/desbloquear. O bloqueio é salvo
-              para o profissional na data acima.
+              Clique num horário livre para bloquear — será pedido o motivo.
+              Clique num bloqueado para liberar. O bloqueio é salvo para o
+              profissional na data acima.
             </p>
           )}
 
@@ -500,14 +533,18 @@ export function EscalaHorariosModal({
                 <button
                   key={s.hora}
                   type="button"
-                  onClick={() => toggleBloqueio(s.hora)}
+                  onClick={() => aoClicarSlot(s.hora)}
                   disabled={blockPending}
                   className={`flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-60 ${
                     s.bloqueado
                       ? "border-red-300 bg-red-50 text-red-600"
                       : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
                   }`}
-                  title={s.bloqueado ? "Desbloquear horário" : "Bloquear horário"}
+                  title={
+                    s.bloqueado
+                      ? `Bloqueado: ${s.motivo || "sem motivo"} — clique para liberar`
+                      : "Bloquear horário"
+                  }
                 >
                   {s.bloqueado ? (
                     <Lock className="h-3.5 w-3.5" />
@@ -519,6 +556,57 @@ export function EscalaHorariosModal({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Diálogo de motivo do bloqueio — exige o porquê antes de persistir e
+          impede que um clique acidental bloqueie o horário. */}
+      {bloqueioAlvo && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => !blockPending && setBloqueioAlvo(null)}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-surface p-5 shadow-xl">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
+              <Lock className="h-4 w-4 text-red-500" />
+              Bloquear horário {bloqueioAlvo}
+            </h3>
+            <p className="mt-0.5 text-sm text-muted">
+              {dataBloqueio.split("-").reverse().join("/")} · informe o motivo do
+              bloqueio.
+            </p>
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-sm font-medium text-ink">
+                Motivo do bloqueio <span className="text-red-500">*</span>
+              </span>
+              <textarea
+                autoFocus
+                rows={3}
+                value={motivoBloqueio}
+                onChange={(e) => setMotivoBloqueio(e.target.value)}
+                placeholder="Ex.: Médico em congresso, manutenção da sala, almoço..."
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setBloqueioAlvo(null)}
+                disabled={blockPending}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                onClick={confirmarBloqueio}
+                disabled={blockPending}
+              >
+                <Lock className="h-4 w-4" />
+                {blockPending ? "Bloqueando..." : "Confirmar bloqueio"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </Modal>
