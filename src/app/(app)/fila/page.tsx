@@ -7,10 +7,11 @@ import { FilaClient } from "./FilaClient";
 
 export default async function FilaPage() {
   await requireView("fila");
-  const [fila, agendados, stages] = await Promise.all([
+  const [fila, agendados, stages, attendanceOptions] = await Promise.all([
     listQueue(),
     listAgendadosHoje(),
     getAttendanceFlow(),
+    listAttendanceOptions(),
   ]);
 
   const aguardando = fila.filter((i) => i.status.label === "Aguardando").length;
@@ -31,6 +32,7 @@ export default async function FilaPage() {
         fila={fila}
         agendados={agendados}
         stages={stages}
+        attendanceOptions={attendanceOptions}
         kpis={{ aguardando, chamados, emAtendimento, total }}
       />
     </>

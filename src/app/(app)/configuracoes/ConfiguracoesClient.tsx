@@ -57,15 +57,23 @@ const BASE_TABS = [
 
 const ATENDIMENTO_TAB = "Dados de Atendimento";
 
+type Tab = (typeof BASE_TABS)[number] | typeof ATENDIMENTO_TAB;
+
 export function ConfiguracoesClient({
   settings,
   stages,
+  anamneseTemplates,
+  attendanceOptions,
   isGestor,
 }: {
   settings: ClinicSettings;
   stages: FlowStage[];
+  anamneseTemplates: AnamneseTemplate[];
+  attendanceOptions: AttendanceOptionsByCategory;
   isGestor: boolean;
 }) {
+  // "Dados de Atendimento" é uma aba extra só para gestor.
+  const tabs: Tab[] = isGestor ? [...BASE_TABS, ATENDIMENTO_TAB] : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
     salvarConfiguracoes,
@@ -509,6 +517,12 @@ export function ConfiguracoesClient({
           por isso vive fora do form de configurações. */}
       {tabAtiva === "Anamnese" && (
         <AnamneseBuilder templates={anamneseTemplates} />
+      )}
+
+      {/* Opções da ficha de atendimento — editor próprio (gestor-only),
+          fora do form de configurações. */}
+      {isGestor && tabAtiva === ATENDIMENTO_TAB && (
+        <AtendimentoOpcoes options={attendanceOptions} />
       )}
     </>
   );
