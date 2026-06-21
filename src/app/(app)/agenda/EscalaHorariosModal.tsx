@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { type Profissional } from "@/lib/data/professionals";
 import { type Escala } from "@/lib/data/schedules";
+import { type Procedimento } from "@/lib/data/procedures";
+import { EXAMES_TUSS } from "@/lib/clinico/exames-shared";
 import {
   createSchedule,
   updateSchedule,
@@ -68,11 +70,13 @@ export function EscalaHorariosModal({
   open,
   onClose,
   profissionais,
+  procedimentos,
   escalaParaEditar,
 }: {
   open: boolean;
   onClose: () => void;
   profissionais: Profissional[];
+  procedimentos: Procedimento[];
   /** Quando presente, o modal abre em modo edição (pré-preenche + updateSchedule). */
   escalaParaEditar?: Escala;
 }) {
@@ -88,6 +92,9 @@ export function EscalaHorariosModal({
   const [slotMin, setSlotMin] = useState(30);
   const [encaixe, setEncaixe] = useState(0);
   const [ativo, setAtivo] = useState(true);
+  // Itens atendidos pela escala (conforme o Tipo de Escala).
+  const [procedureCodes, setProcedureCodes] = useState<string[]>([]);
+  const [examCodes, setExamCodes] = useState<string[]>([]);
 
   const [dias, setDias] = useState<number[]>([1, 2, 3, 4, 5]);
   const [inicio, setInicio] = useState("08:00");
@@ -120,6 +127,8 @@ export function EscalaHorariosModal({
       setInicio(e.startTime);
       setFim(e.endTime);
       setSlots([]);
+      setProcedureCodes(e.procedureCodes ?? []);
+      setExamCodes(e.examTussCodes ?? []);
     } else {
       setAba("dados");
       setDescricao("");
@@ -133,6 +142,8 @@ export function EscalaHorariosModal({
       setInicio("08:00");
       setFim("18:00");
       setSlots([]);
+      setProcedureCodes([]);
+      setExamCodes([]);
     }
   }, [open, escalaParaEditar]);
 
@@ -175,6 +186,16 @@ export function EscalaHorariosModal({
   function toggleDia(n: number) {
     setDias((cur) =>
       cur.includes(n) ? cur.filter((d) => d !== n) : [...cur, n],
+    );
+  }
+
+  /** Marca/desmarca um item (código) num conjunto de seleção (exames/procedimentos). */
+  function toggleItem(
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+    code: string,
+  ) {
+    setter((cur) =>
+      cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code],
     );
   }
 
@@ -306,6 +327,9 @@ export function EscalaHorariosModal({
         weekdays: dias,
         start_time: inicio,
         end_time: fim,
+        // Só guarda o conjunto do tipo atual; limpa o outro ao trocar de tipo.
+        procedure_codes: tipo === "Procedimento" ? procedureCodes : [],
+        exam_tuss_codes: tipo === "Exame" ? examCodes : [],
       };
       const res = escalaParaEditar
         ? await updateSchedule(escalaParaEditar.id, { ...payload, active: ativo })
@@ -332,7 +356,7 @@ export function EscalaHorariosModal({
         editMode ? "Editar Escala de Horários" : "Configuração de Escala de Horários"
       }
       subtitle="Defina a grade de atendimento de um profissional"
-      className="max-w-2xl"
+      className="max-w-3xl"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -411,7 +435,7 @@ export function EscalaHorariosModal({
             ))}
           </Select>
           <Select
-            label="Tipo de Atendimento"
+            label="Tipo de Escala"
             value={tipo}
             onChange={(e) => setTipo(e.target.value)}
           >
@@ -419,6 +443,78 @@ export function EscalaHorariosModal({
               <option key={t}>{t}</option>
             ))}
           </Select>
+
+          {/* Itens da escala: aparece conforme o Tipo de Escala. */}
+          {tipo === "Procedimento" && (
+            <div className="sm:col-span-2">
+              <span className="mb-1.5 block text-sm font-medium text-ink">
+                Procedimentos atendidos
+              </span>
+              {procedimentos.filter((p) => p.ativo).length === 0 ? (
+                <p className="rounded-lg border border-dashed border-line p-3 text-sm text-muted">
+                  Nenhum procedimento ativo cadastrado.
+                </p>
+              ) : (
+                <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-lg border border-line p-3">
+                  {procedimentos
+                    .filter((p) => p.ativo)
+                    .map((p) => (
+                      <label
+                        key={p.codigo}
+                        className="flex items-center gap-2.5 text-sm text-ink"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={procedureCodes.includes(p.codigo)}
+                          onChange={() => toggleItem(setProcedureCodes, p.codigo)}
+                          className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-100"
+                        />
+                        <span>
+                          {p.nome}
+                          {p.categoria ? (
+                            <span className="text-muted"> · {p.categoria}</span>
+                          ) : null}
+                        </span>
+                      </label>
+                    ))}
+                </div>
+              )}
+              <p className="mt-1 text-xs text-muted">
+                {procedureCodes.length} selecionado(s).
+              </p>
+            </div>
+          )}
+
+          {tipo === "Exame" && (
+            <div className="sm:col-span-2">
+              <span className="mb-1.5 block text-sm font-medium text-ink">
+                Exames atendidos
+              </span>
+              <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-lg border border-line p-3">
+                {EXAMES_TUSS.map((ex) => (
+                  <label
+                    key={ex.tuss}
+                    className="flex items-center gap-2.5 text-sm text-ink"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={examCodes.includes(ex.tuss)}
+                      onChange={() => toggleItem(setExamCodes, ex.tuss)}
+                      className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-100"
+                    />
+                    <span>
+                      {ex.nome}
+                      <span className="text-muted"> · {ex.categoria}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                {examCodes.length} selecionado(s).
+              </p>
+            </div>
+          )}
+
           {editMode && (
             <label className="flex items-center gap-2 sm:col-span-2">
               <input

@@ -3,18 +3,21 @@ import { listAppointments, countByStatus } from "@/lib/data/appointments";
 import { listPatients } from "@/lib/data/patients";
 import { listProfessionals } from "@/lib/data/professionals";
 import { listSchedules } from "@/lib/data/schedules";
+import { listProcedures } from "@/lib/data/procedures";
 import { requireView } from "@/lib/permissions";
 import { AgendaActions } from "./AgendaActions";
 import { AgendaList } from "./AgendaList";
 
 export default async function AgendaPage() {
   await requireView("agenda");
-  const [atendimentos, pacientes, profissionais, escalas] = await Promise.all([
-    listAppointments(),
-    listPatients(),
-    listProfessionals(),
-    listSchedules(),
-  ]);
+  const [atendimentos, pacientes, profissionais, escalas, procedimentos] =
+    await Promise.all([
+      listAppointments(),
+      listPatients(),
+      listProfessionals(),
+      listSchedules(),
+      listProcedures(),
+    ]);
   const kpis = countByStatus(atendimentos);
 
   return (
@@ -27,6 +30,7 @@ export default async function AgendaPage() {
             pacientes={pacientes}
             profissionais={profissionais}
             escalas={escalas}
+            procedimentos={procedimentos}
           />
         }
       />

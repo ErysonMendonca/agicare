@@ -198,6 +198,9 @@ const escalaSchema = z.object({
   weekdays: z.array(z.coerce.number().int().min(0).max(6)).default([]),
   start_time: z.string().min(1, "Informe o horário inicial."),
   end_time: z.string().min(1, "Informe o horário final."),
+  // Itens atendidos pela escala (conforme o Tipo de Escala).
+  procedure_codes: z.array(z.string().trim()).default([]),
+  exam_tuss_codes: z.array(z.string().trim()).default([]),
 });
 
 export type EscalaInput = z.input<typeof escalaSchema>;
@@ -229,6 +232,8 @@ export async function createSchedule(
     weekdays: d.weekdays,
     start_time: d.start_time,
     end_time: d.end_time,
+    procedure_codes: d.procedure_codes,
+    exam_tuss_codes: d.exam_tuss_codes,
   });
 
   if (error) return { error: error.message };
@@ -273,6 +278,8 @@ export async function updateSchedule(
       weekdays: d.weekdays,
       start_time: d.start_time,
       end_time: d.end_time,
+      procedure_codes: d.procedure_codes,
+      exam_tuss_codes: d.exam_tuss_codes,
       active: d.active,
     })
     .eq("id", idParsed.data);

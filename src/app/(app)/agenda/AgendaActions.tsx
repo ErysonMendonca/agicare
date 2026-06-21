@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { type Paciente } from "@/lib/data/patients";
 import { type Profissional } from "@/lib/data/professionals";
 import { type Escala } from "@/lib/data/schedules";
+import { type Procedimento } from "@/lib/data/procedures";
 import { NovoAgendamentoModal } from "./NovoAgendamentoModal";
 import { EscalaHorariosModal } from "./EscalaHorariosModal";
 import { EscalaListaModal } from "./EscalaListaModal";
@@ -20,10 +21,12 @@ export function AgendaActions({
   pacientes,
   profissionais,
   escalas,
+  procedimentos,
 }: {
   pacientes: Paciente[];
   profissionais: Profissional[];
   escalas: Escala[];
+  procedimentos: Procedimento[];
 }) {
   const [modal, setModal] = useState<ModalKind>(null);
   // Escala em edição; undefined → o form de escala abre em modo criação.
@@ -68,6 +71,7 @@ export function AgendaActions({
         open={modal === "escala-form"}
         onClose={() => setModal(null)}
         profissionais={profissionais}
+        procedimentos={procedimentos}
         escalaParaEditar={escalaEdit}
       />
     </>
