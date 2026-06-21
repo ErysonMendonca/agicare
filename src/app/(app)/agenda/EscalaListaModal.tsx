@@ -5,6 +5,7 @@ import { CalendarRange, Pencil, Plus } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { type Profissional } from "@/lib/data/professionals";
 import { type Escala } from "@/lib/data/schedules";
@@ -19,6 +20,16 @@ const DIAS_LABEL: Record<number, string> = {
   6: "Sáb",
 };
 
+const DIAS_LABEL_LONGO: Record<number, string> = {
+  0: "domingo",
+  1: "segunda-feira",
+  2: "terça-feira",
+  3: "quarta-feira",
+  4: "quinta-feira",
+  5: "sexta-feira",
+  6: "sábado",
+};
+
 /** Resumo legível dos dias da semana (ordem Seg→Dom). */
 function resumoDias(weekdays: number[]): string {
   const ordem = [1, 2, 3, 4, 5, 6, 0];
@@ -26,6 +37,19 @@ function resumoDias(weekdays: number[]): string {
     .filter((d) => weekdays.includes(d))
     .map((d) => DIAS_LABEL[d])
     .join(", ");
+}
+
+/**
+ * Dia da semana (0=Dom … 6=Sáb) de uma data `YYYY-MM-DD` no fuso LOCAL.
+ * (A escala é recorrente por dia da semana — não tem data própria — então
+ * filtrar "por data" significa mostrar as escalas que atendem naquele dia.)
+ * Parse manual evita o bug de `new Date("YYYY-MM-DD")` ser interpretado em UTC.
+ */
+function weekdayOf(dateStr: string): number | null {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d).getDay();
 }
 
 /**
@@ -49,6 +73,8 @@ export function EscalaListaModal({
 }) {
   const [especialidade, setEspecialidade] = useState("");
   const [profissionalId, setProfissionalId] = useState("");
+  const [data, setData] = useState("");
+  const [busca, setBusca] = useState("");
 
   const especialidades = useMemo(
     () =>
@@ -58,14 +84,23 @@ export function EscalaListaModal({
     [escalas],
   );
 
+  const termo = busca.trim().toLowerCase();
+  const diaSemana = weekdayOf(data);
+
   const filtradas = useMemo(
     () =>
-      escalas.filter(
-        (e) =>
-          (!especialidade || e.specialty === especialidade) &&
-          (!profissionalId || e.professionalId === profissionalId),
-      ),
-    [escalas, especialidade, profissionalId],
+      escalas.filter((e) => {
+        const casaEspec = !especialidade || e.specialty === especialidade;
+        const casaProf = !profissionalId || e.professionalId === profissionalId;
+        const casaData = diaSemana === null || e.weekdays.includes(diaSemana);
+        const casaTexto =
+          termo === "" ||
+          e.description.toLowerCase().includes(termo) ||
+          e.professionalNome.toLowerCase().includes(termo) ||
+          e.specialty.toLowerCase().includes(termo);
+        return casaEspec && casaProf && casaData && casaTexto;
+      }),
+    [escalas, especialidade, profissionalId, diaSemana, termo],
   );
 
   return (
@@ -88,29 +123,58 @@ export function EscalaListaModal({
       }
     >
       {/* Filtros */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Select
-          label="Especialidade"
-          value={especialidade}
-          onChange={(e) => setEspecialidade(e.target.value)}
-        >
-          <option value="">Todas as especialidades</option>
-          {especialidades.map((e) => (
-            <option key={e}>{e}</option>
-          ))}
-        </Select>
-        <Select
-          label="Profissional"
-          value={profissionalId}
-          onChange={(e) => setProfissionalId(e.target.value)}
-        >
-          <option value="">Todos os profissionais</option>
-          {profissionais.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nome}
-            </option>
-          ))}
-        </Select>
+      <div className="mb-4 space-y-3">
+        <Input
+          id="escala-busca"
+          type="search"
+          label="Buscar"
+          placeholder="Buscar por descrição, profissional ou especialidade..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Select
+            label="Especialidade"
+            value={especialidade}
+            onChange={(e) => setEspecialidade(e.target.value)}
+          >
+            <option value="">Todas as especialidades</option>
+            {especialidades.map((e) => (
+              <option key={e}>{e}</option>
+            ))}
+          </Select>
+          <Select
+            label="Profissional"
+            value={profissionalId}
+            onChange={(e) => setProfissionalId(e.target.value)}
+          >
+            <option value="">Todos os profissionais</option>
+            {profissionais.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </Select>
+          <Input
+            id="escala-data"
+            type="date"
+            label="Data"
+            value={data}
+            onChange={(e) => setData(e.target.value)}
+          />
+        </div>
+        {diaSemana !== null && (
+          <p className="text-xs text-muted">
+            Mostrando as escalas que atendem na {DIAS_LABEL_LONGO[diaSemana]}.{" "}
+            <button
+              type="button"
+              onClick={() => setData("")}
+              className="font-medium text-brand-500 hover:underline"
+            >
+              Limpar data
+            </button>
+          </p>
+        )}
       </div>
 
       {filtradas.length === 0 ? (
