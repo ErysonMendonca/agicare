@@ -48,11 +48,13 @@ export function FilaClient({
   fila,
   agendados = [],
   stages = DEFAULT_STAGES,
+  attendanceOptions,
   kpis,
 }: {
   fila: FilaItem[];
   agendados?: FilaItem[];
   stages?: FlowStage[];
+  attendanceOptions?: AttendanceOptionsByCategory;
   kpis?: {
     aguardando: number;
     chamados: number;
