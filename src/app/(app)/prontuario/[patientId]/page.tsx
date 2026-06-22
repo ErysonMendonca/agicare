@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/Card";
 import { getResumo } from "@/lib/data/prontuario";
 import { logAccess } from "@/lib/audit";
 import { ResumoView } from "./ResumoView";
-import { ClinicoNav } from "./ClinicoNav";
 
 export default async function ProntuarioResumoPage({
   params,
@@ -43,12 +42,7 @@ export default async function ProntuarioResumoPage({
       />
 
       {resumo ? (
-        <>
-          {/* Menu clínico sempre visível no resumo (Evolução, Anamnese, etc.),
-              não só ao entrar numa seção. */}
-          <ClinicoNav patientId={patientId} />
-          <ResumoView resumo={resumo} />
-        </>
+        <ResumoView resumo={resumo} />
       ) : (
         <Card className="p-10 text-center text-sm text-muted">
           Paciente não encontrado ou sem permissão de acesso.
