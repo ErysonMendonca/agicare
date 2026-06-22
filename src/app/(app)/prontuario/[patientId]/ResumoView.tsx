@@ -16,10 +16,6 @@ import {
   Stethoscope,
   Pill,
   FlaskConical,
-  CheckSquare,
-  ClipboardList,
-  Bone,
-  FileText,
   Download,
   Paperclip,
 } from "lucide-react";
@@ -28,6 +24,8 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { type Resumo } from "@/lib/data/prontuario";
 import { getProntuarioManualUrl } from "@/lib/actions/pacientes";
+import { PacienteCard } from "./PacienteCard";
+import { ClinicoNav } from "./ClinicoNav";
 
 type Aba = "historico" | "resumo";
 
@@ -37,19 +35,6 @@ export function ResumoView({ resumo }: { resumo: Resumo }) {
   const { patientId } = useParams<{ patientId: string }>();
   const { identificacao: id, vitais, evolucoes, prescricoesAtivas, examesSolicitados } =
     resumo;
-
-  // Seções do prontuário (mesma ordem do ClinicoNav, sem "Resumo" p/ não duplicar).
-  const base = `/prontuario/${patientId}`;
-  const secoes = [
-    { href: `${base}/evolucao`, label: "Evolução", icon: Stethoscope },
-    { href: `${base}/prescricao`, label: "Prescrição", icon: Pill },
-    { href: `${base}/checagem`, label: "Checagem", icon: CheckSquare },
-    { href: `${base}/enfermagem`, label: "Enfermagem", icon: HeartPulse },
-    { href: `${base}/anamnese`, label: "Anamnese", icon: ClipboardList },
-    { href: `${base}/exames`, label: "Exames", icon: FlaskConical },
-    { href: `${base}/protetico`, label: "Protético", icon: Bone },
-    { href: `${base}/documentos`, label: "Documentos", icon: FileText },
-  ];
 
   // Puxa o arquivo de prontuário manual anexado no cadastro (URL assinada).
   async function puxarAnexo() {
@@ -71,54 +56,32 @@ export function ResumoView({ resumo }: { resumo: Resumo }) {
 
   return (
     <div className="space-y-6">
-      {/* Identificação superior */}
-      <Card className="p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex items-center gap-4">
-            <span className="flex h-14 w-14 flex-none items-center justify-center rounded-2xl bg-brand-500 text-lg font-bold text-white">
-              {id.nome.charAt(0)}
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold text-ink">{id.nome}</h2>
-              <p className="text-sm text-muted">
-                Registro {id.registro} · {id.idade} · {id.genero}
-              </p>
-            </div>
-          </div>
-          <Badge status="active">Atendimento em andamento</Badge>
-        </div>
+      {/* Mesma moldura das demais seções: nome do paciente e, logo abaixo, a
+          navegação única (Resumo/Evolução/Anamnese/…). Resumo fica ativo aqui. */}
+      <div>
+        <PacienteCard id={id} />
+        {patientId && <ClinicoNav patientId={patientId} />}
 
-        <dl className="mt-5 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-          <Campo rotulo="Data de Nascimento" valor={id.nascimento} />
-          <Campo rotulo="Nome da Mãe" valor={id.nomeMae} />
-          <Campo rotulo="Convênio" valor={id.convenio} />
-          <Campo rotulo="Gênero" valor={id.genero} />
-        </dl>
-      </Card>
+        {/* Dados complementares de identificação do paciente. */}
+        <Card className="p-5">
+          <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            <Campo rotulo="Data de Nascimento" valor={id.nascimento} />
+            <Campo rotulo="Nome da Mãe" valor={id.nomeMae} />
+            <Campo rotulo="Convênio" valor={id.convenio} />
+            <Campo rotulo="Gênero" valor={id.genero} />
+          </dl>
+        </Card>
+      </div>
 
-      {/* Navegação clínica unificada: Histórico/Resumo (abas locais) + seções
-          do prontuário (links), todas no mesmo estilo p/ ficar homogêneo. */}
-      <nav className="flex flex-wrap items-center gap-2">
+      {/* Alterna o conteúdo do resumo: visão geral × prontuário manual. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <TabButton ativo={aba === "resumo"} onClick={() => setAba("resumo")}>
+          <Activity className="h-4 w-4" /> Visão geral
+        </TabButton>
         <TabButton ativo={aba === "historico"} onClick={() => setAba("historico")}>
           <FileClock className="h-4 w-4" /> Histórico
         </TabButton>
-        <TabButton ativo={aba === "resumo"} onClick={() => setAba("resumo")}>
-          <Activity className="h-4 w-4" /> Resumo
-        </TabButton>
-        {patientId &&
-          secoes.map((s) => {
-            const Icon = s.icon;
-            return (
-              <Link
-                key={s.href}
-                href={s.href}
-                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-black/5 hover:text-ink"
-              >
-                <Icon className="h-4 w-4" /> {s.label}
-              </Link>
-            );
-          })}
-      </nav>
+      </div>
 
       {aba === "historico" ? (
         <Card className="p-5">
