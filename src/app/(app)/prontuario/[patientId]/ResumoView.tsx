@@ -16,6 +16,10 @@ import {
   Stethoscope,
   Pill,
   FlaskConical,
+  CheckSquare,
+  ClipboardList,
+  Bone,
+  FileText,
   Download,
   Paperclip,
 } from "lucide-react";
@@ -33,6 +37,19 @@ export function ResumoView({ resumo }: { resumo: Resumo }) {
   const { patientId } = useParams<{ patientId: string }>();
   const { identificacao: id, vitais, evolucoes, prescricoesAtivas, examesSolicitados } =
     resumo;
+
+  // Seções do prontuário (mesma ordem do ClinicoNav, sem "Resumo" p/ não duplicar).
+  const base = `/prontuario/${patientId}`;
+  const secoes = [
+    { href: `${base}/evolucao`, label: "Evolução", icon: Stethoscope },
+    { href: `${base}/prescricao`, label: "Prescrição", icon: Pill },
+    { href: `${base}/checagem`, label: "Checagem", icon: CheckSquare },
+    { href: `${base}/enfermagem`, label: "Enfermagem", icon: HeartPulse },
+    { href: `${base}/anamnese`, label: "Anamnese", icon: ClipboardList },
+    { href: `${base}/exames`, label: "Exames", icon: FlaskConical },
+    { href: `${base}/protetico`, label: "Protético", icon: Bone },
+    { href: `${base}/documentos`, label: "Documentos", icon: FileText },
+  ];
 
   // Puxa o arquivo de prontuário manual anexado no cadastro (URL assinada).
   async function puxarAnexo() {
@@ -79,15 +96,29 @@ export function ResumoView({ resumo }: { resumo: Resumo }) {
         </dl>
       </Card>
 
-      {/* Abas: Histórico antes de Resumo */}
-      <div className="flex items-center gap-2">
+      {/* Navegação clínica unificada: Histórico/Resumo (abas locais) + seções
+          do prontuário (links), todas no mesmo estilo p/ ficar homogêneo. */}
+      <nav className="flex flex-wrap items-center gap-2">
         <TabButton ativo={aba === "historico"} onClick={() => setAba("historico")}>
           <FileClock className="h-4 w-4" /> Histórico
         </TabButton>
         <TabButton ativo={aba === "resumo"} onClick={() => setAba("resumo")}>
           <Activity className="h-4 w-4" /> Resumo
         </TabButton>
-      </div>
+        {patientId &&
+          secoes.map((s) => {
+            const Icon = s.icon;
+            return (
+              <Link
+                key={s.href}
+                href={s.href}
+                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-black/5 hover:text-ink"
+              >
+                <Icon className="h-4 w-4" /> {s.label}
+              </Link>
+            );
+          })}
+      </nav>
 
       {aba === "historico" ? (
         <Card className="p-5">
