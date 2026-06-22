@@ -198,10 +198,28 @@ const escalaSchema = z.object({
   weekdays: z.array(z.coerce.number().int().min(0).max(6)).default([]),
   start_time: z.string().min(1, "Informe o horário inicial."),
   end_time: z.string().min(1, "Informe o horário final."),
+  // Vigência da escala (obrigatória): a grade só vale dentro do período.
+  start_date: z.string().min(1, "Informe a data inicial."),
+  end_date: z.string().min(1, "Informe a data final."),
   // Itens atendidos pela escala (conforme o Tipo de Escala).
   procedure_codes: z.array(z.string().trim()).default([]),
   exam_tuss_codes: z.array(z.string().trim()).default([]),
 });
+
+/** Valida o período: data final não pode ser anterior à inicial (datas ISO). */
+function periodoInvalido(d: { start_date: string; end_date: string }): boolean {
+  return d.end_date < d.start_date;
+}
+
+/**
+ * `dateISO` (YYYY-MM-DD) cai dentro da vigência da escala? Limites nulos/vazios
+ * = sem fronteira (escalas antigas sem datas seguem sempre válidas).
+ */
+function naVigencia(dateISO: string, start: unknown, end: unknown): boolean {
+  const s = start ? String(start).slice(0, 10) : "";
+  const e = end ? String(end).slice(0, 10) : "";
+  return (!s || dateISO >= s) && (!e || dateISO <= e);
+}
 
 export type EscalaInput = z.input<typeof escalaSchema>;
 
@@ -215,6 +233,9 @@ export async function createSchedule(
   }
 
   const d = parsed.data;
+  if (periodoInvalido(d)) {
+    return { error: "A data final deve ser igual ou posterior à inicial." };
+  }
   const code = `ESC-${String(Math.floor(1000 + Math.random() * 9000))}`;
   if (isDemoMode()) return { ok: true, protocol: code };
 
@@ -232,6 +253,8 @@ export async function createSchedule(
     weekdays: d.weekdays,
     start_time: d.start_time,
     end_time: d.end_time,
+    start_date: d.start_date,
+    end_date: d.end_date,
     procedure_codes: d.procedure_codes,
     exam_tuss_codes: d.exam_tuss_codes,
   });
@@ -262,9 +285,13 @@ export async function updateSchedule(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
+  const d = parsed.data;
+  if (periodoInvalido(d)) {
+    return { error: "A data final deve ser igual ou posterior à inicial." };
+  }
+
   if (isDemoMode()) return { ok: true };
 
-  const d = parsed.data;
   const supabase = await createClient();
   const { error } = await supabase
     .from("schedules")
@@ -278,6 +305,8 @@ export async function updateSchedule(
       weekdays: d.weekdays,
       start_time: d.start_time,
       end_time: d.end_time,
+      start_date: d.start_date,
+      end_date: d.end_date,
       procedure_codes: d.procedure_codes,
       exam_tuss_codes: d.exam_tuss_codes,
       active: d.active,
@@ -577,15 +606,19 @@ export async function listSlots(
   const supabase = await createClient();
   const weekday = new Date(`${dateISO}T00:00:00`).getDay(); // 0=Dom..6=Sáb
 
-  // Escala que cobre esse profissional e dia da semana.
+  // Escala que cobre esse profissional, o dia da semana e a vigência (período).
   const { data: escalas } = await supabase
     .from("schedules")
-    .select("slot_minutes, weekdays, start_time, end_time, active")
+    .select(
+      "slot_minutes, weekdays, start_time, end_time, active, start_date, end_date",
+    )
     .eq("professional_id", professionalId)
     .eq("active", true);
 
-  const escala = (escalas ?? []).find((e) =>
-    Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false,
+  const escala = (escalas ?? []).find(
+    (e) =>
+      (Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false) &&
+      naVigencia(dateISO, e.start_date, e.end_date),
   );
 
   const slotMinutes = escala ? Number(escala.slot_minutes) || 30 : 30;
@@ -658,12 +691,16 @@ export async function listSlotsBySpecialty(
 
   const { data: escalas } = await supabase
     .from("schedules")
-    .select("slot_minutes, weekdays, start_time, end_time, active")
+    .select(
+      "slot_minutes, weekdays, start_time, end_time, active, start_date, end_date",
+    )
     .eq("specialty", specialty)
     .eq("active", true);
 
-  const escala = (escalas ?? []).find((e) =>
-    Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false,
+  const escala = (escalas ?? []).find(
+    (e) =>
+      (Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false) &&
+      naVigencia(dateISO, e.start_date, e.end_date),
   );
 
   const slotMinutes = escala ? Number(escala.slot_minutes) || 30 : 30;
