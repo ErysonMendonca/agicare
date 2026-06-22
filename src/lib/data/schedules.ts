@@ -17,6 +17,9 @@ export type Escala = {
   startTime: string;
   endTime: string;
   active: boolean;
+  /** Vigência da escala (YYYY-MM-DD); "" = sem limite. */
+  startDate: string;
+  endDate: string;
   /** Códigos de procedimentos atendidos (quando serviceType = Procedimento). */
   procedureCodes: string[];
   /** Códigos TUSS de exames atendidos (quando serviceType = Exame). */
@@ -42,6 +45,8 @@ const MOCK: Escala[] = [
     startTime: "08:00",
     endTime: "12:00",
     active: true,
+    startDate: "",
+    endDate: "",
     procedureCodes: [],
     examTussCodes: [],
   },
@@ -59,6 +64,8 @@ const MOCK: Escala[] = [
     startTime: "13:00",
     endTime: "18:00",
     active: true,
+    startDate: "",
+    endDate: "",
     procedureCodes: [],
     examTussCodes: [],
   },
@@ -87,7 +94,7 @@ export async function listSchedules(filtro?: EscalaFiltro): Promise<Escala[]> {
   let query = supabase
     .from("schedules")
     .select(
-      "id, code, description, professional_id, specialty, service_type, slot_minutes, overbook_limit, weekdays, start_time, end_time, active, procedure_codes, exam_tuss_codes, professionals(profiles(full_name))",
+      "id, code, description, professional_id, specialty, service_type, slot_minutes, overbook_limit, weekdays, start_time, end_time, active, start_date, end_date, procedure_codes, exam_tuss_codes, professionals(profiles(full_name))",
     )
     .order("specialty", { ascending: true })
     .order("description", { ascending: true });
@@ -123,6 +130,8 @@ export async function listSchedules(filtro?: EscalaFiltro): Promise<Escala[]> {
       startTime: hhmm(r.start_time),
       endTime: hhmm(r.end_time),
       active: !!r.active,
+      startDate: r.start_date ? String(r.start_date) : "",
+      endDate: r.end_date ? String(r.end_date) : "",
       procedureCodes: Array.isArray(r.procedure_codes)
         ? (r.procedure_codes as string[])
         : [],

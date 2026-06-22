@@ -99,6 +99,9 @@ export function EscalaHorariosModal({
   const [dias, setDias] = useState<number[]>([1, 2, 3, 4, 5]);
   const [inicio, setInicio] = useState("08:00");
   const [fim, setFim] = useState("18:00");
+  // Vigência da escala (período de validade).
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
   const [slots, setSlots] = useState<SlotEscala[]>([]);
   const [manual, setManual] = useState("");
   // Data alvo para persistência de bloqueios em schedule_blocks.
@@ -126,6 +129,8 @@ export function EscalaHorariosModal({
       setDias(e.weekdays);
       setInicio(e.startTime);
       setFim(e.endTime);
+      setDataInicio(e.startDate ?? "");
+      setDataFim(e.endDate ?? "");
       setSlots([]);
       setProcedureCodes(e.procedureCodes ?? []);
       setExamCodes(e.examTussCodes ?? []);
@@ -141,6 +146,8 @@ export function EscalaHorariosModal({
       setDias([1, 2, 3, 4, 5]);
       setInicio("08:00");
       setFim("18:00");
+      setDataInicio("");
+      setDataFim("");
       setSlots([]);
       setProcedureCodes([]);
       setExamCodes([]);
@@ -316,6 +323,16 @@ export function EscalaHorariosModal({
       setAba("horarios");
       return;
     }
+    if (!dataInicio || !dataFim) {
+      toast.error("Informe a data inicial e a data final da vigência.");
+      setAba("horarios");
+      return;
+    }
+    if (dataFim < dataInicio) {
+      toast.error("A data final deve ser igual ou posterior à inicial.");
+      setAba("horarios");
+      return;
+    }
     startTransition(async () => {
       const payload = {
         description: descricao,
@@ -327,6 +344,8 @@ export function EscalaHorariosModal({
         weekdays: dias,
         start_time: inicio,
         end_time: fim,
+        start_date: dataInicio,
+        end_date: dataFim,
         // Só guarda o conjunto do tipo atual; limpa o outro ao trocar de tipo.
         procedure_codes: tipo === "Procedimento" ? procedureCodes : [],
         exam_tuss_codes: tipo === "Exame" ? examCodes : [],
@@ -557,6 +576,32 @@ export function EscalaHorariosModal({
                 );
               })}
             </div>
+          </div>
+
+          {/* Vigência da escala (período de validade) */}
+          <div>
+            <span className="mb-2 block text-sm font-medium text-ink">
+              Período de Vigência
+            </span>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Data Inicial"
+                type="date"
+                value={dataInicio}
+                max={dataFim || undefined}
+                onChange={(e) => setDataInicio(e.target.value)}
+              />
+              <Input
+                label="Data Final"
+                type="date"
+                value={dataFim}
+                min={dataInicio || undefined}
+                onChange={(e) => setDataFim(e.target.value)}
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted">
+              A escala só vale (gera horários na agenda) dentro deste período.
+            </p>
           </div>
 
           {/* Faixa de horário */}
