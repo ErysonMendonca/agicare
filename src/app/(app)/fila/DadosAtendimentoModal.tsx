@@ -48,7 +48,6 @@ function resolveOptions(
 type DraftShape = {
   fields: Record<string, string>;
   plano: string;
-  privado: boolean;
   gestante: boolean;
   oMesmo: boolean;
   respNome: string;
@@ -72,7 +71,6 @@ export function DadosAtendimentoModal({
   const [plano, setPlano] = useState("");
   const [oMesmo, setOMesmo] = useState(false);
   const [respNome, setRespNome] = useState("");
-  const [privado, setPrivado] = useState(false);
   const [gestante, setGestante] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -102,8 +100,8 @@ export function DadosAtendimentoModal({
         if (typeof v === "string") fields[k] = v;
       }
     }
-    return { fields, plano, privado, gestante, oMesmo, respNome };
-  }, [plano, privado, gestante, oMesmo, respNome]);
+    return { fields, plano, gestante, oMesmo, respNome };
+  }, [plano, gestante, oMesmo, respNome]);
 
   const persist = useCallback(() => {
     try {
@@ -138,7 +136,6 @@ export function DadosAtendimentoModal({
       // evitar setState síncrono — restaura controlados + campos do DOM).
       requestAnimationFrame(() => {
         if (typeof d.plano === "string") setPlano(d.plano);
-        if (typeof d.privado === "boolean") setPrivado(d.privado);
         if (typeof d.gestante === "boolean") setGestante(d.gestante);
         if (typeof d.oMesmo === "boolean") setOMesmo(d.oMesmo);
         if (typeof d.respNome === "string") setRespNome(d.respNome);
@@ -165,7 +162,7 @@ export function DadosAtendimentoModal({
   useEffect(() => {
     if (!open || !dirty) return;
     persist();
-  }, [open, dirty, plano, privado, gestante, oMesmo, respNome, persist]);
+  }, [open, dirty, plano, gestante, oMesmo, respNome, persist]);
 
   function markDirty() {
     setDirty(true);
@@ -229,7 +226,6 @@ export function DadosAtendimentoModal({
       centroCusto: readForm("centro_custo"),
       origem: readForm("origem"),
       dataEntrada: readForm("data_entrada"),
-      privadoLiberdade: privado,
       gestante,
       convenio: readForm("convenio"),
       plano,
@@ -264,7 +260,7 @@ export function DadosAtendimentoModal({
         open={open}
         onClose={handleClose}
         title={`Dados de Atendimento - ${item.paciente}`}
-        className="max-w-2xl"
+        className="max-w-3xl"
         footer={
           <>
             <Button
@@ -292,115 +288,125 @@ export function DadosAtendimentoModal({
           onSubmit={(e) => e.preventDefault()}
           onInput={markDirty}
         >
-          {/* Cabeçalho do atendimento */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div>
-              <span className="mb-1.5 block text-sm font-medium text-ink">Registro</span>
-              <span className="inline-flex h-10 items-center rounded-lg bg-brand-50 px-3 text-sm font-semibold text-brand-600">
-                AUTO
-              </span>
-            </div>
-            <Input
-              type="date"
-              name="data_entrada"
-              label="Data e Hora da Entrada"
-              defaultValue={new Date().toISOString().slice(0, 10)}
-            />
-            <Select
-              name="origem"
-              label="Origem Atendimento"
-              defaultValue={oOrigem[0]?.value}
-            >
-              {oOrigem.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <div className="flex flex-col justify-center gap-2">
-              <Toggle
-                label="Privado de Liberdade?"
-                checked={privado}
-                onChange={(v) => {
-                  setPrivado(v);
-                  setDirty(true);
-                }}
-              />
-              <Toggle
-                label="Gestante?"
-                checked={gestante}
-                onChange={(v) => {
-                  setGestante(v);
-                  setDirty(true);
-                }}
-              />
-            </div>
-          </div>
+          {/* Dados do Atendimento */}
+          <fieldset className="rounded-xl border border-line p-4">
+            <legend className="px-1 text-sm font-semibold text-muted">
+              Dados do Atendimento
+            </legend>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Select name="medico" label="Médico" defaultValue={oMedico[0]?.value}>
-              {oMedico.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="especialidade"
-              label="Especialidade"
-              defaultValue={oEspec[0]?.value}
-            >
-              {oEspec.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="encaminhamento"
-              label="Encaminhamento de Atendimento"
-              defaultValue={oEncam[0]?.value}
-            >
-              {oEncam.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="carater"
-              label="Caráter de Atendimento"
-              defaultValue={oCarater[0]?.value}
-            >
-              {oCarater.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="procedencia"
-              label="Local Procedência"
-              defaultValue={oProced[0]?.value}
-            >
-              {oProced.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="centro_custo"
-              label="Centro de Custo"
-              defaultValue={oCentro[0]?.value}
-            >
-              {oCentro.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </div>
+            {/* Linha 1: identificação + entrada + gestante */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <span className="mb-1.5 block text-sm font-medium text-ink">
+                  Registro
+                </span>
+                <span className="inline-flex h-10 w-full items-center rounded-lg bg-brand-50 px-3 text-sm font-semibold text-brand-600">
+                  AUTO
+                </span>
+              </div>
+              <Input
+                type="date"
+                name="data_entrada"
+                label="Data e Hora da Entrada"
+                defaultValue={new Date().toISOString().slice(0, 10)}
+              />
+              <Select
+                name="origem"
+                label="Origem Atendimento"
+                defaultValue={oOrigem[0]?.value}
+              >
+                {oOrigem.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <div>
+                <span className="mb-1.5 block text-sm font-medium text-ink">
+                  Gestante?
+                </span>
+                <Toggle
+                  className="h-10 w-full rounded-lg border border-line bg-white px-3"
+                  label={gestante ? "Sim" : "Não"}
+                  checked={gestante}
+                  onChange={(v) => {
+                    setGestante(v);
+                    setDirty(true);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Linha 2: profissional / especialidade / encaminhamento / etc. */}
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Select
+                name="medico"
+                label="Profissional"
+                defaultValue={oMedico[0]?.value}
+              >
+                {oMedico.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="especialidade"
+                label="Especialidade"
+                defaultValue={oEspec[0]?.value}
+              >
+                {oEspec.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="encaminhamento"
+                label="Encaminhamento de Atendimento"
+                defaultValue={oEncam[0]?.value}
+              >
+                {oEncam.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="carater"
+                label="Caráter de Atendimento"
+                defaultValue={oCarater[0]?.value}
+              >
+                {oCarater.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="procedencia"
+                label="Local Procedência"
+                defaultValue={oProced[0]?.value}
+              >
+                {oProced.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="centro_custo"
+                label="Centro de Custo"
+                defaultValue={oCentro[0]?.value}
+              >
+                {oCentro.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </fieldset>
 
           {/* Dados do Convênio */}
           <fieldset className="mt-5 rounded-xl border border-line p-4">
@@ -543,13 +549,15 @@ function Toggle({
   label,
   checked,
   onChange,
+  className = "",
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  className?: string;
 }) {
   return (
-    <label className="flex items-center justify-between gap-2">
+    <label className={`flex items-center justify-between gap-2 ${className}`}>
       <span className="text-sm text-ink">{label}</span>
       <button
         type="button"
