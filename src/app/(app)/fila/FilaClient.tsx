@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Clock,
   Stethoscope,
@@ -10,6 +11,7 @@ import {
   Search,
   Filter,
   CalendarClock,
+  CalendarDays,
   Ticket,
   Users,
 } from "lucide-react";
@@ -50,6 +52,8 @@ export function FilaClient({
   stages = DEFAULT_STAGES,
   attendanceOptions,
   kpis,
+  dataSelecionada,
+  isHoje = true,
 }: {
   fila: FilaItem[];
   agendados?: FilaItem[];
@@ -61,7 +65,14 @@ export function FilaClient({
     emAtendimento: number;
     total: number;
   };
+  /** Dia exibido (yyyy-mm-dd). A fila já vem filtrada por este dia no servidor. */
+  dataSelecionada?: string;
+  /** true quando o dia exibido é hoje (mostra agendados aguardando chegada). */
+  isHoje?: boolean;
 }) {
+  const router = useRouter();
+  const [navegando, startNavegacao] = useTransition();
+
   const [selected, setSelected] = useState<FilaItem | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
 
@@ -100,6 +111,16 @@ export function FilaClient({
       (item) => termo === "" || item.paciente.toLowerCase().includes(termo),
     );
   }, [agendados, termo, statusFiltro]);
+
+  // Troca o dia exibido navegando pela URL (?data=…). A page re-consulta a fila
+  // no servidor já filtrada pelo dia → não carrega pacientes de dias passados.
+  // Data vazia ou igual a hoje limpa o param (URL limpa, default = hoje).
+  function mudarData(novaData: string) {
+    const params = new URLSearchParams();
+    if (novaData) params.set("data", novaData);
+    const qs = params.toString();
+    startNavegacao(() => router.push(qs ? `/fila?${qs}` : "/fila"));
+  }
 
   function abrir(item: FilaItem) {
     setSelected(item);
@@ -252,6 +273,28 @@ export function FilaClient({
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+          {/* Filtro por data: a fila mostra só o dia selecionado (default = hoje). */}
+          <div className="relative sm:w-48">
+            <CalendarDays className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Input
+              type="date"
+              aria-label="Filtrar a fila por data"
+              className="pl-9"
+              value={dataSelecionada ?? ""}
+              disabled={navegando}
+              onChange={(e) => mudarData(e.target.value)}
+            />
+          </div>
+          {!isHoje && (
+            <button
+              type="button"
+              onClick={() => mudarData("")}
+              disabled={navegando}
+              className="h-10 flex-none rounded-lg border border-line px-3 text-sm font-medium text-muted transition-colors hover:bg-muted-surface hover:text-ink disabled:opacity-60"
+            >
+              Hoje
+            </button>
+          )}
           <div className="relative sm:w-56">
             <Filter className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
             <Select

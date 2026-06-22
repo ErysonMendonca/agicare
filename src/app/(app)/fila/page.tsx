@@ -5,11 +5,33 @@ import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { requireView } from "@/lib/permissions";
 import { FilaClient } from "./FilaClient";
 
-export default async function FilaPage() {
+/** Data local de hoje em yyyy-mm-dd (coerente com <input type="date">). */
+function hojeISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+export default async function FilaPage({
+  searchParams,
+}: {
+  // Next.js 16: searchParams é assíncrono.
+  searchParams: Promise<{ data?: string }>;
+}) {
   await requireView("fila");
+
+  // Dia selecionado (default = hoje). A fila lista só as entradas desse dia,
+  // evitando poluir a tela com pacientes de dias que já passaram.
+  const sp = await searchParams;
+  const hoje = hojeISO();
+  const dataSelecionada = sp.data?.trim() || hoje;
+  const isHoje = dataSelecionada === hoje;
+
   const [fila, agendados, stages, attendanceOptions] = await Promise.all([
-    listQueue(),
-    listAgendadosHoje(),
+    listQueue({ date: dataSelecionada }),
+    // "Aguardando chegada" só faz sentido para o dia de hoje.
+    isHoje ? listAgendadosHoje() : Promise.resolve([]),
     getAttendanceFlow(),
     listAttendanceOptions(),
   ]);
@@ -34,6 +56,8 @@ export default async function FilaPage() {
         stages={stages}
         attendanceOptions={attendanceOptions}
         kpis={{ aguardando, chamados, emAtendimento, total }}
+        dataSelecionada={dataSelecionada}
+        isHoje={isHoje}
       />
     </>
   );
