@@ -12,6 +12,7 @@ import {
   Filter,
   CalendarClock,
   CalendarDays,
+  ArrowDownUp,
   Ticket,
   Users,
 } from "lucide-react";
@@ -34,6 +35,27 @@ import { DesistenciaModal } from "./DesistenciaModal";
 import { CheckInModal } from "./CheckInModal";
 
 type ModalKind = "acoes" | "triagem" | "atendimento" | "desistencia" | null;
+
+/** Critérios de ordenação da fila. */
+type Ordenacao = "agendamento" | "az" | "za";
+
+const ORDENACAO_OPCOES: { value: Ordenacao; label: string }[] = [
+  { value: "agendamento", label: "Horário de agendamento" },
+  { value: "az", label: "Nome (A–Z)" },
+  { value: "za", label: "Nome (Z–A)" },
+];
+
+/**
+ * Comparador conforme o critério escolhido. "agendamento" ordena pelo horário
+ * (HH:MM, crescente); itens sem horário ("—") vão para o fim.
+ */
+function compararFila(a: FilaItem, b: FilaItem, ord: Ordenacao): number {
+  if (ord === "az") return a.paciente.localeCompare(b.paciente, "pt-BR");
+  if (ord === "za") return b.paciente.localeCompare(a.paciente, "pt-BR");
+  const ha = a.hora === "—" ? "99:99" : a.hora;
+  const hb = b.hora === "—" ? "99:99" : b.hora;
+  return ha.localeCompare(hb);
+}
 
 /** Opções do filtro de status (valor = statusRaw do banco). */
 const STATUS_OPCOES = [
@@ -80,9 +102,10 @@ export function FilaClient({
   const [checkInAlvo, setCheckInAlvo] = useState<FilaItem | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
 
-  // Busca + filtro
+  // Busca + filtro + ordenação
   const [query, setQuery] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("todos");
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>("agendamento");
 
   // Clicar numa KPI filtra a fila pelo status; clicar na ativa (ou na Total)
   // volta para "todos". Compartilha o MESMO estado do Select de status.
@@ -92,25 +115,29 @@ export function FilaClient({
   const termo = query.trim().toLowerCase();
 
   const filaFiltrada = useMemo(() => {
-    return fila.filter((item) => {
-      const casaTexto =
-        termo === "" ||
-        item.paciente.toLowerCase().includes(termo) ||
-        item.codigo.toLowerCase().includes(termo);
-      const casaStatus =
-        statusFiltro === "todos" || item.statusRaw === statusFiltro;
-      return casaTexto && casaStatus;
-    });
-  }, [fila, termo, statusFiltro]);
+    return fila
+      .filter((item) => {
+        const casaTexto =
+          termo === "" ||
+          item.paciente.toLowerCase().includes(termo) ||
+          item.codigo.toLowerCase().includes(termo);
+        const casaStatus =
+          statusFiltro === "todos" || item.statusRaw === statusFiltro;
+        return casaTexto && casaStatus;
+      })
+      .sort((a, b) => compararFila(a, b, ordenacao));
+  }, [fila, termo, statusFiltro, ordenacao]);
 
   // Agendados só aparecem quando o filtro está em "todos" (não têm status de fila);
   // a busca textual continua valendo.
   const agendadosFiltrados = useMemo(() => {
     if (statusFiltro !== "todos") return [];
-    return agendados.filter(
-      (item) => termo === "" || item.paciente.toLowerCase().includes(termo),
-    );
-  }, [agendados, termo, statusFiltro]);
+    return agendados
+      .filter(
+        (item) => termo === "" || item.paciente.toLowerCase().includes(termo),
+      )
+      .sort((a, b) => compararFila(a, b, ordenacao));
+  }, [agendados, termo, statusFiltro, ordenacao]);
 
   // Troca o dia exibido navegando pela URL (?data=…). A page re-consulta a fila
   // no servidor já filtrada pelo dia → não carrega pacientes de dias passados.
@@ -304,6 +331,22 @@ export function FilaClient({
               onChange={(e) => setStatusFiltro(e.target.value)}
             >
               {STATUS_OPCOES.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {/* Ordenação: por horário de agendamento ou ordem alfabética. */}
+          <div className="relative sm:w-56">
+            <ArrowDownUp className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Select
+              aria-label="Ordenar a fila"
+              className="pl-9"
+              value={ordenacao}
+              onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
+            >
+              {ORDENACAO_OPCOES.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
