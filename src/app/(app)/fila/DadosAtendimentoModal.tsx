@@ -260,7 +260,7 @@ export function DadosAtendimentoModal({
         open={open}
         onClose={handleClose}
         title={`Dados de Atendimento - ${item.paciente}`}
-        className="max-w-3xl"
+        className="max-w-5xl"
         footer={
           <>
             <Button
