@@ -63,6 +63,18 @@ function todayRangeISO(): { startISO: string; endISO: string } {
   return { startISO: start.toISOString(), endISO: end.toISOString() };
 }
 
+/**
+ * Início/fim (ISO) de um dia local informado como yyyy-mm-dd. Parse LOCAL
+ * (`new Date(y, m-1, d)`) p/ não cair no bug de fuso do `<input type="date">`.
+ */
+function dayRangeISO(dateISO: string): { startISO: string; endISO: string } {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const start = new Date(y, (m ?? 1) - 1, d ?? 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { startISO: start.toISOString(), endISO: end.toISOString() };
+}
+
 /** Mapeia prioridade do banco → tag (Urgente/Preferencial). */
 function mapPriority(priority: string): Tag[] | undefined {
   if (priority === "urgente") return [{ label: "Urgente", status: "danger" }];
@@ -143,9 +155,13 @@ const MOCK: FilaItem[] = [
 /**
  * Lista a fila de atendimento: do banco quando configurado, mock no modo demo.
  * Filtro opcional por especialidade (usado pelo Prontuário, default = especialidade do médico).
+ * `date` (yyyy-mm-dd, opcional): restringe às entradas criadas naquele dia — usado
+ * pela tela da Fila p/ mostrar só o dia selecionado (default = hoje) e não poluir
+ * com pacientes de dias passados. Sem `date`, retorna todas (comportamento legado).
  */
 export async function listQueue(opts?: {
   specialty?: string | null;
+  date?: string | null;
 }): Promise<FilaItem[]> {
   if (isDemoMode()) {
     return opts?.specialty
@@ -162,6 +178,11 @@ export async function listQueue(opts?: {
     .order("created_at", { ascending: false });
 
   if (opts?.specialty) query = query.eq("specialty", opts.specialty);
+
+  if (opts?.date) {
+    const { startISO, endISO } = dayRangeISO(opts.date);
+    query = query.gte("created_at", startISO).lt("created_at", endISO);
+  }
 
   // Escopo 'own' (módulo 'fila'): o papel só enxerga as entradas do próprio
   // profissional. Admin é sempre 'all' (seed) → sem filtro. Sem vínculo de
