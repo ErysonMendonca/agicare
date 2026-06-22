@@ -76,6 +76,7 @@ export function FilaClient({
   kpis,
   dataSelecionada,
   isHoje = true,
+  todoPeriodo = false,
 }: {
   fila: FilaItem[];
   agendados?: FilaItem[];
@@ -91,6 +92,8 @@ export function FilaClient({
   dataSelecionada?: string;
   /** true quando o dia exibido é hoje (mostra agendados aguardando chegada). */
   isHoje?: boolean;
+  /** true quando o filtro de data está desligado (fila do período inteiro). */
+  todoPeriodo?: boolean;
 }) {
   const router = useRouter();
   const [navegando, startNavegacao] = useTransition();
@@ -308,11 +311,25 @@ export function FilaClient({
               aria-label="Filtrar a fila por data"
               className="pl-9"
               value={dataSelecionada ?? ""}
-              disabled={navegando}
+              disabled={navegando || todoPeriodo}
               onChange={(e) => mudarData(e.target.value)}
             />
           </div>
-          {!isHoje && (
+          {/* Todo o período: desliga o filtro de data e lista a fila inteira. */}
+          <button
+            type="button"
+            onClick={() => mudarData(todoPeriodo ? "" : "todos")}
+            disabled={navegando}
+            aria-pressed={todoPeriodo}
+            className={`h-10 flex-none rounded-lg border px-3 text-sm font-medium transition-colors disabled:opacity-60 ${
+              todoPeriodo
+                ? "border-brand-500 bg-brand-50 text-brand-600"
+                : "border-line text-muted hover:bg-muted-surface hover:text-ink"
+            }`}
+          >
+            Todo o período
+          </button>
+          {!isHoje && !todoPeriodo && (
             <button
               type="button"
               onClick={() => mudarData("")}

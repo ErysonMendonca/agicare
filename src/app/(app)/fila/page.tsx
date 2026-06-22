@@ -23,13 +23,16 @@ export default async function FilaPage({
 
   // Dia selecionado (default = hoje). A fila lista só as entradas desse dia,
   // evitando poluir a tela com pacientes de dias que já passaram.
+  // `data=todos` desliga o filtro de data e mostra a fila do período inteiro.
   const sp = await searchParams;
   const hoje = hojeISO();
-  const dataSelecionada = sp.data?.trim() || hoje;
-  const isHoje = dataSelecionada === hoje;
+  const dataParam = sp.data?.trim() || "";
+  const todoPeriodo = dataParam === "todos";
+  const dataSelecionada = todoPeriodo ? "" : dataParam || hoje;
+  const isHoje = !todoPeriodo && dataSelecionada === hoje;
 
   const [fila, agendados, stages, attendanceOptions] = await Promise.all([
-    listQueue({ date: dataSelecionada }),
+    listQueue(todoPeriodo ? {} : { date: dataSelecionada }),
     // "Aguardando chegada" só faz sentido para o dia de hoje.
     isHoje ? listAgendadosHoje() : Promise.resolve([]),
     getAttendanceFlow(),
@@ -58,6 +61,7 @@ export default async function FilaPage({
         kpis={{ aguardando, chamados, emAtendimento, total }}
         dataSelecionada={dataSelecionada}
         isHoje={isHoje}
+        todoPeriodo={todoPeriodo}
       />
     </>
   );
