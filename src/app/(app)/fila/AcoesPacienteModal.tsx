@@ -26,6 +26,7 @@ export function AcoesPacienteModal({
   onTriar,
   onAtender,
   onDesistir,
+  isMedico = false,
 }: {
   item: FilaItem;
   stages?: FlowStage[];
@@ -35,6 +36,8 @@ export function AcoesPacienteModal({
   onTriar: () => void;
   onAtender: () => void;
   onDesistir: () => void;
+  /** Médico: ao Atender vai direto ao prontuário do paciente (não abre o modal admin). */
+  isMedico?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -68,6 +71,12 @@ export function AcoesPacienteModal({
       const res = await atenderPaciente(item.id);
       if (res?.ok) {
         onStatusChange("em_atendimento");
+        // Médico: vai direto ao prontuário com o paciente selecionado.
+        if (isMedico && item.patientId) {
+          onClose();
+          router.push(`/prontuario/${item.patientId}`);
+          return;
+        }
         router.refresh();
         onAtender();
       } else {

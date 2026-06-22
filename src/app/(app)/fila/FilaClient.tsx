@@ -77,6 +77,7 @@ export function FilaClient({
   dataSelecionada,
   isHoje = true,
   todoPeriodo = false,
+  isMedico = false,
 }: {
   fila: FilaItem[];
   agendados?: FilaItem[];
@@ -94,6 +95,8 @@ export function FilaClient({
   isHoje?: boolean;
   /** true quando o filtro de data está desligado (fila do período inteiro). */
   todoPeriodo?: boolean;
+  /** true quando o usuário é médico → "Atender" leva ao prontuário do paciente. */
+  isMedico?: boolean;
 }) {
   const router = useRouter();
   const [navegando, startNavegacao] = useTransition();
@@ -455,6 +458,7 @@ export function FilaClient({
             onTriar={() => setModal("triagem")}
             onAtender={() => setModal("atendimento")}
             onDesistir={() => setModal("desistencia")}
+            isMedico={isMedico}
           />
           <TriagemModal
             item={selected}

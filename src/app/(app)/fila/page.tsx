@@ -3,6 +3,7 @@ import { listQueue, listAgendadosHoje } from "@/lib/data/queue";
 import { getAttendanceFlow } from "@/lib/data/attendance-flow";
 import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { requireView } from "@/lib/permissions";
+import { getRole } from "@/lib/auth";
 import { FilaClient } from "./FilaClient";
 
 /** Data local de hoje em yyyy-mm-dd (coerente com <input type="date">). */
@@ -20,6 +21,9 @@ export default async function FilaPage({
   searchParams: Promise<{ data?: string }>;
 }) {
   await requireView("fila");
+
+  // Médico: o botão "Atender" leva direto ao prontuário do paciente.
+  const isMedico = (await getRole()) === "medico";
 
   // Dia selecionado (default = hoje). A fila lista só as entradas desse dia,
   // evitando poluir a tela com pacientes de dias que já passaram.
@@ -62,6 +66,7 @@ export default async function FilaPage({
         dataSelecionada={dataSelecionada}
         isHoje={isHoje}
         todoPeriodo={todoPeriodo}
+        isMedico={isMedico}
       />
     </>
   );
