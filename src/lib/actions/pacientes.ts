@@ -200,7 +200,15 @@ export async function criarPacienteAvulso(input: {
   nome: string;
   telefone: string;
   cpf: string;
-}): Promise<{ ok?: boolean; patientId?: string; error?: string }> {
+}): Promise<{
+  ok?: boolean;
+  patientId?: string;
+  error?: string;
+  /** true = reaproveitou um paciente já existente com o mesmo CPF (anti-duplicidade),
+   * em vez de criar um novo. A Agenda avisa o usuário para ele saber que NÃO é
+   * um cadastro novo (o cadastro existente pode já estar completo). */
+  reused?: boolean;
+}> {
   const parsed = avulsoSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
@@ -219,7 +227,7 @@ export async function criarPacienteAvulso(input: {
 
   // Anti-duplicidade: reusa o paciente da clínica com o mesmo CPF (só-dígitos).
   const existenteId = await acharPacientePorCpf(supabase, clinicId, d.cpf);
-  if (existenteId) return { ok: true, patientId: existenteId };
+  if (existenteId) return { ok: true, patientId: existenteId, reused: true };
 
   const { data: novo, error } = await supabase
     .from("patients")
@@ -237,14 +245,14 @@ export async function criarPacienteAvulso(input: {
     // Corrida no índice único 0046 (outro request gravou o mesmo CPF) → reusa.
     if (error?.code === "23505") {
       const id = await acharPacientePorCpf(supabase, clinicId, d.cpf);
-      if (id) return { ok: true, patientId: id };
+      if (id) return { ok: true, patientId: id, reused: true };
       return { error: "CPF já cadastrado nesta clínica." };
     }
     return { error: "Não foi possível criar o paciente." };
   }
 
   revalidatePath("/pacientes");
-  return { ok: true, patientId: novo.id as string };
+  return { ok: true, patientId: novo.id as string, reused: false };
 }
 
 // Completar cadastro do avulso (no check-in): preenche os campos faltantes e
