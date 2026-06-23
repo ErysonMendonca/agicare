@@ -35,6 +35,7 @@ import {
   type Slot,
 } from "@/lib/actions/appointments";
 import { criarPacienteAvulso } from "@/lib/actions/pacientes";
+import { isValidCPF } from "@/lib/cpf";
 
 const TIPOS = ["Consulta", "Retorno", "Exame", "Procedimento"];
 /** Durações (min) ofertadas; a duração da escala é injetada dinamicamente. */
@@ -85,6 +86,10 @@ export function NovoAgendamentoModal({
   const [avulsoNome, setAvulsoNome] = useState("");
   const [avulsoTel, setAvulsoTel] = useState("");
   const [avulsoCpf, setAvulsoCpf] = useState("");
+  // Validação do dígito verificador do CPF no client (só sinaliza com 11 dígitos
+  // digitados, para não acusar enquanto o usuário ainda digita).
+  const avulsoCpfInvalido =
+    avulsoCpf.replace(/\D/g, "").length === 11 && !isValidCPF(avulsoCpf);
 
   // QR Code REAL do comprovante (gerado do protocolo, sem rede). Vazio até
   // haver protocolo válido (passo 4).
@@ -166,6 +171,8 @@ export function NovoAgendamentoModal({
     if (modoAvulso) {
       if (!avulsoNome.trim() || !avulsoTel.trim() || !avulsoCpf.trim())
         return toast.error("Preencha nome, telefone e CPF do paciente avulso.");
+      if (!isValidCPF(avulsoCpf))
+        return toast.error("CPF inválido (dígito verificador).");
     } else if (!pacienteId) {
       return toast.error("Selecione o paciente.");
     }
@@ -331,12 +338,20 @@ export function NovoAgendamentoModal({
                 value={avulsoTel}
                 onChange={(e) => setAvulsoTel(e.target.value)}
               />
-              <Input
-                label="CPF"
-                placeholder="000.000.000-00"
-                value={avulsoCpf}
-                onChange={(e) => setAvulsoCpf(e.target.value)}
-              />
+              <div>
+                <Input
+                  label="CPF"
+                  placeholder="000.000.000-00"
+                  value={avulsoCpf}
+                  onChange={(e) => setAvulsoCpf(e.target.value)}
+                  aria-invalid={avulsoCpfInvalido}
+                />
+                {avulsoCpfInvalido && (
+                  <p className="mt-1 text-xs text-red-600">
+                    CPF inválido (dígito verificador).
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
             <div>
