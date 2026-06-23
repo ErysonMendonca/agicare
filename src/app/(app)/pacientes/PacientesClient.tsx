@@ -40,6 +40,8 @@ import { EditarPacienteModal } from "./EditarPacienteModal";
 /** Forma client-safe do paciente (espelha `Paciente` da data layer — só tipos). */
 export type PacienteRow = {
   id: string;
+  /** Número de prontuário sequencial por clínica (0057), formatado. */
+  numeroProntuario: string;
   nome: string;
   cpf: string;
   telefone: string;
@@ -107,7 +109,8 @@ export function PacientesClient({
       return (
         p.nome.toLowerCase().includes(termo) ||
         p.cpf.toLowerCase().includes(termo) ||
-        p.email.toLowerCase().includes(termo)
+        p.email.toLowerCase().includes(termo) ||
+        p.numeroProntuario.toLowerCase().includes(termo)
       );
     });
   }, [pacientes, busca, status]);
@@ -118,6 +121,7 @@ export function PacientesClient({
       return;
     }
     const cabecalho = [
+      "Nº Prontuário",
       "Nome",
       "CPF",
       "Telefone",
@@ -128,6 +132,7 @@ export function PacientesClient({
     ];
     const linhas = filtrados.map((p) =>
       [
+        p.numeroProntuario,
         p.nome,
         p.cpf,
         p.telefone,
@@ -165,6 +170,7 @@ export function PacientesClient({
     const linhas = filtrados
       .map(
         (p) => `<tr>
+          <td>${esc(p.numeroProntuario)}</td>
           <td>${esc(p.nome)}</td>
           <td>${esc(p.cpf || "—")}</td>
           <td>${esc(p.telefone || "—")}</td>
@@ -194,7 +200,7 @@ export function PacientesClient({
         <p class="sub">${filtrados.length} paciente(s) · Gerado em ${hoje}</p>
         <table>
           <thead><tr>
-            <th>Nome</th><th>CPF</th><th>Telefone</th><th>E-mail</th>
+            <th>Nº Prontuário</th><th>Nome</th><th>CPF</th><th>Telefone</th><th>E-mail</th>
             <th>Convênio</th><th>Tipo Sanguíneo</th><th>Status</th>
           </tr></thead>
           <tbody>${linhas}</tbody>
@@ -302,7 +308,7 @@ export function PacientesClient({
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <Input
                 id="busca"
-                placeholder="Nome, CPF ou e-mail..."
+                placeholder="Nº prontuário, nome, CPF ou e-mail..."
                 className="pl-9"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
@@ -356,6 +362,7 @@ export function PacientesClient({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-y border-line text-left text-xs uppercase text-muted">
+                <th className="px-5 py-3 font-medium">Nº Prontuário</th>
                 <th className="px-5 py-3 font-medium">Paciente</th>
                 <th className="px-5 py-3 font-medium">Contato</th>
                 <th className="px-5 py-3 font-medium">Convênio</th>
@@ -368,13 +375,16 @@ export function PacientesClient({
             <tbody>
               {filtrados.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-sm text-muted">
+                  <td colSpan={8} className="px-5 py-12 text-center text-sm text-muted">
                     Nenhum paciente encontrado para os filtros aplicados.
                   </td>
                 </tr>
               ) : (
                 filtrados.map((p) => (
                   <tr key={p.id} className="border-b border-line last:border-0">
+                    <td className="whitespace-nowrap px-5 py-3 font-mono font-medium text-ink">
+                      {p.numeroProntuario}
+                    </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
                         <Avatar name={p.nome} />
