@@ -4,6 +4,8 @@ import { requireClinic } from "@/lib/tenant";
 
 export type Paciente = {
   id: string;
+  /** Número de prontuário sequencial por clínica (0057), formatado. "—" se ausente. */
+  numeroProntuario: string;
   nome: string;
   cpf: string;
   telefone: string;
@@ -21,9 +23,9 @@ export type Paciente = {
 
 /** Mock usado no modo demo (espelha o Figma). */
 const MOCK: Paciente[] = [
-  { id: "1", nome: "João Pedro Oliveira", cpf: "111.222.333-44", telefone: "(11) 91234-5678", email: "joao.oliveira@email.com", convenio: "Unimed", tipoSanguineo: "O+", alergia: true, emTratamento: true, cardiaco: true, ativo: true, obito: false },
-  { id: "2", nome: "Maria Clara Santos", cpf: "222.333.444-55", telefone: "(11) 92345-6789", email: "maria.santos@email.com", convenio: "Particular", tipoSanguineo: "A+", alergia: false, emTratamento: false, cardiaco: false, ativo: true, obito: false },
-  { id: "3", nome: "Pedro Henrique Lima", cpf: "333.444.555-66", telefone: "(11) 93456-7890", email: "responsavel@email.com", convenio: "Amil", tipoSanguineo: "B+", alergia: true, emTratamento: true, cardiaco: false, ativo: false, obito: false },
+  { id: "1", numeroProntuario: "000001", nome: "João Pedro Oliveira", cpf: "111.222.333-44", telefone: "(11) 91234-5678", email: "joao.oliveira@email.com", convenio: "Unimed", tipoSanguineo: "O+", alergia: true, emTratamento: true, cardiaco: true, ativo: true, obito: false },
+  { id: "2", numeroProntuario: "000002", nome: "Maria Clara Santos", cpf: "222.333.444-55", telefone: "(11) 92345-6789", email: "maria.santos@email.com", convenio: "Particular", tipoSanguineo: "A+", alergia: false, emTratamento: false, cardiaco: false, ativo: true, obito: false },
+  { id: "3", numeroProntuario: "000003", nome: "Pedro Henrique Lima", cpf: "333.444.555-66", telefone: "(11) 93456-7890", email: "responsavel@email.com", convenio: "Amil", tipoSanguineo: "B+", alergia: true, emTratamento: true, cardiaco: false, ativo: false, obito: false },
 ];
 
 /** Lista pacientes: do banco quando configurado, mock no modo demo. */
@@ -42,6 +44,11 @@ export async function listPatients(): Promise<Paciente[]> {
 
   return data.map((p) => ({
     id: p.id as string,
+    // Número de prontuário (0057) zero-pad a 6 dígitos; "—" se a coluna faltar.
+    numeroProntuario:
+      p.record_number != null
+        ? String(p.record_number as number).padStart(6, "0")
+        : "—",
     nome: (p.full_name as string | null) ?? "",
     cpf: (p.cpf as string | null) ?? "",
     telefone: (p.phone as string | null) ?? "",
