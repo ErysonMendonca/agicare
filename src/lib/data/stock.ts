@@ -89,7 +89,11 @@ export async function listStockProducts(): Promise<ProdutoEstoque[]> {
     const sup = Array.isArray(p.suppliers) ? p.suppliers[0] : p.suppliers;
     return {
       id: p.id as string,
-      codigo: (p.code as string | null) ?? "—",
+      // Código = nº sequencial por clínica (0058) zero-pad a 6; fallback ao code legado.
+      codigo:
+        p.code_number != null
+          ? String(p.code_number as number).padStart(6, "0")
+          : ((p.code as string | null) ?? "—"),
       produto: (p.name as string | null) ?? "",
       categoria: (p.category as string | null) ?? "—",
       unidade: (p.unit as string | null) ?? "—",
