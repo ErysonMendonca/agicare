@@ -231,7 +231,11 @@ export function CadastroPacienteModal() {
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" form="form-cad-paciente" disabled={pending}>
+            <Button
+              type="submit"
+              form="form-cad-paciente"
+              disabled={pending || cpfInvalido}
+            >
               {pending ? "Salvando..." : "Salvar Cadastro"}
             </Button>
           </>

@@ -58,6 +58,8 @@ export function EditarPacienteModal({
 
   const [state, formAction, pending] = useActionState(updatePaciente, undefined);
   const processadoRef = useRef<ActionState>(undefined);
+  // CPF inválido é içado do form interno para travar o botão "Salvar" do footer.
+  const [cpfInvalido, setCpfInvalido] = useState(false);
 
   // Carrega os dados crus ao MONTAR (o pai monta com `key` por paciente, então
   // cada abertura é um mount novo — sem reset síncrono de estado dentro do
@@ -108,7 +110,11 @@ export function EditarPacienteModal({
             <Button variant="ghost" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" form="form-edit-paciente" disabled={pending}>
+            <Button
+              type="submit"
+              form="form-edit-paciente"
+              disabled={pending || cpfInvalido}
+            >
               {pending ? "Salvando..." : "Salvar alterações"}
             </Button>
           </>
@@ -139,6 +145,7 @@ export function EditarPacienteModal({
           paciente={paciente}
           formAction={formAction}
           erro={state?.error}
+          onCpfValidityChange={setCpfInvalido}
         />
       )}
     </Modal>
@@ -154,10 +161,12 @@ function EditarPacienteForm({
   paciente,
   formAction,
   erro,
+  onCpfValidityChange,
 }: {
   paciente: PacienteEditavel;
   formAction: (formData: FormData) => void;
   erro?: string;
+  onCpfValidityChange: (invalido: boolean) => void;
 }) {
   const [aba, setAba] = useState<AbaId>("pessoais");
 
@@ -278,7 +287,13 @@ function EditarPacienteForm({
                 label="CPF"
                 placeholder="000.000.000-00"
                 value={cpf}
-                onChange={(e) => setCpf(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCpf(v);
+                  onCpfValidityChange(
+                    v.replace(/\D/g, "").length === 11 && !isValidCPF(v),
+                  );
+                }}
                 aria-invalid={cpfInvalido}
               />
               {cpfInvalido && (
