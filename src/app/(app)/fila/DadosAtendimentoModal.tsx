@@ -47,6 +47,7 @@ function resolveOptions(
 
 type DraftShape = {
   fields: Record<string, string>;
+  convenio: string;
   plano: string;
   gestante: boolean;
   oMesmo: boolean;
@@ -68,7 +69,12 @@ export function DadosAtendimentoModal({
   options?: AttendanceOptionsByCategory;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [convenio, setConvenio] = useState<string>(
+    () => item.convenio || resolveOptions(options, "convenio")[0]?.value || "",
+  );
   const [plano, setPlano] = useState("");
+  // "Particular" não tem convênio → não exige plano nem dados de carteirinha.
+  const isParticular = /particular/i.test(convenio);
   const [oMesmo, setOMesmo] = useState(false);
   const [respNome, setRespNome] = useState("");
   const [gestante, setGestante] = useState(false);
@@ -100,8 +106,8 @@ export function DadosAtendimentoModal({
         if (typeof v === "string") fields[k] = v;
       }
     }
-    return { fields, plano, gestante, oMesmo, respNome };
-  }, [plano, gestante, oMesmo, respNome]);
+    return { fields, convenio, plano, gestante, oMesmo, respNome };
+  }, [convenio, plano, gestante, oMesmo, respNome]);
 
   const persist = useCallback(() => {
     try {
@@ -135,6 +141,7 @@ export function DadosAtendimentoModal({
       // Aplica o rascunho após o paint inicial (fora do corpo do efeito, p/
       // evitar setState síncrono — restaura controlados + campos do DOM).
       requestAnimationFrame(() => {
+        if (typeof d.convenio === "string") setConvenio(d.convenio);
         if (typeof d.plano === "string") setPlano(d.plano);
         if (typeof d.gestante === "boolean") setGestante(d.gestante);
         if (typeof d.oMesmo === "boolean") setOMesmo(d.oMesmo);
@@ -162,7 +169,7 @@ export function DadosAtendimentoModal({
   useEffect(() => {
     if (!open || !dirty) return;
     persist();
-  }, [open, dirty, plano, gestante, oMesmo, respNome, persist]);
+  }, [open, dirty, convenio, plano, gestante, oMesmo, respNome, persist]);
 
   function markDirty() {
     setDirty(true);
@@ -208,7 +215,7 @@ export function DadosAtendimentoModal({
 
   async function salvar(imprimir: boolean) {
     if (pending) return;
-    if (!plano) {
+    if (!isParticular && !plano) {
       toast.error("Selecione o plano do convênio.");
       return;
     }
@@ -227,8 +234,8 @@ export function DadosAtendimentoModal({
       origem: readForm("origem"),
       dataEntrada: readForm("data_entrada"),
       gestante,
-      convenio: readForm("convenio"),
-      plano,
+      convenio,
+      plano: isParticular ? "" : plano,
       carteira: readForm("carteira"),
       validade: readForm("validade"),
       validador: readForm("validador"),
@@ -417,7 +424,13 @@ export function DadosAtendimentoModal({
               <Select
                 name="convenio"
                 label="Convênio *"
-                defaultValue={item.convenio || oConv[0]?.value}
+                value={convenio}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setConvenio(v);
+                  if (/particular/i.test(v)) setPlano("");
+                  setDirty(true);
+                }}
               >
                 {oConv.map((o) => (
                   <option key={o.id} value={o.value}>
@@ -426,31 +439,54 @@ export function DadosAtendimentoModal({
                 ))}
               </Select>
               <Select
-                label="Plano *"
-                value={plano}
+                label={isParticular ? "Plano" : "Plano *"}
+                value={isParticular ? "" : plano}
+                disabled={isParticular}
                 onChange={(e) => {
                   setPlano(e.target.value);
                   setDirty(true);
                 }}
               >
-                <option value="" disabled>
-                  Selecione o plano
-                </option>
-                {oPlano.map((o) => (
-                  <option key={o.id} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
+                {isParticular ? (
+                  <option value="">Não se aplica (Particular)</option>
+                ) : (
+                  <>
+                    <option value="" disabled>
+                      Selecione o plano
+                    </option>
+                    {oPlano.map((o) => (
+                      <option key={o.id} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </>
+                )}
               </Select>
-              <Input name="carteira" label="Número da Carteirinha" placeholder="Número da carteirinha" />
-              <Input type="date" name="validade" label="Validade da Carteirinha" />
+              <Input
+                name="carteira"
+                label="Número da Carteirinha"
+                placeholder="Número da carteirinha"
+                disabled={isParticular}
+              />
+              <Input
+                type="date"
+                name="validade"
+                label="Validade da Carteirinha"
+                disabled={isParticular}
+              />
               <label className="block sm:col-span-2">
                 <span className="mb-1.5 block text-sm font-medium text-ink">
                   Validador de Convênio
                 </span>
-                <Input name="validador" placeholder="Código do validador" />
+                <Input
+                  name="validador"
+                  placeholder="Código do validador"
+                  disabled={isParticular}
+                />
                 <span className="mt-1 block text-xs text-muted">
-                  Digite o código do validador fornecido pelo convênio
+                  {isParticular
+                    ? "Atendimento particular — sem dados de convênio."
+                    : "Digite o código do validador fornecido pelo convênio"}
                 </span>
               </label>
             </div>

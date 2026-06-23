@@ -220,9 +220,10 @@ const atendimentoSchema = z.object({
   dataEntrada: z.string().trim().max(10).nullish(),
   privadoLiberdade: z.boolean().default(false),
   gestante: z.boolean().default(false),
-  // Convênio obrigatório (mesma regra do form: plano é exigido).
+  // Convênio obrigatório. Plano só é exigido quando há convênio — atendimento
+  // "Particular" dispensa o plano (validado no superRefine abaixo).
   convenio: z.string().trim().min(1, "Convênio obrigatório.").max(120),
-  plano: z.string().trim().min(1, "Selecione o plano do convênio.").max(120),
+  plano: z.string().trim().max(120).default(""),
   carteira: z.string().trim().max(60).nullish(),
   validade: z.string().trim().max(10).nullish(),
   validador: z.string().trim().max(120).nullish(),
@@ -231,6 +232,15 @@ const atendimentoSchema = z.object({
   respDocumento: z.string().trim().max(60).nullish(),
   respParentesco: z.string().trim().max(60).nullish(),
   observacoes: z.string().trim().max(2000).nullish(),
+}).superRefine((d, ctx) => {
+  // Plano obrigatório, exceto em atendimento particular (sem convênio).
+  if (!/particular/i.test(d.convenio) && !d.plano) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["plano"],
+      message: "Selecione o plano do convênio.",
+    });
+  }
 });
 
 export type AtendimentoInput = z.input<typeof atendimentoSchema>;
