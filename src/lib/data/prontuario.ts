@@ -30,6 +30,29 @@ export type SinaisVitais = {
   glucose: string;
 } | null;
 
+/** Classificação de risco da triagem (protocolo de Manchester). */
+export type RiscoTriagem =
+  | "azul"
+  | "verde"
+  | "amarelo"
+  | "laranja"
+  | "vermelho";
+
+/** Triagem do paciente: sinais vitais aferidos + classificação de risco. */
+export type Triagem = {
+  recordedAt: string;
+  pa: string;
+  fc: string;
+  fr: string;
+  temp: string;
+  peso: string;
+  altura: string;
+  spo2: string;
+  glucose: string;
+  riskLevel: RiscoTriagem | null;
+  notes: string | null;
+} | null;
+
 export type Evolucao = {
   id: string;
   data: string;
@@ -56,6 +79,8 @@ export type ExameResumo = {
 export type Resumo = {
   identificacao: Identificacao;
   vitais: SinaisVitais;
+  /** Triagem mais recente do paciente (sinais + risco). Null = sem triagem. */
+  triagem: Triagem;
   evolucoes: Evolucao[];
   /** Medicamentos da prescrição mais recente (visão 360º inline). */
   prescricoesAtivas: PrescricaoAtivaItem[];
@@ -204,6 +229,19 @@ const DEMO_RESUMO: Resumo = {
     altura: "1.75 m",
     spo2: "98 %",
     glucose: "92 mg/dL",
+  },
+  triagem: {
+    recordedAt: "12/06/2026 07:55",
+    pa: "130/85 mmHg",
+    fc: "78 bpm",
+    fr: "18 irpm",
+    temp: "37.1 °C",
+    peso: "75 kg",
+    altura: "1.75 m",
+    spo2: "97 %",
+    glucose: "98 mg/dL",
+    riskLevel: "amarelo",
+    notes: "Dor torácica leve à entrada; classificada como urgente.",
   },
   evolucoes: [
     {
@@ -374,6 +412,35 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
     .maybeSingle();
   const numeroAtendimento = (ultimaEntrada?.ticket_code as string | null) || "—";
 
+  // Triagem mais recente do paciente (sinais aferidos + classificação de risco).
+  // Erro/sem registro → null (a seção não aparece no prontuário).
+  const { data: t } = await supabase
+    .from("triage_records")
+    .select("*")
+    .eq("patient_id", patientId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const triagem: Triagem = t
+    ? {
+        recordedAt: fmtDataHora(t.created_at as string),
+        pa:
+          t.systolic && t.diastolic
+            ? `${t.systolic}/${t.diastolic} mmHg`
+            : "—",
+        fc: t.heart_rate ? `${t.heart_rate} bpm` : "—",
+        fr: t.resp_rate ? `${t.resp_rate} irpm` : "—",
+        temp: t.temperature ? `${t.temperature} °C` : "—",
+        peso: t.weight ? `${t.weight} kg` : "—",
+        altura: t.height ? `${t.height} m` : "—",
+        spo2: t.spo2 ? `${t.spo2} %` : "—",
+        glucose: t.glucose ? `${t.glucose} mg/dL` : "—",
+        riskLevel: (t.risk_level as RiscoTriagem | null) ?? null,
+        notes: (t.notes as string | null) ?? null,
+      }
+    : null;
+
   return {
     identificacao: {
       nome: (p.full_name as string) ?? "—",
@@ -388,6 +455,7 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
       manualRecordName: (p.manual_record_name as string | null) ?? null,
     },
     vitais,
+    triagem,
     evolucoes,
     prescricoesAtivas,
     examesSolicitados,
