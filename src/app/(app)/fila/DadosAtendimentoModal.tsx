@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, Save, Printer, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
@@ -69,6 +70,7 @@ export function DadosAtendimentoModal({
   options?: AttendanceOptionsByCategory;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
   const [convenio, setConvenio] = useState<string>(
     () => item.convenio || resolveOptions(options, "convenio")[0]?.value || "",
   );
@@ -258,6 +260,8 @@ export function DadosAtendimentoModal({
       imprimir ? "Atendimento salvo. Gerando impressão…" : "Atendimento salvo.",
     );
     if (imprimir) window.print();
+    // Reflete na fila o avanço do status (recepção concluída → aguardando atendimento).
+    router.refresh();
     onClose();
   }
 
