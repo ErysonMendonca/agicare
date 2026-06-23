@@ -362,10 +362,22 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
 
   const genero = (p.gender as string | null) ?? "";
 
+  // Número de atendimento = senha (ticket_code) da entrada de fila mais recente
+  // do paciente — é o "Registro Atendimento" usado na lista do prontuário. NÃO é
+  // o CPF. Sem entrada na fila (paciente fora de atendimento) → "—".
+  const { data: ultimaEntrada } = await supabase
+    .from("queue_entries")
+    .select("ticket_code")
+    .eq("patient_id", patientId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const numeroAtendimento = (ultimaEntrada?.ticket_code as string | null) || "—";
+
   return {
     identificacao: {
       nome: (p.full_name as string) ?? "—",
-      registro: (p.cpf as string | null) ?? (p.id as string).slice(0, 8),
+      registro: numeroAtendimento,
       idade: calcIdade(p.birth_date as string | null),
       nascimento: fmtData(p.birth_date as string | null),
       genero: GENERO[genero] ?? (genero || "—"),
