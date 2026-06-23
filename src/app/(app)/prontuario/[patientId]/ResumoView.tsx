@@ -29,11 +29,20 @@ import { ClinicoNav } from "./ClinicoNav";
 
 type Aba = "historico" | "resumo";
 
+/** Classificação de risco da triagem (Manchester) — rótulo + cor sólida do selo. */
+const RISCO: Record<string, { label: string; dot: string; text: string }> = {
+  vermelho: { label: "Vermelho — Emergência", dot: "bg-red-600", text: "text-red-700" },
+  laranja: { label: "Laranja — Muito urgente", dot: "bg-orange-500", text: "text-orange-700" },
+  amarelo: { label: "Amarelo — Urgente", dot: "bg-yellow-400", text: "text-yellow-700" },
+  verde: { label: "Verde — Pouco urgente", dot: "bg-green-600", text: "text-green-700" },
+  azul: { label: "Azul — Não urgente", dot: "bg-blue-600", text: "text-blue-700" },
+};
+
 export function ResumoView({ resumo }: { resumo: Resumo }) {
   const [aba, setAba] = useState<Aba>("resumo");
   const [baixandoAnexo, setBaixandoAnexo] = useState(false);
   const { patientId } = useParams<{ patientId: string }>();
-  const { identificacao: id, vitais, evolucoes, prescricoesAtivas, examesSolicitados } =
+  const { identificacao: id, vitais, triagem, evolucoes, prescricoesAtivas, examesSolicitados } =
     resumo;
 
   // Puxa o arquivo de prontuário manual anexado no cadastro (URL assinada).
@@ -145,6 +154,45 @@ export function ResumoView({ resumo }: { resumo: Resumo }) {
               </p>
             )}
           </Card>
+
+          {/* Triagem (sinais aferidos na triagem + classificação de risco). Só
+              aparece quando o paciente passou pela triagem. */}
+          {triagem && (
+            <Card className="p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-semibold text-ink">Triagem</h3>
+                <span className="text-xs text-muted">
+                  Realizada: {triagem.recordedAt}
+                </span>
+              </div>
+              {triagem.riskLevel && RISCO[triagem.riskLevel] && (
+                <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-line bg-muted-surface px-3 py-1.5 text-sm font-medium">
+                  <span
+                    className={`h-3 w-3 flex-none rounded-full ${RISCO[triagem.riskLevel].dot}`}
+                  />
+                  <span className={RISCO[triagem.riskLevel].text}>
+                    Classificação de risco: {RISCO[triagem.riskLevel].label}
+                  </span>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Vital icon={<HeartPulse />} label="Pressão Arterial" value={triagem.pa} tone="text-red-500" />
+                <Vital icon={<Activity />} label="Freq. Cardíaca" value={triagem.fc} tone="text-brand-600" />
+                <Vital icon={<Wind />} label="Freq. Respiratória" value={triagem.fr} tone="text-blue-500" />
+                <Vital icon={<Thermometer />} label="Temperatura" value={triagem.temp} tone="text-orange-500" />
+                <Vital icon={<Weight />} label="Peso" value={triagem.peso} tone="text-purple-600" />
+                <Vital icon={<Ruler />} label="Altura" value={triagem.altura} tone="text-ink" />
+                <Vital icon={<Gauge />} label="Saturação O₂" value={triagem.spo2} tone="text-brand-600" />
+                <Vital icon={<Droplet />} label="Glicemia" value={triagem.glucose} tone="text-red-500" />
+              </div>
+              {triagem.notes && (
+                <p className="mt-3 text-sm text-muted">
+                  <span className="font-medium text-ink">Observações:</span>{" "}
+                  {triagem.notes}
+                </p>
+              )}
+            </Card>
+          )}
 
           {/* Evoluções */}
           <Card className="p-5">
