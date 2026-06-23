@@ -203,6 +203,13 @@ export function NovoAgendamentoModal({
         }
         patientId = novo.patientId;
         setPacienteId(novo.patientId);
+        // Anti-duplicidade: avisa quando o CPF já existia e o cadastro foi
+        // reaproveitado (pode já estar completo) — não é um avulso novo.
+        if (novo.reused) {
+          toast.warning(
+            "Já existe paciente com este CPF — usando o cadastro existente.",
+          );
+        }
       }
 
       const res = await createAppointment({
