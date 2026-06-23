@@ -11,7 +11,11 @@ import {
   actionsForEntry,
   type FlowStage,
 } from "@/lib/data/attendance-flow.shared";
-import { chamarPaciente, atenderPaciente } from "@/lib/actions/queue";
+import {
+  chamarPaciente,
+  atenderPaciente,
+  atenderRecepcao,
+} from "@/lib/actions/queue";
 import { PacienteResumo } from "./PacienteResumo";
 import { tocarBeep } from "./sound";
 
@@ -67,18 +71,43 @@ export function AcoesPacienteModal({
   }
 
   function handleAtender() {
+    const status = item.statusRaw;
+
+    // Recepção inicia o atendimento administrativo: aguardando → na_recepcao
+    // e abre o modal "Dados de Atendimento". Conclui (→ aguardando atendimento)
+    // ao Salvar nesse modal.
+    if (status === "aguardando") {
+      startTransition(async () => {
+        const res = await atenderRecepcao(item.id);
+        if (res?.ok) {
+          onStatusChange("na_recepcao");
+          router.refresh();
+          onAtender();
+        } else {
+          toast.error(res?.error ?? "Não foi possível iniciar a recepção.");
+        }
+      });
+      return;
+    }
+
+    // Já em recepção: reabre o "Dados de Atendimento" para continuar/concluir.
+    if (status === "na_recepcao") {
+      onAtender();
+      return;
+    }
+
+    // Profissional inicia o atendimento clínico: → em_atendimento. Médico vai
+    // direto ao prontuário; demais papéis só atualizam a fila.
     startTransition(async () => {
       const res = await atenderPaciente(item.id);
       if (res?.ok) {
         onStatusChange("em_atendimento");
-        // Médico: vai direto ao prontuário com o paciente selecionado.
         if (isMedico && item.patientId) {
           onClose();
           router.push(`/prontuario/${item.patientId}`);
           return;
         }
         router.refresh();
-        onAtender();
       } else {
         toast.error(res?.error ?? "Não foi possível iniciar o atendimento.");
       }

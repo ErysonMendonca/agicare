@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser, getRole } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
+import { getAttendanceFlow } from "@/lib/data/attendance-flow";
+import { statusAfterStage } from "@/lib/data/attendance-flow.shared";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -101,6 +103,17 @@ export async function atenderPaciente(id: string): Promise<ActionState> {
   const res = await updateQueueStatus(parsed.data, { status: "em_atendimento" });
   if (res?.ok) await stampQueueTime(parsed.data, "started_at");
   return res;
+}
+
+/**
+ * Recepção inicia o atendimento administrativo: aguardando → na_recepcao.
+ * Concluir a recepção (Salvar no modal Dados de Atendimento) avança para
+ * 'aguardando_atendimento' (ou 'triagem') — ver `salvarAtendimento`.
+ */
+export async function atenderRecepcao(id: string): Promise<ActionState> {
+  const parsed = idSchema.safeParse(id);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  return updateQueueStatus(parsed.data, { status: "na_recepcao" });
 }
 
 const desistirSchema = z.object({
@@ -307,6 +320,20 @@ export async function salvarAtendimento(
   });
 
   if (error) return { error: "Não foi possível salvar o atendimento." };
+
+  // Concluir a recepção: se a entrada está 'na_recepcao', avança para o próximo
+  // status do fluxo ('aguardando_atendimento' ou 'triagem', se configurada).
+  // Guard por status garante que só avança quem estava em atendimento da recepção.
+  const queueEntryId = emptyToNull(d.queueEntryId);
+  if (queueEntryId) {
+    const stages = await getAttendanceFlow();
+    const next = statusAfterStage("recepcao", stages);
+    await supabase
+      .from("queue_entries")
+      .update({ status: next })
+      .eq("id", queueEntryId)
+      .eq("status", "na_recepcao");
+  }
 
   revalidateFila();
   return { ok: true };

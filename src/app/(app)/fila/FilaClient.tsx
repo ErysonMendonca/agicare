@@ -61,6 +61,8 @@ function compararFila(a: FilaItem, b: FilaItem, ord: Ordenacao): number {
 const STATUS_OPCOES = [
   { value: "todos", label: "Todos os Status" },
   { value: "aguardando", label: "Aguardando" },
+  { value: "na_recepcao", label: "Na recepção" },
+  { value: "aguardando_atendimento", label: "Aguardando atendimento" },
   { value: "triagem", label: "Em Triagem" },
   { value: "chamado", label: "Chamado" },
   { value: "em_atendimento", label: "Em Atendimento" },

@@ -35,6 +35,10 @@ export type FilaItem = {
 /** Mapeia status do banco → rótulo + tom do Badge. */
 function mapStatus(status: string): { label: string; tone: Status } {
   switch (status) {
+    case "na_recepcao":
+      return { label: "Na recepção", tone: "active" };
+    case "aguardando_atendimento":
+      return { label: "Aguardando atendimento", tone: "wait" };
     case "chamado":
       return { label: "Chamado", tone: "active" };
     case "triagem":
