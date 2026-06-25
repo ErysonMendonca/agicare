@@ -26,19 +26,28 @@ const numeroOpcional = z
   .pipe(z.number().min(0, "Valor inválido."));
 
 const produtoSchema = z.object({
-  code: z.string().trim().min(1, "Código obrigatório."),
+  // `code` NÃO vem do form: é gerado automático (sequencial por clínica) pelo
+  // trigger 0058. Aqui ficam só os dados do cadastro-mestre do produto.
   name: z.string().trim().min(2, "Nome muito curto."),
+  active_ingredient: z.string().trim().optional().or(z.literal("")),
+  presentation: z.string().trim().optional().or(z.literal("")),
+  barcode: z.string().trim().optional().or(z.literal("")),
+  anvisa_registration: z.string().trim().optional().or(z.literal("")),
   category: z.string().trim().optional().or(z.literal("")),
+  therapeutic_class: z.string().trim().optional().or(z.literal("")),
   unit: z.string().trim().optional().or(z.literal("")),
+  controlled_class: z.string().trim().optional().or(z.literal("")),
+  requires_prescription: z.string().optional(),
   quantity: numeroOpcional,
   min_quantity: numeroOpcional,
-  lot: z.string().trim().optional().or(z.literal("")),
-  expiry: z.string().trim().optional().or(z.literal("")),
+  max_quantity: numeroOpcional,
+  location: z.string().trim().optional().or(z.literal("")),
   cost: numeroOpcional,
   price: numeroOpcional,
-  location: z.string().trim().optional().or(z.literal("")),
+  manufacturer: z.string().trim().optional().or(z.literal("")),
   supplier_id: z.string().trim().optional().or(z.literal("")),
   active: z.string().optional(),
+  notes: z.string().trim().optional().or(z.literal("")),
 });
 
 /** Cria um produto de estoque. Valida com Zod e insere via cliente de servidor (RLS staff). */
@@ -58,19 +67,27 @@ export async function createStockProduct(
   const supabase = await createClient();
   const { error } = await supabase.from("stock_products").insert({
     clinic_id: clinicId,
-    code: d.code,
+    // code/code_number são atribuídos automaticamente pelo trigger 0058.
     name: d.name,
+    active_ingredient: d.active_ingredient || null,
+    presentation: d.presentation || null,
+    barcode: d.barcode || null,
+    anvisa_registration: d.anvisa_registration || null,
     category: d.category || null,
+    therapeutic_class: d.therapeutic_class || null,
     unit: d.unit || "un",
+    controlled_class: d.controlled_class || null,
+    requires_prescription: d.requires_prescription === "true",
     quantity: d.quantity,
     min_quantity: d.min_quantity,
-    lot: d.lot || null,
-    expiry: d.expiry || null,
+    max_quantity: d.max_quantity,
+    location: d.location || null,
     cost: d.cost,
     price: d.price,
-    location: d.location || null,
+    manufacturer: d.manufacturer || null,
     supplier_id: d.supplier_id || null,
     active: d.active !== "false",
+    notes: d.notes || null,
   });
 
   if (error) return { error: error.message };
