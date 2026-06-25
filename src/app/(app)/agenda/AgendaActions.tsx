@@ -66,7 +66,6 @@ export function AgendaActions({
         open={modal === "escala-lista"}
         onClose={() => setModal(null)}
         escalas={escalas}
-        profissionais={profissionais}
         onNova={abrirCriacao}
         onEditar={abrirEdicao}
       />
