@@ -7,6 +7,8 @@ export type Procedimento = {
   descricao: string;
   categoria: string;
   duracao: string;
+  /** Duração em minutos (bruto) — usado p/ preencher o slot da escala. */
+  duracaoNum: number;
   valor: string;
   /** Valor numérico bruto (para cálculo do ticket médio). */
   precoNum: number;
@@ -47,6 +49,7 @@ function toProcedimento(p: {
     descricao: p.description ?? "",
     categoria: p.category ?? "—",
     duracao: `${duracao}min`,
+    duracaoNum: duracao,
     valor: moedaBR(preco),
     precoNum: preco,
     margem: `${margem}%`,
