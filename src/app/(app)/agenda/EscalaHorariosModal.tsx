@@ -9,6 +9,8 @@ import {
   Lock,
   Unlock,
   CalendarRange,
+  Search,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
@@ -203,6 +205,17 @@ export function EscalaHorariosModal({
     setter((cur) =>
       cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code],
     );
+  }
+
+  /**
+   * Seleciona o (único) procedimento da escala e já preenche o Tempo de
+   * Atendimento com a duração cadastrada do procedimento (o campo segue
+   * editável caso a clínica queira ajustar para esta escala).
+   */
+  function selecionarProcedimento(code: string) {
+    setProcedureCodes([code]);
+    const p = procedimentos.find((x) => x.codigo === code);
+    if (p && p.duracaoNum > 0) setSlotMin(p.duracaoNum);
   }
 
   function gerarGrade() {
@@ -474,39 +487,32 @@ export function EscalaHorariosModal({
           {tipo === "Procedimento" && (
             <div className="sm:col-span-2">
               <span className="mb-1.5 block text-sm font-medium text-ink">
-                Procedimentos atendidos
+                Procedimento atendido
               </span>
               {procedimentos.filter((p) => p.ativo).length === 0 ? (
                 <p className="rounded-lg border border-dashed border-line p-3 text-sm text-muted">
                   Nenhum procedimento ativo cadastrado.
                 </p>
               ) : (
-                <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-lg border border-line p-3">
-                  {procedimentos
+                <BuscaItens
+                  single
+                  options={procedimentos
                     .filter((p) => p.ativo)
-                    .map((p) => (
-                      <label
-                        key={p.codigo}
-                        className="flex items-center gap-2.5 text-sm text-ink"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={procedureCodes.includes(p.codigo)}
-                          onChange={() => toggleItem(setProcedureCodes, p.codigo)}
-                          className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-100"
-                        />
-                        <span>
-                          {p.nome}
-                          {p.categoria ? (
-                            <span className="text-muted"> · {p.categoria}</span>
-                          ) : null}
-                        </span>
-                      </label>
-                    ))}
-                </div>
+                    .map((p) => ({
+                      code: p.codigo,
+                      nome: p.nome,
+                      sub: p.categoria !== "—" ? p.categoria : undefined,
+                    }))}
+                  selected={procedureCodes}
+                  onPick={selecionarProcedimento}
+                  onRemove={() => setProcedureCodes([])}
+                  placeholder="Buscar procedimento..."
+                  vazio="Nenhum procedimento encontrado."
+                />
               )}
               <p className="mt-1 text-xs text-muted">
-                {procedureCodes.length} selecionado(s).
+                O tempo de atendimento é preenchido com a duração do
+                procedimento (editável).
               </p>
             </div>
           )}
@@ -516,25 +522,18 @@ export function EscalaHorariosModal({
               <span className="mb-1.5 block text-sm font-medium text-ink">
                 Exames atendidos
               </span>
-              <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-lg border border-line p-3">
-                {EXAMES_TUSS.map((ex) => (
-                  <label
-                    key={ex.tuss}
-                    className="flex items-center gap-2.5 text-sm text-ink"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={examCodes.includes(ex.tuss)}
-                      onChange={() => toggleItem(setExamCodes, ex.tuss)}
-                      className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-100"
-                    />
-                    <span>
-                      {ex.nome}
-                      <span className="text-muted"> · {ex.categoria}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <BuscaItens
+                options={EXAMES_TUSS.map((ex) => ({
+                  code: ex.tuss,
+                  nome: ex.nome,
+                  sub: ex.categoria,
+                }))}
+                selected={examCodes}
+                onPick={(code) => toggleItem(setExamCodes, code)}
+                onRemove={(code) => toggleItem(setExamCodes, code)}
+                placeholder="Buscar exame..."
+                vazio="Nenhum exame encontrado."
+              />
               <p className="mt-1 text-xs text-muted">
                 {examCodes.length} selecionado(s).
               </p>
@@ -803,5 +802,121 @@ function TabButton({
     >
       {children}
     </button>
+  );
+}
+
+/** Opção pesquisável (código + nome + subtítulo opcional). */
+type OpcaoItem = { code: string; nome: string; sub?: string };
+
+/**
+ * Campo de busca com seleção por chips. Em vez de listar todos os itens, o
+ * usuário digita e escolhe nos resultados filtrados. `single` mantém só uma
+ * seleção (esconde a busca enquanto há item escolhido).
+ */
+function BuscaItens({
+  options,
+  selected,
+  onPick,
+  onRemove,
+  single = false,
+  placeholder = "Digite para buscar...",
+  vazio = "Nenhum item encontrado.",
+}: {
+  options: OpcaoItem[];
+  selected: string[];
+  onPick: (code: string) => void;
+  onRemove: (code: string) => void;
+  single?: boolean;
+  placeholder?: string;
+  vazio?: string;
+}) {
+  const [q, setQ] = useState("");
+  const [aberto, setAberto] = useState(false);
+
+  const filtradas = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return options
+      .filter((o) => !selected.includes(o.code))
+      .filter((o) =>
+        term
+          ? o.nome.toLowerCase().includes(term) ||
+            o.code.toLowerCase().includes(term) ||
+            (o.sub ?? "").toLowerCase().includes(term)
+          : true,
+      )
+      .slice(0, 8);
+  }, [options, selected, q]);
+
+  const escolhidas = options.filter((o) => selected.includes(o.code));
+
+  return (
+    <div>
+      {escolhidas.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {escolhidas.map((o) => (
+            <span
+              key={o.code}
+              className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700"
+            >
+              {o.nome}
+              <button
+                type="button"
+                onClick={() => onRemove(o.code)}
+                aria-label={`Remover ${o.nome}`}
+                className="text-brand-500 transition-colors hover:text-brand-700"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* No modo single, esconde a busca enquanto houver item escolhido. */}
+      {!(single && selected.length > 0) && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <input
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setAberto(true);
+            }}
+            onFocus={() => setAberto(true)}
+            onBlur={() => setTimeout(() => setAberto(false), 120)}
+            placeholder={placeholder}
+            className="w-full rounded-lg border border-line bg-white py-2 pl-9 pr-3 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
+          {aberto && (
+            <div className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-line bg-surface shadow-lg">
+              {filtradas.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-muted">{vazio}</p>
+              ) : (
+                filtradas.map((o) => (
+                  <button
+                    key={o.code}
+                    type="button"
+                    // onMouseDown evita o blur do input antes do clique registrar.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      onPick(o.code);
+                      setQ("");
+                      if (single) setAberto(false);
+                    }}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-muted-surface"
+                  >
+                    <span>
+                      {o.nome}
+                      {o.sub ? <span className="text-muted"> · {o.sub}</span> : null}
+                    </span>
+                    <Plus className="h-3.5 w-3.5 shrink-0 text-brand-500" />
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
