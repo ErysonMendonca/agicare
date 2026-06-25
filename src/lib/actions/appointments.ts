@@ -204,6 +204,15 @@ const escalaSchema = z.object({
   // Itens atendidos pela escala (conforme o Tipo de Escala).
   procedure_codes: z.array(z.string().trim()).default([]),
   exam_tuss_codes: z.array(z.string().trim()).default([]),
+  // Bloqueios fixos/recorrentes (valem em todos os dias da escala).
+  recurring_blocks: z
+    .array(
+      z.object({
+        time: z.string().regex(/^\d{2}:\d{2}$/, "Horário inválido."),
+        reason: z.string().trim().default(""),
+      }),
+    )
+    .default([]),
 });
 
 /** Valida o período: data final não pode ser anterior à inicial (datas ISO). */
@@ -219,6 +228,31 @@ function naVigencia(dateISO: string, start: unknown, end: unknown): boolean {
   const s = start ? String(start).slice(0, 10) : "";
   const e = end ? String(end).slice(0, 10) : "";
   return (!s || dateISO >= s) && (!e || dateISO <= e);
+}
+
+/** Bloqueio fixo/recorrente da escala (vale em todos os dias dela). */
+export type RecurringBlock = { time: string; reason: string };
+
+/** Normaliza o jsonb `recurring_blocks` (array de {time, reason}) defensivamente. */
+function parseRecurringBlocks(raw: unknown): RecurringBlock[] {
+  let arr: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      arr = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map((x) => {
+      const o = x as { time?: unknown; reason?: unknown };
+      return {
+        time: typeof o?.time === "string" ? o.time.slice(0, 5) : "",
+        reason: typeof o?.reason === "string" ? o.reason : "",
+      };
+    })
+    .filter((r) => /^\d{2}:\d{2}$/.test(r.time));
 }
 
 export type EscalaInput = z.input<typeof escalaSchema>;
@@ -257,6 +291,7 @@ export async function createSchedule(
     end_date: d.end_date,
     procedure_codes: d.procedure_codes,
     exam_tuss_codes: d.exam_tuss_codes,
+    recurring_blocks: d.recurring_blocks,
   });
 
   if (error) return { error: error.message };
@@ -309,6 +344,7 @@ export async function updateSchedule(
       end_date: d.end_date,
       procedure_codes: d.procedure_codes,
       exam_tuss_codes: d.exam_tuss_codes,
+      recurring_blocks: d.recurring_blocks,
       active: d.active,
     })
     .eq("id", idParsed.data);
@@ -610,7 +646,7 @@ export async function listSlots(
   const { data: escalas } = await supabase
     .from("schedules")
     .select(
-      "slot_minutes, weekdays, start_time, end_time, active, start_date, end_date",
+      "slot_minutes, weekdays, start_time, end_time, active, start_date, end_date, recurring_blocks",
     )
     .eq("professional_id", professionalId)
     .eq("active", true);
@@ -653,6 +689,9 @@ export async function listSlots(
   const intervalos = ocupacaoIntervalos(ags ?? [], slotMinutes);
   const bloqueados = new Set<string>();
   for (const b of blocks ?? []) bloqueados.add(String(b.start_time).slice(0, 5));
+  // Bloqueios fixos/recorrentes da escala valem em todos os dias dela.
+  for (const r of parseRecurringBlocks(escala?.recurring_blocks))
+    bloqueados.add(r.time);
 
   return {
     slots: horarios.map((hora) => ({

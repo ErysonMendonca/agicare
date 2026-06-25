@@ -24,6 +24,8 @@ export type Escala = {
   procedureCodes: string[];
   /** Códigos TUSS de exames atendidos (quando serviceType = Exame). */
   examTussCodes: string[];
+  /** Bloqueios fixos/recorrentes: horários sempre indisponíveis nessa escala. */
+  recurringBlocks: { time: string; reason: string }[];
 };
 
 /** Filtro opcional da listagem de escalas. */
@@ -49,6 +51,7 @@ const MOCK: Escala[] = [
     endDate: "",
     procedureCodes: [],
     examTussCodes: [],
+    recurringBlocks: [],
   },
   {
     id: "esc-2",
@@ -68,12 +71,37 @@ const MOCK: Escala[] = [
     endDate: "",
     procedureCodes: [],
     examTussCodes: [],
+    recurringBlocks: [],
   },
 ];
 
 /** "HH:mm:ss" | "HH:mm" → "HH:mm". */
 function hhmm(t: unknown): string {
   return String(t ?? "").slice(0, 5);
+}
+
+/** Normaliza o jsonb `recurring_blocks` (array de {time, reason}) defensivamente. */
+function parseRecurringBlocks(
+  raw: unknown,
+): { time: string; reason: string }[] {
+  let arr: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      arr = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map((x) => {
+      const o = x as { time?: unknown; reason?: unknown };
+      return {
+        time: typeof o?.time === "string" ? o.time.slice(0, 5) : "",
+        reason: typeof o?.reason === "string" ? o.reason : "",
+      };
+    })
+    .filter((r) => /^\d{2}:\d{2}$/.test(r.time));
 }
 
 /**
@@ -94,7 +122,7 @@ export async function listSchedules(filtro?: EscalaFiltro): Promise<Escala[]> {
   let query = supabase
     .from("schedules")
     .select(
-      "id, code, description, professional_id, specialty, service_type, slot_minutes, overbook_limit, weekdays, start_time, end_time, active, start_date, end_date, procedure_codes, exam_tuss_codes, professionals(profiles(full_name))",
+      "id, code, description, professional_id, specialty, service_type, slot_minutes, overbook_limit, weekdays, start_time, end_time, active, start_date, end_date, procedure_codes, exam_tuss_codes, recurring_blocks, professionals(profiles(full_name))",
     )
     .order("specialty", { ascending: true })
     .order("description", { ascending: true });
@@ -138,6 +166,7 @@ export async function listSchedules(filtro?: EscalaFiltro): Promise<Escala[]> {
       examTussCodes: Array.isArray(r.exam_tuss_codes)
         ? (r.exam_tuss_codes as string[])
         : [],
+      recurringBlocks: parseRecurringBlocks(r.recurring_blocks),
     };
   });
 }
