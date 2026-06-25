@@ -177,7 +177,7 @@ export async function listQueue(opts?: {
   let query = supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, patient_name, priority, specialty, insurance, status, created_at, appointment_id, professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, patient_name, priority, specialty, insurance, status, created_at, appointment_id, appointments(starts_at), professionals(profiles(full_name))",
     )
     .order("created_at", { ascending: false });
 
@@ -213,12 +213,21 @@ export async function listQueue(opts?: {
     const statusRaw = r.status ?? "aguardando";
     const priorityRaw = r.priority ?? "normal";
 
+    // A coluna "hora" representa o HORÁRIO DE AGENDAMENTO. Para quem tem
+    // agendamento vinculado, usa o starts_at (ex.: 18:20) — não o created_at
+    // (momento do check-in). Avulso (sem agendamento) cai no created_at.
+    const agendamento = Array.isArray(r.appointments)
+      ? r.appointments[0]
+      : r.appointments;
+    const horaFonte =
+      (agendamento?.starts_at as string | null) ?? r.created_at;
+
     return {
       id: r.id as string,
       patientId: (r.patient_id as string | null) ?? null,
       codigo: r.ticket_code ?? "—",
       paciente: r.patient_name ?? "",
-      hora: formatHora(r.created_at),
+      hora: formatHora(horaFonte),
       especialidade: r.specialty ?? "—",
       medico: profile?.full_name ?? "—",
       convenio: r.insurance ?? "—",
