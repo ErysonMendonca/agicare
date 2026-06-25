@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition, useEffect } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Save,
   Sparkles,
   Plus,
-  Lock,
   Unlock,
   CalendarRange,
   Search,
@@ -22,14 +21,7 @@ import { type Profissional } from "@/lib/data/professionals";
 import { type Escala } from "@/lib/data/schedules";
 import { type Procedimento } from "@/lib/data/procedures";
 import { EXAMES_TUSS } from "@/lib/clinico/exames-shared";
-import {
-  createSchedule,
-  updateSchedule,
-  createBlock,
-  removeBlock,
-  listBlocks,
-  listOcupacao,
-} from "@/lib/actions/appointments";
+import { createSchedule, updateSchedule } from "@/lib/actions/appointments";
 
 /** Dias da semana (number = getDay: 0=Dom..6=Sáb), exibidos de Seg a Dom. */
 const DIAS: { n: number; label: string }[] = [
@@ -46,18 +38,11 @@ const TIPOS = ["Consulta", "Retorno", "Exame", "Procedimento"];
 
 type Aba = "dados" | "horarios";
 /**
- * Estado de um horário na grade da escala:
- * - blockId presente => bloqueio manual persistido em schedule_blocks.
- * - ocupado => existe agendamento real cobrindo o slot (paciente = quem ocupa).
+ * Horário da grade da escala. A escala é por ESPECIALIDADE: a grade só define
+ * a faixa de horários; o (único) estado operacional é o bloqueio fixo
+ * (recorrente), mantido à parte em `recorrentes`.
  */
-type SlotEscala = {
-  hora: string;
-  bloqueado: boolean;
-  blockId?: string;
-  motivo?: string;
-  ocupado?: boolean;
-  paciente?: string;
-};
+type SlotEscala = { hora: string };
 
 /** Gera horários "HH:mm" entre início e fim com passo em minutos. */
 function gerarHorarios(start: string, end: string, stepMin: number): string[] {
@@ -102,7 +87,6 @@ export function EscalaHorariosModal({
 
   const [aba, setAba] = useState<Aba>("dados");
   const [descricao, setDescricao] = useState(esc?.description ?? "");
-  const [profissionalId, setProfissionalId] = useState(esc?.professionalId ?? "");
   const [especialidade, setEspecialidade] = useState(esc?.specialty ?? "");
   const [tipo, setTipo] = useState(esc?.serviceType || TIPOS[0]);
   const [slotMin, setSlotMin] = useState(esc?.slotMinutes ?? 30);
@@ -120,72 +104,22 @@ export function EscalaHorariosModal({
   // Vigência da escala (período de validade).
   const [dataInicio, setDataInicio] = useState(esc?.startDate ?? "");
   const [dataFim, setDataFim] = useState(esc?.endDate ?? "");
-  // Edição já monta a grade a partir do que está salvo (sem exigir "Gerar
-  // Grade"); os estados bloqueado/ocupado vêm do effect de sync abaixo.
+  // Edição já monta a grade a partir do que está salvo (sem exigir "Gerar Grade").
   const [slots, setSlots] = useState<SlotEscala[]>(() =>
     esc
       ? gerarHorarios(esc.startTime, esc.endTime, esc.slotMinutes).map(
-          (hora) => ({ hora, bloqueado: false }),
+          (hora) => ({ hora }),
         )
       : [],
   );
   const [manual, setManual] = useState("");
-  // Data alvo dos bloqueios (schedule_blocks é por data): hoje, ou o início da
-  // vigência se ele for futuro.
-  const [dataBloqueio, setDataBloqueio] = useState(() => {
-    const hojeISO = new Date().toISOString().slice(0, 10);
-    return esc?.startDate && esc.startDate > hojeISO ? esc.startDate : hojeISO;
-  });
-  const [blockPending, startBlock] = useTransition();
-  // Diálogo de bloqueio: horário-alvo + motivo (obrigatório) antes de persistir.
+  // Diálogo de bloqueio fixo (recorrente): horário-alvo + motivo (obrigatório).
   const [bloqueioAlvo, setBloqueioAlvo] = useState<string | null>(null);
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
-  // Modo do bloqueio: "data" (só nesta data → schedule_blocks) ou "recorrente"
-  // (fixo na escala → recurring_blocks, salvo junto da escala).
-  const [modoBloqueio, setModoBloqueio] = useState<"data" | "recorrente">("data");
   // Bloqueios recorrentes (fixos) da escala — persistidos ao salvar a escala.
   const [recorrentes, setRecorrentes] = useState<
     { time: string; reason: string }[]
   >(esc?.recurringBlocks ?? []);
-
-  // Chave estável da grade (conjunto de horas) p/ disparar o sync sem laço:
-  // depender de `slots` direto re-rodaria a cada merge (loop infinito).
-  const horasKey = useMemo(() => slots.map((s) => s.hora).join(","), [slots]);
-
-  // Sincroniza bloqueios (schedule_blocks) + ocupação (appointments) quando há
-  // profissional + data + grade. Marca cada horário como livre/bloqueado/ocupado.
-  useEffect(() => {
-    if (!open || !profissionalId || !dataBloqueio || !horasKey) return;
-    const horas = horasKey.split(",");
-    let ativo = true;
-    (async () => {
-      const [blocks, ocupacao] = await Promise.all([
-        listBlocks(profissionalId, dataBloqueio),
-        listOcupacao(profissionalId, dataBloqueio, slotMin, horas),
-      ]);
-      if (!ativo) return;
-      const porHora = new Map(blocks.map((b) => [b.hora, b]));
-      const ocupHora = new Map(ocupacao.map((o) => [o.hora, o]));
-      setSlots((cur) =>
-        cur.map((s) => {
-          const b = porHora.get(s.hora);
-          const o = ocupHora.get(s.hora);
-          return {
-            ...s,
-            bloqueado: Boolean(b),
-            blockId: b?.id,
-            motivo: b?.motivo,
-            ocupado: Boolean(o?.ocupado),
-            paciente: o?.paciente,
-          };
-        }),
-      );
-    })();
-    return () => {
-      ativo = false;
-    };
-    // Recarrega ao mudar profissional/data/grade (horasKey) ou duração do slot.
-  }, [open, profissionalId, dataBloqueio, slotMin, horasKey]);
 
   const especialidades = useMemo(
     () =>
@@ -232,7 +166,7 @@ export function EscalaHorariosModal({
       toast.error("Horário final deve ser maior que o inicial.");
       return;
     }
-    setSlots(horas.map((hora) => ({ hora, bloqueado: false })));
+    setSlots(horas.map((hora) => ({ hora })));
     toast.success(`${horas.length} horários gerados.`);
   }
 
@@ -246,83 +180,29 @@ export function EscalaHorariosModal({
       return;
     }
     setSlots((cur) =>
-      [...cur, { hora: manual, bloqueado: false }].sort((a, b) =>
-        a.hora.localeCompare(b.hora),
-      ),
+      [...cur, { hora: manual }].sort((a, b) => a.hora.localeCompare(b.hora)),
     );
     setManual("");
   }
 
   /**
-   * Clique num horário. Prioridade:
-   *  1) recorrente (fixo da escala) → remove o bloqueio recorrente (local, salvo
-   *     ao salvar a escala).
-   *  2) ocupado por agendamento → só informa quem ocupa (não bloqueia).
-   *  3) bloqueado nesta data (schedule_blocks) → desbloqueia direto.
-   *  4) livre → abre o diálogo (escolher "só nesta data" ou "recorrente").
+   * Clique num horário. Como a escala é por especialidade, o único estado
+   * operacional é o bloqueio fixo (recorrente): se já bloqueado → remove;
+   * se livre → abre o diálogo para informar o motivo.
    */
   function aoClicarSlot(hora: string) {
-    if (!profissionalId) {
-      toast.error("Selecione o profissional para bloquear horários.");
-      setAba("dados");
-      return;
-    }
-    const slot = slots.find((s) => s.hora === hora);
-    if (!slot) return;
-
-    // 1) Recorrente → toggle off (sem data; persiste ao salvar a escala).
     if (recorrentes.some((r) => r.time === hora)) {
       setRecorrentes((cur) => cur.filter((r) => r.time !== hora));
       toast.info(
-        `Bloqueio recorrente de ${hora} removido — salve a escala para confirmar.`,
+        `Bloqueio fixo de ${hora} removido — salve a escala para confirmar.`,
       );
       return;
     }
-
-    // 2) Ocupado por agendamento → não bloqueia; só informa quem ocupa.
-    if (slot.ocupado && !slot.blockId) {
-      toast.info(
-        `${hora} ocupado por agendamento${slot.paciente ? ` — ${slot.paciente}` : ""}.`,
-      );
-      return;
-    }
-
-    if (!dataBloqueio) {
-      toast.error("Informe a data para o bloqueio.");
-      return;
-    }
-
-    // 3) Bloqueado nesta data → desbloqueia direto.
-    if (slot.bloqueado && slot.blockId) {
-      desbloquear(slot.hora, slot.blockId);
-      return;
-    }
-    // 4) Livre → pede o motivo (e o modo) antes de bloquear.
     setMotivoBloqueio("");
-    setModoBloqueio("data");
     setBloqueioAlvo(hora);
   }
 
-  /** Remove o bloqueio persistido de um horário. */
-  function desbloquear(hora: string, blockId: string) {
-    startBlock(async () => {
-      const res = await removeBlock(blockId);
-      if (res?.ok) {
-        setSlots((cur) =>
-          cur.map((s) =>
-            s.hora === hora
-              ? { ...s, bloqueado: false, blockId: undefined, motivo: undefined }
-              : s,
-          ),
-        );
-        router.refresh();
-      } else {
-        toast.error(res?.error ?? "Não foi possível desbloquear o horário.");
-      }
-    });
-  }
-
-  /** Confirma o bloqueio do horário-alvo com o motivo informado (obrigatório). */
+  /** Confirma o bloqueio fixo (recorrente) do horário-alvo com o motivo. */
   function confirmarBloqueio() {
     const hora = bloqueioAlvo;
     if (!hora) return;
@@ -331,48 +211,27 @@ export function EscalaHorariosModal({
       toast.error("Descreva o motivo do bloqueio (mínimo 3 caracteres).");
       return;
     }
-    // Recorrente: fica na escala (recurring_blocks), salvo ao salvar a escala —
-    // não chama o servidor agora.
-    if (modoBloqueio === "recorrente") {
-      setRecorrentes((cur) =>
-        cur.some((r) => r.time === hora)
-          ? cur
-          : [...cur, { time: hora, reason: motivo }],
-      );
-      setBloqueioAlvo(null);
-      setMotivoBloqueio("");
-      toast.success(
-        `Bloqueio recorrente de ${hora} adicionado — salve a escala para confirmar.`,
-      );
-      return;
-    }
-    startBlock(async () => {
-      const res = await createBlock({
-        professional_id: profissionalId,
-        date: dataBloqueio,
-        time: hora,
-        reason: motivo,
-      });
-      if (res?.ok) {
-        setSlots((cur) =>
-          cur.map((s) =>
-            s.hora === hora
-              ? { ...s, bloqueado: true, blockId: res.protocol, motivo }
-              : s,
-          ),
-        );
-        setBloqueioAlvo(null);
-        setMotivoBloqueio("");
-        router.refresh();
-      } else {
-        toast.error(res?.error ?? "Não foi possível bloquear o horário.");
-      }
-    });
+    // Bloqueio fixo fica na escala (recurring_blocks), salvo ao salvar a escala.
+    setRecorrentes((cur) =>
+      cur.some((r) => r.time === hora)
+        ? cur
+        : [...cur, { time: hora, reason: motivo }],
+    );
+    setBloqueioAlvo(null);
+    setMotivoBloqueio("");
+    toast.success(
+      `Bloqueio fixo de ${hora} adicionado — salve a escala para confirmar.`,
+    );
   }
 
   function salvar() {
     if (descricao.trim().length < 2) {
       toast.error("Informe a descrição da escala.");
+      setAba("dados");
+      return;
+    }
+    if (especialidade.trim().length < 2) {
+      toast.error("Selecione a especialidade da escala.");
       setAba("dados");
       return;
     }
@@ -394,7 +253,8 @@ export function EscalaHorariosModal({
     startTransition(async () => {
       const payload = {
         description: descricao,
-        professional_id: profissionalId,
+        // Escala é por especialidade — sem profissional fixo.
+        professional_id: "",
         specialty: especialidade,
         service_type: tipo,
         slot_minutes: slotMin,
@@ -433,7 +293,7 @@ export function EscalaHorariosModal({
       title={
         editMode ? "Editar Escala de Horários" : "Configuração de Escala de Horários"
       }
-      subtitle="Defina a grade de atendimento de um profissional"
+      subtitle="Defina a grade de atendimento de uma especialidade"
       className="max-w-3xl"
       footer={
         <>
@@ -491,23 +351,11 @@ export function EscalaHorariosModal({
             onChange={(e) => setEncaixe(Number(e.target.value))}
           />
           <Select
-            label="Profissional"
-            value={profissionalId}
-            onChange={(e) => setProfissionalId(e.target.value)}
-          >
-            <option value="">Todos os profissionais</option>
-            {profissionais.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-              </option>
-            ))}
-          </Select>
-          <Select
-            label="Especialidade"
+            label="Especialidade *"
             value={especialidade}
             onChange={(e) => setEspecialidade(e.target.value)}
           >
-            <option value="">Todas</option>
+            <option value="">Selecione a especialidade</option>
             {especialidades.map((e) => (
               <option key={e}>{e}</option>
             ))}
@@ -521,6 +369,10 @@ export function EscalaHorariosModal({
               <option key={t}>{t}</option>
             ))}
           </Select>
+          <p className="text-xs text-muted sm:col-span-2">
+            A escala é definida por <strong>especialidade</strong> e vale para
+            todos os profissionais dela.
+          </p>
 
           {/* Itens da escala: aparece conforme o Tipo de Escala. */}
           {tipo === "Procedimento" && (
@@ -625,7 +477,7 @@ export function EscalaHorariosModal({
               Cada escala tem um único horário, válido para todos os dias
               marcados. Para horários diferentes por dia (ex.: Seg/Qua/Sex
               08–13 e Ter/Qui 13–18), crie <strong>escalas separadas</strong>{" "}
-              para o mesmo profissional.
+              para a mesma especialidade.
             </p>
           </div>
 
@@ -671,16 +523,6 @@ export function EscalaHorariosModal({
             />
           </div>
 
-          {/* Data alvo dos bloqueios (schedule_blocks é por data específica) */}
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Data para Bloqueios"
-              type="date"
-              value={dataBloqueio}
-              onChange={(e) => setDataBloqueio(e.target.value)}
-            />
-          </div>
-
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" size="sm" onClick={gerarGrade}>
               <Sparkles className="h-4 w-4" />
@@ -710,24 +552,15 @@ export function EscalaHorariosModal({
                   Livre
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded border border-red-300 bg-red-50" />
-                  Bloqueado (nesta data)
-                </span>
-                <span className="inline-flex items-center gap-1.5">
                   <span className="h-3 w-3 rounded border border-amber-300 bg-amber-50" />
                   Bloqueado fixo (recorrente)
                 </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-3 w-3 rounded border border-slate-300 bg-slate-100" />
-                  Ocupado (agendamento)
-                </span>
               </div>
               <p className="text-xs text-muted">
-                Clique num horário livre para bloquear — você escolhe se é só
-                nesta data ou fixo (recorrente). Clique num bloqueado para
-                liberar. Bloqueio recorrente vale em todos os dias da escala e é
-                salvo ao salvar a escala. Ocupados (com agendamento) não podem
-                ser bloqueados.
+                Clique num horário livre para bloqueá-lo de forma fixa
+                (recorrente) — será pedido o motivo. Clique num bloqueado para
+                liberar. O bloqueio fixo vale em todos os dias da escala e é
+                salvo ao salvar a escala.
               </p>
             </div>
           )}
@@ -746,36 +579,23 @@ export function EscalaHorariosModal({
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {slots.map((s) => {
                 const recorrente = recorrentes.find((r) => r.time === s.hora);
-                const ocupadoLivre = s.ocupado && !s.bloqueado && !recorrente;
-                // Prioridade visual: recorrente > bloqueado(data) > ocupado > livre.
                 const estilo = recorrente
                   ? "border-amber-300 bg-amber-50 text-amber-700"
-                  : s.bloqueado
-                    ? "border-red-300 bg-red-50 text-red-600"
-                    : ocupadoLivre
-                      ? "border-slate-300 bg-slate-100 text-slate-500"
-                      : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100";
+                  : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100";
                 return (
                   <button
                     key={s.hora}
                     type="button"
                     onClick={() => aoClicarSlot(s.hora)}
-                    disabled={blockPending}
-                    className={`flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-60 ${estilo}`}
+                    className={`flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors ${estilo}`}
                     title={
                       recorrente
                         ? `Bloqueio fixo: ${recorrente.reason || "sem motivo"} — clique para remover`
-                        : s.bloqueado
-                          ? `Bloqueado: ${s.motivo || "sem motivo"} — clique para liberar`
-                          : ocupadoLivre
-                            ? `Ocupado${s.paciente ? `: ${s.paciente}` : ""}`
-                            : "Bloquear horário"
+                        : "Bloquear horário (fixo)"
                     }
                   >
                     {recorrente ? (
                       <Repeat className="h-3.5 w-3.5" />
-                    ) : s.bloqueado || ocupadoLivre ? (
-                      <Lock className="h-3.5 w-3.5" />
                     ) : (
                       <Unlock className="h-3.5 w-3.5" />
                     )}
@@ -788,64 +608,21 @@ export function EscalaHorariosModal({
         </div>
       )}
 
-      {/* Diálogo de motivo do bloqueio — exige o porquê antes de persistir e
-          impede que um clique acidental bloqueie o horário. */}
+      {/* Diálogo de motivo do bloqueio fixo — exige o porquê antes de aplicar. */}
       {bloqueioAlvo && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => !blockPending && setBloqueioAlvo(null)}
+            onClick={() => setBloqueioAlvo(null)}
           />
           <div className="relative z-10 w-full max-w-md rounded-2xl bg-surface p-5 shadow-xl">
             <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
-              <Lock className="h-4 w-4 text-red-500" />
-              Bloquear horário {bloqueioAlvo}
+              <Repeat className="h-4 w-4 text-amber-500" />
+              Bloqueio fixo de {bloqueioAlvo}
             </h3>
             <p className="mt-0.5 text-sm text-muted">
-              Escolha o tipo de bloqueio e informe o motivo.
+              Vale em todos os dias desta escala. Informe o motivo.
             </p>
-
-            {/* Tipo do bloqueio: só nesta data x fixo (recorrente). */}
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setModoBloqueio("data")}
-                className={`flex items-start gap-2 rounded-lg border p-3 text-left transition-colors ${
-                  modoBloqueio === "data"
-                    ? "border-brand-400 bg-brand-50"
-                    : "border-line hover:bg-muted-surface"
-                }`}
-              >
-                <CalendarRange className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-                <span>
-                  <span className="block text-sm font-medium text-ink">
-                    Só nesta data
-                  </span>
-                  <span className="block text-xs text-muted">
-                    {dataBloqueio.split("-").reverse().join("/")}
-                  </span>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setModoBloqueio("recorrente")}
-                className={`flex items-start gap-2 rounded-lg border p-3 text-left transition-colors ${
-                  modoBloqueio === "recorrente"
-                    ? "border-amber-400 bg-amber-50"
-                    : "border-line hover:bg-muted-surface"
-                }`}
-              >
-                <Repeat className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                <span>
-                  <span className="block text-sm font-medium text-ink">
-                    Fixo (recorrente)
-                  </span>
-                  <span className="block text-xs text-muted">
-                    Todos os dias da escala
-                  </span>
-                </span>
-              </button>
-            </div>
 
             <label className="mt-4 block">
               <span className="mb-1.5 block text-sm font-medium text-ink">
@@ -861,20 +638,12 @@ export function EscalaHorariosModal({
               />
             </label>
             <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setBloqueioAlvo(null)}
-                disabled={blockPending}
-              >
+              <Button variant="ghost" onClick={() => setBloqueioAlvo(null)}>
                 Cancelar
               </Button>
-              <Button
-                variant="primary"
-                onClick={confirmarBloqueio}
-                disabled={blockPending}
-              >
-                <Lock className="h-4 w-4" />
-                {blockPending ? "Bloqueando..." : "Confirmar bloqueio"}
+              <Button variant="primary" onClick={confirmarBloqueio}>
+                <Repeat className="h-4 w-4" />
+                Confirmar bloqueio fixo
               </Button>
             </div>
           </div>

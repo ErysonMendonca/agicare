@@ -190,8 +190,10 @@ export async function trocarProfissional(
 // ════════════════════════════════════════════════════════════════
 const escalaSchema = z.object({
   description: z.string().trim().min(2, "Informe a descrição."),
+  // Escala é por ESPECIALIDADE (não por profissional). professional_id mantido
+  // no schema por compatibilidade, mas ignorado (gravado null).
   professional_id: z.string().trim().optional().or(z.literal("")),
-  specialty: z.string().trim().optional().or(z.literal("")),
+  specialty: z.string().trim().min(2, "Selecione a especialidade."),
   service_type: z.string().trim().optional().or(z.literal("")),
   slot_minutes: z.coerce.number().int().positive().default(30),
   overbook_limit: z.coerce.number().int().min(0).default(0),
@@ -279,7 +281,8 @@ export async function createSchedule(
     clinic_id: clinicId,
     code,
     description: d.description,
-    professional_id: d.professional_id || null,
+    // Escala por especialidade: sem profissional fixo.
+    professional_id: null,
     specialty: d.specialty || null,
     service_type: d.service_type || null,
     slot_minutes: d.slot_minutes,
@@ -332,7 +335,9 @@ export async function updateSchedule(
     .from("schedules")
     .update({
       description: d.description,
-      professional_id: d.professional_id || null,
+      // Escala por especialidade: zera qualquer profissional fixo (inclusive
+      // ao editar uma escala antiga que tinha profissional).
+      professional_id: null,
       specialty: d.specialty || null,
       service_type: d.service_type || null,
       slot_minutes: d.slot_minutes,
@@ -642,17 +647,27 @@ export async function listSlots(
   const supabase = await createClient();
   const weekday = new Date(`${dateISO}T00:00:00`).getDay(); // 0=Dom..6=Sáb
 
-  // Escala que cobre esse profissional, o dia da semana e a vigência (período).
+  // A escala é por ESPECIALIDADE: resolvemos a grade pela especialidade do
+  // profissional. Mantemos fallback ao professional_id para escalas antigas
+  // (criadas quando a escala ainda era amarrada ao profissional).
+  const { data: prof } = await supabase
+    .from("professionals")
+    .select("specialty")
+    .eq("id", professionalId)
+    .maybeSingle();
+  const especialidade = (prof?.specialty as string | null) ?? "";
+
   const { data: escalas } = await supabase
     .from("schedules")
     .select(
-      "slot_minutes, weekdays, start_time, end_time, active, start_date, end_date, recurring_blocks",
+      "professional_id, specialty, slot_minutes, weekdays, start_time, end_time, active, start_date, end_date, recurring_blocks",
     )
-    .eq("professional_id", professionalId)
     .eq("active", true);
 
   const escala = (escalas ?? []).find(
     (e) =>
+      (e.professional_id === professionalId ||
+        (especialidade && e.specialty === especialidade)) &&
       (Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false) &&
       naVigencia(dateISO, e.start_date, e.end_date),
   );
@@ -801,7 +816,7 @@ export async function listSlotsBySpecialty(
   const { data: escalas } = await supabase
     .from("schedules")
     .select(
-      "slot_minutes, weekdays, start_time, end_time, active, start_date, end_date",
+      "slot_minutes, weekdays, start_time, end_time, active, start_date, end_date, recurring_blocks",
     )
     .eq("specialty", specialty)
     .eq("active", true);
@@ -842,11 +857,17 @@ export async function listSlotsBySpecialty(
   // Conta agendamentos que SOBREPÕEM cada slot (considera a duração real), não
   // só os que começam exatamente na hora do slot. Ocupado ao atingir a capacidade.
   const intervalos = ocupacaoIntervalos(ags ?? [], slotMinutes);
+  // Bloqueios fixos/recorrentes da escala valem em todos os dias dela.
+  const bloqueados = new Set(
+    parseRecurringBlocks(escala?.recurring_blocks).map((r) => r.time),
+  );
 
   return {
     slots: horarios.map((hora) => ({
       hora,
-      ocupado: contarSobrepostos(hora, slotMinutes, intervalos) >= capacity,
+      ocupado:
+        bloqueados.has(hora) ||
+        contarSobrepostos(hora, slotMinutes, intervalos) >= capacity,
     })),
     slotMinutes,
   };
