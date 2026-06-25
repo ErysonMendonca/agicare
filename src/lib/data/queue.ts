@@ -35,6 +35,10 @@ export type FilaItem = {
 /** Mapeia status do banco → rótulo + tom do Badge. */
 function mapStatus(status: string): { label: string; tone: Status } {
   switch (status) {
+    case "na_recepcao":
+      return { label: "Na recepção", tone: "active" };
+    case "aguardando_atendimento":
+      return { label: "Aguardando atendimento", tone: "wait" };
     case "chamado":
       return { label: "Chamado", tone: "active" };
     case "triagem":
@@ -58,6 +62,18 @@ function mapStatus(status: string): { label: string; tone: Status } {
 function todayRangeISO(): { startISO: string; endISO: string } {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { startISO: start.toISOString(), endISO: end.toISOString() };
+}
+
+/**
+ * Início/fim (ISO) de um dia local informado como yyyy-mm-dd. Parse LOCAL
+ * (`new Date(y, m-1, d)`) p/ não cair no bug de fuso do `<input type="date">`.
+ */
+function dayRangeISO(dateISO: string): { startISO: string; endISO: string } {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const start = new Date(y, (m ?? 1) - 1, d ?? 1);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
   return { startISO: start.toISOString(), endISO: end.toISOString() };
@@ -143,9 +159,13 @@ const MOCK: FilaItem[] = [
 /**
  * Lista a fila de atendimento: do banco quando configurado, mock no modo demo.
  * Filtro opcional por especialidade (usado pelo Prontuário, default = especialidade do médico).
+ * `date` (yyyy-mm-dd, opcional): restringe às entradas criadas naquele dia — usado
+ * pela tela da Fila p/ mostrar só o dia selecionado (default = hoje) e não poluir
+ * com pacientes de dias passados. Sem `date`, retorna todas (comportamento legado).
  */
 export async function listQueue(opts?: {
   specialty?: string | null;
+  date?: string | null;
 }): Promise<FilaItem[]> {
   if (isDemoMode()) {
     return opts?.specialty
@@ -157,11 +177,16 @@ export async function listQueue(opts?: {
   let query = supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, patient_name, priority, specialty, insurance, status, created_at, appointment_id, professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, patient_name, priority, specialty, insurance, status, created_at, appointment_id, appointments(starts_at), professionals(profiles(full_name))",
     )
     .order("created_at", { ascending: false });
 
   if (opts?.specialty) query = query.eq("specialty", opts.specialty);
+
+  if (opts?.date) {
+    const { startISO, endISO } = dayRangeISO(opts.date);
+    query = query.gte("created_at", startISO).lt("created_at", endISO);
+  }
 
   // Escopo 'own' (módulo 'fila'): o papel só enxerga as entradas do próprio
   // profissional. Admin é sempre 'all' (seed) → sem filtro. Sem vínculo de
@@ -188,12 +213,21 @@ export async function listQueue(opts?: {
     const statusRaw = r.status ?? "aguardando";
     const priorityRaw = r.priority ?? "normal";
 
+    // A coluna "hora" representa o HORÁRIO DE AGENDAMENTO. Para quem tem
+    // agendamento vinculado, usa o starts_at (ex.: 18:20) — não o created_at
+    // (momento do check-in). Avulso (sem agendamento) cai no created_at.
+    const agendamento = Array.isArray(r.appointments)
+      ? r.appointments[0]
+      : r.appointments;
+    const horaFonte =
+      (agendamento?.starts_at as string | null) ?? r.created_at;
+
     return {
       id: r.id as string,
       patientId: (r.patient_id as string | null) ?? null,
       codigo: r.ticket_code ?? "—",
       paciente: r.patient_name ?? "",
-      hora: formatHora(r.created_at),
+      hora: formatHora(horaFonte),
       especialidade: r.specialty ?? "—",
       medico: profile?.full_name ?? "—",
       convenio: r.insurance ?? "—",
