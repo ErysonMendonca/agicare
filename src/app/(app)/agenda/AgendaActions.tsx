@@ -31,14 +31,18 @@ export function AgendaActions({
   const [modal, setModal] = useState<ModalKind>(null);
   // Escala em edição; undefined → o form de escala abre em modo criação.
   const [escalaEdit, setEscalaEdit] = useState<Escala | undefined>(undefined);
+  // Muda a cada abertura p/ forçar remont do form (estado inicializa das props).
+  const [formKey, setFormKey] = useState(0);
 
   function abrirCriacao() {
     setEscalaEdit(undefined);
+    setFormKey((k) => k + 1);
     setModal("escala-form");
   }
 
   function abrirEdicao(escala: Escala) {
     setEscalaEdit(escala);
+    setFormKey((k) => k + 1);
     setModal("escala-form");
   }
 
@@ -68,6 +72,7 @@ export function AgendaActions({
       />
 
       <EscalaHorariosModal
+        key={formKey}
         open={modal === "escala-form"}
         onClose={() => setModal(null)}
         profissionais={profissionais}

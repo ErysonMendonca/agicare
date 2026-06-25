@@ -25,6 +25,7 @@ import {
   createBlock,
   removeBlock,
   listBlocks,
+  listOcupacao,
 } from "@/lib/actions/appointments";
 
 /** Dias da semana (number = getDay: 0=Dom..6=Sáb), exibidos de Seg a Dom. */
@@ -41,12 +42,18 @@ const DIAS: { n: number; label: string }[] = [
 const TIPOS = ["Consulta", "Retorno", "Exame", "Procedimento"];
 
 type Aba = "dados" | "horarios";
-/** blockId presente => bloqueio persistido em schedule_blocks. */
+/**
+ * Estado de um horário na grade da escala:
+ * - blockId presente => bloqueio manual persistido em schedule_blocks.
+ * - ocupado => existe agendamento real cobrindo o slot (paciente = quem ocupa).
+ */
 type SlotEscala = {
   hora: string;
   bloqueado: boolean;
   blockId?: string;
   motivo?: string;
+  ocupado?: boolean;
+  paciente?: string;
 };
 
 /** Gera horários "HH:mm" entre início e fim com passo em minutos. */
@@ -84,99 +91,91 @@ export function EscalaHorariosModal({
   const [pending, startTransition] = useTransition();
   const editMode = Boolean(escalaParaEditar);
 
-  const [aba, setAba] = useState<Aba>("dados");
-  const [descricao, setDescricao] = useState("");
-  const [profissionalId, setProfissionalId] = useState("");
-  const [especialidade, setEspecialidade] = useState("");
-  const [tipo, setTipo] = useState(TIPOS[0]);
-  const [slotMin, setSlotMin] = useState(30);
-  const [encaixe, setEncaixe] = useState(0);
-  const [ativo, setAtivo] = useState(true);
-  // Itens atendidos pela escala (conforme o Tipo de Escala).
-  const [procedureCodes, setProcedureCodes] = useState<string[]>([]);
-  const [examCodes, setExamCodes] = useState<string[]>([]);
+  // Estado inicializado DIRETO das props: modo edição pré-preenche pela escala,
+  // criação usa os defaults. O reset entre aberturas é feito por REMONT (o pai
+  // passa um `key` que muda a cada abertura) — por isso não há effect de
+  // pré-preenchimento (evita setState síncrono dentro de effect).
+  const esc = escalaParaEditar;
 
-  const [dias, setDias] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [inicio, setInicio] = useState("08:00");
-  const [fim, setFim] = useState("18:00");
-  // Vigência da escala (período de validade).
-  const [dataInicio, setDataInicio] = useState("");
-  const [dataFim, setDataFim] = useState("");
-  const [slots, setSlots] = useState<SlotEscala[]>([]);
-  const [manual, setManual] = useState("");
-  // Data alvo para persistência de bloqueios em schedule_blocks.
-  const [dataBloqueio, setDataBloqueio] = useState(
-    new Date().toISOString().slice(0, 10),
+  const [aba, setAba] = useState<Aba>("dados");
+  const [descricao, setDescricao] = useState(esc?.description ?? "");
+  const [profissionalId, setProfissionalId] = useState(esc?.professionalId ?? "");
+  const [especialidade, setEspecialidade] = useState(esc?.specialty ?? "");
+  const [tipo, setTipo] = useState(esc?.serviceType || TIPOS[0]);
+  const [slotMin, setSlotMin] = useState(esc?.slotMinutes ?? 30);
+  const [encaixe, setEncaixe] = useState(esc?.overbookLimit ?? 0);
+  const [ativo, setAtivo] = useState(esc?.active ?? true);
+  // Itens atendidos pela escala (conforme o Tipo de Escala).
+  const [procedureCodes, setProcedureCodes] = useState<string[]>(
+    esc?.procedureCodes ?? [],
   );
+  const [examCodes, setExamCodes] = useState<string[]>(esc?.examTussCodes ?? []);
+
+  const [dias, setDias] = useState<number[]>(esc?.weekdays ?? [1, 2, 3, 4, 5]);
+  const [inicio, setInicio] = useState(esc?.startTime ?? "08:00");
+  const [fim, setFim] = useState(esc?.endTime ?? "18:00");
+  // Vigência da escala (período de validade).
+  const [dataInicio, setDataInicio] = useState(esc?.startDate ?? "");
+  const [dataFim, setDataFim] = useState(esc?.endDate ?? "");
+  // Edição já monta a grade a partir do que está salvo (sem exigir "Gerar
+  // Grade"); os estados bloqueado/ocupado vêm do effect de sync abaixo.
+  const [slots, setSlots] = useState<SlotEscala[]>(() =>
+    esc
+      ? gerarHorarios(esc.startTime, esc.endTime, esc.slotMinutes).map(
+          (hora) => ({ hora, bloqueado: false }),
+        )
+      : [],
+  );
+  const [manual, setManual] = useState("");
+  // Data alvo dos bloqueios (schedule_blocks é por data): hoje, ou o início da
+  // vigência se ele for futuro.
+  const [dataBloqueio, setDataBloqueio] = useState(() => {
+    const hojeISO = new Date().toISOString().slice(0, 10);
+    return esc?.startDate && esc.startDate > hojeISO ? esc.startDate : hojeISO;
+  });
   const [blockPending, startBlock] = useTransition();
   // Diálogo de bloqueio: horário-alvo + motivo (obrigatório) antes de persistir.
   const [bloqueioAlvo, setBloqueioAlvo] = useState<string | null>(null);
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
 
-  // Pré-preenche (modo edição) ou reseta (modo criação) ao abrir.
-  useEffect(() => {
-    if (!open) return;
-    if (escalaParaEditar) {
-      const e = escalaParaEditar;
-      setAba("dados");
-      setDescricao(e.description);
-      setProfissionalId(e.professionalId);
-      setEspecialidade(e.specialty);
-      setTipo(e.serviceType || TIPOS[0]);
-      setSlotMin(e.slotMinutes);
-      setEncaixe(e.overbookLimit);
-      setAtivo(e.active);
-      setDias(e.weekdays);
-      setInicio(e.startTime);
-      setFim(e.endTime);
-      setDataInicio(e.startDate ?? "");
-      setDataFim(e.endDate ?? "");
-      setSlots([]);
-      setProcedureCodes(e.procedureCodes ?? []);
-      setExamCodes(e.examTussCodes ?? []);
-    } else {
-      setAba("dados");
-      setDescricao("");
-      setProfissionalId("");
-      setEspecialidade("");
-      setTipo(TIPOS[0]);
-      setSlotMin(30);
-      setEncaixe(0);
-      setAtivo(true);
-      setDias([1, 2, 3, 4, 5]);
-      setInicio("08:00");
-      setFim("18:00");
-      setDataInicio("");
-      setDataFim("");
-      setSlots([]);
-      setProcedureCodes([]);
-      setExamCodes([]);
-    }
-  }, [open, escalaParaEditar]);
+  // Chave estável da grade (conjunto de horas) p/ disparar o sync sem laço:
+  // depender de `slots` direto re-rodaria a cada merge (loop infinito).
+  const horasKey = useMemo(() => slots.map((s) => s.hora).join(","), [slots]);
 
-  // Sincroniza os bloqueios persistidos quando há profissional + data + grade.
+  // Sincroniza bloqueios (schedule_blocks) + ocupação (appointments) quando há
+  // profissional + data + grade. Marca cada horário como livre/bloqueado/ocupado.
   useEffect(() => {
-    if (!open || !profissionalId || !dataBloqueio || slots.length === 0) return;
+    if (!open || !profissionalId || !dataBloqueio || !horasKey) return;
+    const horas = horasKey.split(",");
     let ativo = true;
     (async () => {
-      const blocks = await listBlocks(profissionalId, dataBloqueio);
+      const [blocks, ocupacao] = await Promise.all([
+        listBlocks(profissionalId, dataBloqueio),
+        listOcupacao(profissionalId, dataBloqueio, slotMin, horas),
+      ]);
       if (!ativo) return;
       const porHora = new Map(blocks.map((b) => [b.hora, b]));
+      const ocupHora = new Map(ocupacao.map((o) => [o.hora, o]));
       setSlots((cur) =>
         cur.map((s) => {
           const b = porHora.get(s.hora);
-          return b
-            ? { ...s, bloqueado: true, blockId: b.id, motivo: b.motivo }
-            : { ...s, bloqueado: false, blockId: undefined, motivo: undefined };
+          const o = ocupHora.get(s.hora);
+          return {
+            ...s,
+            bloqueado: Boolean(b),
+            blockId: b?.id,
+            motivo: b?.motivo,
+            ocupado: Boolean(o?.ocupado),
+            paciente: o?.paciente,
+          };
         }),
       );
     })();
     return () => {
       ativo = false;
     };
-    // Recarrega ao mudar profissional/data; slots.length para refletir nova grade.
-     
-  }, [open, profissionalId, dataBloqueio, slots.length]);
+    // Recarrega ao mudar profissional/data/grade (horasKey) ou duração do slot.
+  }, [open, profissionalId, dataBloqueio, slotMin, horasKey]);
 
   const especialidades = useMemo(
     () =>
@@ -250,6 +249,14 @@ export function EscalaHorariosModal({
     }
     const slot = slots.find((s) => s.hora === hora);
     if (!slot) return;
+
+    // Ocupado por agendamento → não bloqueia; só informa quem ocupa.
+    if (slot.ocupado && !slot.blockId) {
+      toast.info(
+        `${hora} ocupado por agendamento${slot.paciente ? ` — ${slot.paciente}` : ""}.`,
+      );
+      return;
+    }
 
     if (slot.bloqueado && slot.blockId) {
       desbloquear(slot.hora, slot.blockId);
@@ -651,11 +658,28 @@ export function EscalaHorariosModal({
           </div>
 
           {slots.length > 0 && (
-            <p className="text-xs text-muted">
-              Clique num horário livre para bloquear — será pedido o motivo.
-              Clique num bloqueado para liberar. O bloqueio é salvo para o
-              profissional na data acima.
-            </p>
+            <div className="space-y-2">
+              {/* Legenda dos 3 estados */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded border border-green-300 bg-green-50" />
+                  Livre
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded border border-red-300 bg-red-50" />
+                  Bloqueado
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-3 w-3 rounded border border-slate-300 bg-slate-100" />
+                  Ocupado (agendamento)
+                </span>
+              </div>
+              <p className="text-xs text-muted">
+                Clique num horário livre para bloquear — será pedido o motivo.
+                Clique num bloqueado para liberar. Ocupados (com agendamento) não
+                podem ser bloqueados. Estados referentes à data acima.
+              </p>
+            </div>
           )}
 
           {/* Grade gerada */}
@@ -670,31 +694,37 @@ export function EscalaHorariosModal({
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {slots.map((s) => (
-                <button
-                  key={s.hora}
-                  type="button"
-                  onClick={() => aoClicarSlot(s.hora)}
-                  disabled={blockPending}
-                  className={`flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-60 ${
-                    s.bloqueado
-                      ? "border-red-300 bg-red-50 text-red-600"
-                      : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
-                  }`}
-                  title={
-                    s.bloqueado
-                      ? `Bloqueado: ${s.motivo || "sem motivo"} — clique para liberar`
-                      : "Bloquear horário"
-                  }
-                >
-                  {s.bloqueado ? (
-                    <Lock className="h-3.5 w-3.5" />
-                  ) : (
-                    <Unlock className="h-3.5 w-3.5" />
-                  )}
-                  {s.hora}
-                </button>
-              ))}
+              {slots.map((s) => {
+                const ocupadoLivre = s.ocupado && !s.bloqueado;
+                const estilo = s.bloqueado
+                  ? "border-red-300 bg-red-50 text-red-600"
+                  : ocupadoLivre
+                    ? "border-slate-300 bg-slate-100 text-slate-500"
+                    : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100";
+                return (
+                  <button
+                    key={s.hora}
+                    type="button"
+                    onClick={() => aoClicarSlot(s.hora)}
+                    disabled={blockPending}
+                    className={`flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-60 ${estilo}`}
+                    title={
+                      s.bloqueado
+                        ? `Bloqueado: ${s.motivo || "sem motivo"} — clique para liberar`
+                        : ocupadoLivre
+                          ? `Ocupado${s.paciente ? `: ${s.paciente}` : ""}`
+                          : "Bloquear horário"
+                    }
+                  >
+                    {s.bloqueado || ocupadoLivre ? (
+                      <Lock className="h-3.5 w-3.5" />
+                    ) : (
+                      <Unlock className="h-3.5 w-3.5" />
+                    )}
+                    {s.hora}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

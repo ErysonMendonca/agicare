@@ -663,6 +663,76 @@ export async function listSlots(
   };
 }
 
+/** Ocupação de um horário da grade por um agendamento real (com paciente). */
+export type SlotOcupacao = {
+  hora: string;
+  ocupado: boolean;
+  /** Nome do paciente do 1º agendamento que sobrepõe o slot (se ocupado). */
+  paciente?: string;
+};
+
+/**
+ * Para uma grade de horários já montada (vinda do modal de escala), diz quais
+ * estão OCUPADOS por agendamentos reais do profissional naquela data — trazendo
+ * o nome do paciente. Bloqueios não entram aqui (a UI os trata via `listBlocks`).
+ * Considera a DURAÇÃO real do agendamento (um agendamento longo cobre vários slots).
+ */
+export async function listOcupacao(
+  professionalId: string,
+  dateISO: string,
+  slotMinutes: number,
+  horas: string[],
+): Promise<SlotOcupacao[]> {
+  const step = slotMinutes > 0 ? slotMinutes : 30;
+  if (!professionalId || !dateISO || horas.length === 0) {
+    return horas.map((hora) => ({ hora, ocupado: false }));
+  }
+  if (isDemoMode()) {
+    const ocupados = new Map<string, string>([
+      ["09:00", "Maria Silva"],
+      ["10:30", "João Pereira"],
+      ["14:30", "Ana Souza"],
+    ]);
+    return horas.map((hora) => ({
+      hora,
+      ocupado: ocupados.has(hora),
+      paciente: ocupados.get(hora),
+    }));
+  }
+
+  const supabase = await createClient();
+  const dayStart = toIso(dateISO, "00:00");
+  const dayEnd = addMinutes(toIso(dateISO, "00:00"), 24 * 60);
+
+  const { data: ags } = await supabase
+    .from("appointments")
+    .select("starts_at, ends_at, status, patients(full_name)")
+    .eq("professional_id", professionalId)
+    .gte("starts_at", dayStart)
+    .lt("starts_at", dayEnd);
+
+  // Intervalos [início, fim) ocupados + o paciente de cada um.
+  const intervalos: Array<{ ini: number; fim: number; paciente: string }> = [];
+  for (const a of ags ?? []) {
+    if (a.status === "cancelado") continue;
+    const ini = isoToMin(a.starts_at as string);
+    const fim = a.ends_at ? isoToMin(a.ends_at as string) : ini + step;
+    const pac = a.patients as { full_name?: string } | null;
+    intervalos.push({
+      ini,
+      fim: fim > ini ? fim : ini + step,
+      paciente: pac?.full_name ?? "Paciente",
+    });
+  }
+
+  return horas.map((hora) => {
+    const ini = horaToMin(hora);
+    const fim = ini + step;
+    const hit = intervalos.find((iv) => iv.ini < fim && ini < iv.fim);
+    return { hora, ocupado: Boolean(hit), paciente: hit?.paciente };
+  });
+}
+
 /**
  * Variante por ESPECIALIDADE (agendamento sem profissional definido).
  * Grade derivada das escalas (`schedules`) da especialidade ativas no dia.
