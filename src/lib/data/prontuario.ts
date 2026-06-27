@@ -6,6 +6,8 @@ import { type FilaItem } from "@/lib/data/queue";
 export type Identificacao = {
   nome: string;
   registro: string;
+  /** Numeração de atendimento (ficha) da entrada de fila mais recente. */
+  atendimentoCodigo: string | null;
   idade: string;
   nascimento: string;
   genero: string;
@@ -157,6 +159,7 @@ export async function listAtendimentosPorData(
       id: r.id as string,
       patientId: (r.patient_id as string | null) ?? null,
       codigo: (r.id as string).slice(0, 8).toUpperCase(),
+      atendimentoCodigo: null,
       paciente: (r.patient_name as string | null) ?? "—",
       hora: formatHora(r.created_at as string | null),
       especialidade: (r.especialidade as string | null) ?? "—",
@@ -209,6 +212,7 @@ const DEMO_RESUMO: Resumo = {
   identificacao: {
     nome: "Maria Silva Santos",
     registro: "REG-000123",
+    atendimentoCodigo: "100001",
     idade: "40 anos",
     nascimento: "12/03/1985",
     genero: "Feminino",
@@ -405,12 +409,15 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
   // o CPF. Sem entrada na fila (paciente fora de atendimento) → "—".
   const { data: ultimaEntrada } = await supabase
     .from("queue_entries")
-    .select("ticket_code")
+    .select("ticket_code, attendance_code")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   const numeroAtendimento = (ultimaEntrada?.ticket_code as string | null) || "—";
+  // Numeração de atendimento (ficha) da mesma entrada; null fora de atendimento.
+  const atendimentoCodigo =
+    (ultimaEntrada?.attendance_code as string | null) ?? null;
 
   // Triagem mais recente do paciente (sinais aferidos + classificação de risco).
   // Erro/sem registro → null (a seção não aparece no prontuário).
@@ -445,6 +452,7 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
     identificacao: {
       nome: (p.full_name as string) ?? "—",
       registro: numeroAtendimento,
+      atendimentoCodigo,
       idade: calcIdade(p.birth_date as string | null),
       nascimento: fmtData(p.birth_date as string | null),
       genero: GENERO[genero] ?? (genero || "—"),

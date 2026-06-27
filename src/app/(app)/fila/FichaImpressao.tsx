@@ -73,6 +73,20 @@ export function FichaImpressao({
             </p>
           </div>
 
+          {item.atendimentoCodigo && (
+            <div className="mb-6 rounded-xl border-2 border-dashed border-line py-4 text-center">
+              <p className="text-xs uppercase tracking-wide text-muted">
+                Nº do Atendimento
+              </p>
+              <p className="text-3xl font-bold tracking-[0.2em] text-brand-600">
+                {item.atendimentoCodigo}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Use este número para acompanhar o atendimento.
+              </p>
+            </div>
+          )}
+
           <dl className="space-y-2 border-t border-line pt-4 text-sm">
             <FichaLinha rotulo="Paciente" valor={item.paciente} />
             <FichaLinha rotulo="Especialidade" valor={item.especialidade} />
