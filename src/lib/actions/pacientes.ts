@@ -445,6 +445,9 @@ export async function updatePaciente(
   let q = supabase
     .from("patients")
     .update({
+      // Avulso: o check-in agora completa o cadastro pela ficha completa.
+      // Idempotente — paciente normal já é true; reafirmar não muda nada.
+      registration_complete: true,
       full_name: d.full_name,
       social_name: d.social_name || null,
       cpf: d.cpf || null,

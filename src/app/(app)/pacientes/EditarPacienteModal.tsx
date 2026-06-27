@@ -47,10 +47,13 @@ export function EditarPacienteModal({
   patientId,
   onClose,
   onSaved,
+  closeOnSave = true,
 }: {
   patientId: string | null;
   onClose: () => void;
   onSaved?: () => void;
+  /** Quando false, em sucesso NÃO fecha o modal (ex.: wizard de check-in avulso). */
+  closeOnSave?: boolean;
 }) {
   const [paciente, setPaciente] = useState<PacienteEditavel | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -92,10 +95,10 @@ export function EditarPacienteModal({
     }
     if (state.ok) {
       toast.success("Cadastro atualizado com sucesso!");
-      onClose();
+      if (closeOnSave) onClose();
       onSaved?.();
     }
-  }, [state, onClose, onSaved]);
+  }, [state, onClose, onSaved, closeOnSave]);
 
   return (
     <Modal

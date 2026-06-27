@@ -193,15 +193,32 @@ export async function checkInTotem(
 
   const ticketCode = genTicketCode(data.priority, (count ?? 0) + 1);
 
+  // Quando há paciente vinculado, o cadastro é a FONTE DA VERDADE de nome e
+  // convênio — o cliente pode ter dados antigos (ex.: avulso que acabou de
+  // completar o cadastro no próprio check-in). Lê do banco e sobrepõe.
+  let patientName = data.patientName;
+  let insurance = data.insurance ?? null;
+  if (data.patientId) {
+    const { data: pac } = await supabase
+      .from("patients")
+      .select("full_name, convenio")
+      .eq("id", data.patientId)
+      .maybeSingle();
+    if (pac) {
+      if (pac.full_name) patientName = pac.full_name as string;
+      insurance = ((pac.convenio as string | null) ?? "").trim() || insurance;
+    }
+  }
+
   const { error } = await supabase.from("queue_entries").insert({
     clinic_id: clinicId,
     ticket_code: ticketCode,
     patient_id: data.patientId ?? null,
-    patient_name: data.patientName,
+    patient_name: patientName,
     priority: data.priority,
     professional_id: data.professionalId ?? null,
     specialty: data.specialty ?? null,
-    insurance: data.insurance ?? null,
+    insurance: insurance,
     status: "aguardando",
     arrived_at: new Date().toISOString(),
     appointment_id: data.appointmentId ?? null,
