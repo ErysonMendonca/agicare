@@ -5,6 +5,7 @@ import { User, MapPin, HeartCrack, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -471,7 +472,7 @@ function EditarPacienteForm({
 
         {/* Aba 2 — Contato e Endereço */}
         <div className={aba === "contato" ? "space-y-4" : "hidden"}>
-          <Input
+          <TelefoneInput
             id="ep-tel"
             name="phone"
             label="Telefone / Celular"

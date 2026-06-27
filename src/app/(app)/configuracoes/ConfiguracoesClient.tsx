@@ -31,6 +31,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { EmBreve } from "@/components/ui/EmBreve";
 import { salvarConfiguracoes, executarBackup } from "@/lib/actions/settings";
@@ -209,7 +210,7 @@ export function ConfiguracoesClient({
                   />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Input id="cnpj" name="cnpj" label="CNPJ" defaultValue={settings.cnpj} />
-                    <Input id="telefone" name="phone" label="Telefone" defaultValue={settings.phone} />
+                    <TelefoneInput id="telefone" name="phone" label="Telefone" defaultValue={settings.phone} />
                   </div>
                   <Input id="email" name="email" label="E-mail" type="email" defaultValue={settings.email} />
                   <Input id="endereco" name="address" label="Endereço" defaultValue={settings.address} />
