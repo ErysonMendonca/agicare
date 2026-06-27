@@ -82,12 +82,16 @@ export async function createAppointment(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  const protocol = gerarProtocolo();
-  if (isDemoMode()) return { ok: true, protocol };
-
   const d = parsed.data;
   const startsAt = toIso(d.date, d.time);
+  // Não permite agendar no passado (vale tanto no demo quanto no real).
+  if (new Date(startsAt).getTime() < Date.now()) {
+    return { error: "Não é possível agendar em um horário que já passou." };
+  }
   const endsAt = addMinutes(startsAt, d.slot_minutes);
+
+  const protocol = gerarProtocolo();
+  if (isDemoMode()) return { ok: true, protocol };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -157,6 +161,10 @@ export async function remarcarAppointment(
 
   const d = parsed.data;
   const startsAt = toIso(d.date, d.time);
+  // Não permite remarcar para um horário que já passou.
+  if (new Date(startsAt).getTime() < Date.now()) {
+    return { error: "Não é possível remarcar para um horário que já passou." };
+  }
   return updateAppointment(d.id, {
     starts_at: startsAt,
     ends_at: addMinutes(startsAt, d.slot_minutes),

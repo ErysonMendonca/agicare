@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -497,13 +498,13 @@ export function CadastroPacienteModal() {
           {/* Aba 2 — Contato e Endereço */}
           <div className={aba === "contato" ? "space-y-4" : "hidden"}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
+              <TelefoneInput
                 id="cp-tel"
                 name="phone"
                 label="Telefone"
                 placeholder="(11) 3456-7890"
               />
-              <Input
+              <TelefoneInput
                 id="cp-cel"
                 name="cell"
                 label="Celular"

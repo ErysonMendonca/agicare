@@ -6,6 +6,7 @@ import { Plus, SquarePen } from "lucide-react";
 import { toast } from "sonner";
 import { Button, type ButtonProps } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -23,18 +24,6 @@ const PAPEIS_FORM = ["medico", "recepcao"] as const;
 /** Normaliza o papel para os valores aceitos pelo Select (default medico). */
 function papelDefault(role?: string): string {
   return role && (PAPEIS_FORM as readonly string[]).includes(role) ? role : "medico";
-}
-
-/**
- * Máscara de telefone BR (progressiva): "(11) 90000-0000" (celular, 11 dígitos)
- * ou "(11) 3456-7890" (fixo, 10 dígitos). Mantém só dígitos (máx. 11).
- */
-function mascararTelefone(valor: string): string {
-  const d = valor.replace(/\D/g, "").slice(0, 11);
-  if (d.length <= 2) return d ? `(${d}` : "";
-  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
 /**
@@ -93,14 +82,13 @@ function CamposProfissional({
           <option value="medico">Médico</option>
           <option value="recepcao">Recepção</option>
         </Select>
-        <Input
+        <TelefoneInput
           id={`${prefixo}-telefone`}
           name="phone"
           label="Telefone"
           placeholder="(11) 90000-0000"
-          inputMode="tel"
           value={telefone}
-          onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
+          onChange={(e) => setTelefone(e.target.value)}
         />
       </div>
 

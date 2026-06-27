@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { type Paciente } from "@/lib/data/patients";
 import { type Profissional } from "@/lib/data/professionals";
@@ -75,7 +76,13 @@ export function NovoAgendamentoModal({
   const [especialidade, setEspecialidade] = useState("");
   const [profissionalId, setProfissionalId] = useState("");
   const [tipo, setTipo] = useState(TIPOS[0]);
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  // Data de hoje (YYYY-MM-DD) em horário LOCAL — usada como mínimo do date
+  // picker e para filtrar horários que já passaram quando o agendamento é para
+  // hoje. NÃO usar toISOString() (data UTC): perto da meia-noite em fuso
+  // negativo (BR -03) cairia no dia seguinte e bloquearia o dia local corrente.
+  const agora = new Date();
+  const hoje = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+  const [data, setData] = useState(hoje);
   const [hora, setHora] = useState("");
   const [duracao, setDuracao] = useState(30);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -151,7 +158,7 @@ export function NovoAgendamentoModal({
     setEspecialidade("");
     setProfissionalId("");
     setTipo(TIPOS[0]);
-    setData(new Date().toISOString().slice(0, 10));
+    setData(hoje);
     setHora("");
     setDuracao(30);
     setSlots([]);
@@ -274,6 +281,13 @@ export function NovoAgendamentoModal({
     ? new Date(`${data}T00:00:00`).toLocaleDateString("pt-BR")
     : "—";
 
+  // Quando o agendamento é para hoje, oculta horários que já passaram (não faz
+  // sentido marcar para um horário anterior ao atual). Datas futuras: todos.
+  const slotsVisiveis =
+    data === hoje
+      ? slots.filter((s) => new Date(`${data}T${s.hora}:00`) > new Date())
+      : slots;
+
   return (
     <Modal
       open={open}
@@ -332,7 +346,7 @@ export function NovoAgendamentoModal({
                 onChange={(e) => setAvulsoNome(e.target.value)}
                 className="sm:col-span-2"
               />
-              <Input
+              <TelefoneInput
                 label="Telefone"
                 placeholder="(00) 00000-0000"
                 value={avulsoTel}
@@ -435,6 +449,7 @@ export function NovoAgendamentoModal({
             <Input
               label="Data do Atendimento"
               type="date"
+              min={hoje}
               value={data}
               onChange={(e) => setData(e.target.value)}
             />
@@ -480,7 +495,7 @@ export function NovoAgendamentoModal({
             <p className="py-10 text-center text-sm text-muted">
               Carregando horários...
             </p>
-          ) : slots.length === 0 ? (
+          ) : slotsVisiveis.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line px-6 py-10 text-center">
               <Clock className="h-8 w-8 text-muted" />
               <p className="mt-3 text-sm text-muted">
@@ -489,7 +504,7 @@ export function NovoAgendamentoModal({
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {slots.map((s) => {
+              {slotsVisiveis.map((s) => {
                 const sel = hora === s.hora;
                 return (
                   <button
