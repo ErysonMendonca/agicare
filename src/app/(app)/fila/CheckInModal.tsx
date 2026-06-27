@@ -2,14 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Printer, Ticket, UserCheck, UserPlus } from "lucide-react";
+import { AlertCircle, Printer, Ticket, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { type FilaItem } from "@/lib/data/queue";
 import { checkInTotem } from "@/lib/actions/queue";
-import { completarCadastroAvulso } from "@/lib/actions/pacientes";
+import { getPacienteEditavel } from "@/lib/actions/pacientes";
+import { EditarPacienteModal } from "@/app/(app)/pacientes/EditarPacienteModal";
 import { FichaImpressao } from "./FichaImpressao";
 
 type Prioridade = "normal" | "preferencial" | "urgente";
@@ -55,46 +55,41 @@ export function CheckInModal({
   const [senha, setSenha] = useState<string | null>(null);
   const [emitidoEm, setEmitidoEm] = useState<Date | null>(null);
 
-  // Paciente AVULSO (0049): cadastro mínimo pendente → completar antes do check-in.
+  // Paciente AVULSO (0049): cadastro mínimo pendente → cadastro completo antes do check-in.
   const avulso = agendado?.registrationComplete === false && !!agendado?.patientId;
 
-  // Campos do complemento de cadastro (só usados quando avulso).
-  const [nome, setNome] = useState(agendado?.paciente ?? "");
-  const [nascimento, setNascimento] = useState("");
-  const [email, setEmail] = useState("");
-  const [convenio, setConvenio] = useState("");
-  const [plano, setPlano] = useState("");
+  // Wizard do avulso: enquanto não concluir o cadastro completo, a senha fica travada.
+  const [cadastroConcluido, setCadastroConcluido] = useState(false);
+  // Controla a abertura do EditarPacienteModal (patientId quando aberto, null quando fechado).
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  // Dados frescos do paciente após o cadastro completo (o `agendado` é um
+  // snapshot do pai e fica defasado — ver nome/convênio recém-preenchidos).
+  const [dadosAtuais, setDadosAtuais] = useState<{
+    nome: string;
+    convenio: string | null;
+  } | null>(null);
 
   // O componente é montado a cada abertura (com key no pai), então o estado
   // inicial já nasce limpo — sem necessidade de reset via efeito.
   if (!agendado) return null;
 
+  // Avulso só libera a emissão da senha depois do cadastro completo concluído.
+  const bloqueado = avulso && !cadastroConcluido;
+  // Nome/convênio exibidos e enviados: dados frescos quando houver, senão o snapshot.
+  const nomeAtual = dadosAtuais?.nome || agendado.paciente;
+  const convenioAtual = dadosAtuais ? dadosAtuais.convenio : agendado.convenio;
+
   function confirmar() {
     if (!agendado) return;
+    if (bloqueado) return;
     startTransition(async () => {
-      // Avulso: completa o cadastro (registration_complete=true) ANTES do check-in.
-      if (avulso && agendado.patientId) {
-        const comp = await completarCadastroAvulso({
-          id: agendado.patientId,
-          full_name: nome,
-          birth_date: nascimento,
-          email: email || undefined,
-          convenio: convenio || undefined,
-          plan: plano || undefined,
-        });
-        if (!comp.ok) {
-          toast.error(comp.error ?? "Não foi possível completar o cadastro.");
-          return;
-        }
-      }
-
       const res = await checkInTotem({
         appointmentId: agendado.appointmentId ?? undefined,
         patientId: agendado.patientId,
-        patientName: avulso ? nome : agendado.paciente,
+        patientName: nomeAtual,
         priority: prioridade,
         specialty: limpar(agendado.especialidade),
-        insurance: avulso ? convenio || null : limpar(agendado.convenio),
+        insurance: limpar(convenioAtual),
       });
 
       if (res?.ticketCode) {
@@ -123,8 +118,8 @@ export function CheckInModal({
       subtitle={
         emitida
           ? "Imprima a ficha e oriente o paciente a aguardar a chamada."
-          : avulso
-            ? "Cadastro pendente: complete os dados do paciente para emitir a senha."
+          : bloqueado
+            ? "Cadastro pendente: complete o cadastro do paciente para emitir a senha."
             : "Confirme a prioridade para emitir a senha de atendimento."
       }
       footer={
@@ -143,21 +138,21 @@ export function CheckInModal({
             <Button variant="ghost" onClick={onClose} disabled={pending}>
               Cancelar
             </Button>
-            <Button variant="primary" onClick={confirmar} disabled={pending}>
+            <Button
+              variant="primary"
+              onClick={confirmar}
+              disabled={pending || bloqueado}
+            >
               <UserCheck className="h-4 w-4" />
-              {pending
-                ? "Emitindo…"
-                : avulso
-                  ? "Completar e Emitir Senha"
-                  : "Confirmar e Emitir Senha"}
+              {pending ? "Emitindo…" : "Emitir Senha"}
             </Button>
           </>
         )
       }
     >
-      {/* Resumo do agendado */}
+      {/* Resumo do agendado (nome/convênio refletem o cadastro recém-salvo) */}
       <div className="rounded-xl border border-line bg-muted-surface p-4">
-        <p className="truncate font-semibold text-ink">{agendado.paciente}</p>
+        <p className="truncate font-semibold text-ink">{nomeAtual}</p>
         <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">
           <span>
             Especialidade:{" "}
@@ -169,63 +164,32 @@ export function CheckInModal({
           </span>
           <span>
             Convênio:{" "}
-            <span className="font-medium text-ink">{agendado.convenio}</span>
+            <span className="font-medium text-ink">{convenioAtual ?? "—"}</span>
           </span>
         </div>
       </div>
 
-      {!emitida && avulso && (
-        <fieldset className="mt-5">
-          <legend className="mb-2 flex items-center gap-1.5 text-sm font-medium text-ink">
-            <UserPlus className="h-4 w-4 text-brand-500" />
-            Complementar cadastro
-          </legend>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Input
-              id="avulso-nome"
-              label="Nome completo *"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="Nome do paciente"
-            />
-            <Input
-              id="avulso-nascimento"
-              label="Data de nascimento *"
-              type="date"
-              value={nascimento}
-              onChange={(e) => setNascimento(e.target.value)}
-            />
-            <Input
-              id="avulso-email"
-              label="E-mail"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="opcional"
-            />
-            <Input
-              id="avulso-convenio"
-              label="Convênio"
-              value={convenio}
-              onChange={(e) => setConvenio(e.target.value)}
-              placeholder="Particular, Unimed…"
-            />
-            {convenio.trim() &&
-              convenio.trim().toLowerCase() !== "sus" &&
-              convenio.trim().toLowerCase() !== "particular" && (
-                <Input
-                  id="avulso-plano"
-                  label="Plano *"
-                  value={plano}
-                  onChange={(e) => setPlano(e.target.value)}
-                  placeholder="Plano do convênio"
-                />
-              )}
-          </div>
-        </fieldset>
+      {/* Passo 1 (só avulso, antes de concluir): cadastro completo via EditarPacienteModal. */}
+      {!emitida && bloqueado && (
+        <div className="mt-5 rounded-xl border border-orange-200 bg-orange-50 p-4">
+          <p className="flex items-start gap-2 text-sm text-orange-700">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            Paciente avulso com cadastro pendente. Complete o cadastro do
+            paciente para liberar a emissão da senha.
+          </p>
+          <Button
+            variant="primary"
+            className="mt-3"
+            onClick={() => setEditandoId(agendado.patientId)}
+          >
+            <UserPlus className="h-4 w-4" />
+            Completar cadastro
+          </Button>
+        </div>
       )}
 
-      {!emitida ? (
+      {/* Passo 2 (ou paciente já cadastrado): prioridade + emissão. */}
+      {!emitida && !bloqueado && (
         <fieldset className="mt-5">
           <legend className="mb-2 text-sm font-medium text-ink">Prioridade</legend>
           <div className="grid grid-cols-3 gap-2">
@@ -243,7 +207,9 @@ export function CheckInModal({
             ))}
           </div>
         </fieldset>
-      ) : (
+      )}
+
+      {emitida && (
         <div className="mt-5 flex flex-col items-center rounded-xl border border-brand-200 bg-brand-50 py-6">
           <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-brand-600">
             <Ticket className="h-4 w-4" /> Senha
@@ -254,15 +220,43 @@ export function CheckInModal({
         </div>
       )}
 
-      {/* Ficha (oculta na tela, visível só na impressão) */}
+      {/* Ficha (oculta na tela, visível só na impressão) — usa o nome/convênio
+          atuais para não imprimir dados do cadastro mínimo do avulso. */}
       {emitida && senha && (
         <FichaImpressao
           senha={senha}
-          item={agendado}
+          item={{ ...agendado, paciente: nomeAtual, convenio: convenioAtual ?? agendado.convenio }}
           prioridade={prioridade}
           emitidoEm={emitidoEm ?? undefined}
         />
       )}
+
+      {/* Cadastro completo do avulso. closeOnSave=false: ao salvar, NÃO fecha o
+          CheckInModal — só conclui o passo 1 e avança para a emissão da senha. */}
+      <EditarPacienteModal
+        // key por abertura: remonta limpo (sem estado carregando/paciente stale)
+        // ao reabrir após cancelar.
+        key={editandoId ?? "fechado"}
+        patientId={editandoId}
+        closeOnSave={false}
+        onClose={() => setEditandoId(null)}
+        onSaved={async () => {
+          setEditandoId(null);
+          // Relê o cadastro recém-salvo para refletir nome/convênio atuais na
+          // ficha/senha (o `agendado` do pai ainda está defasado neste tick).
+          if (agendado.patientId) {
+            const r = await getPacienteEditavel(agendado.patientId);
+            if ("paciente" in r && r.paciente) {
+              setDadosAtuais({
+                nome: r.paciente.full_name,
+                convenio: r.paciente.convenio?.trim() || null,
+              });
+            }
+          }
+          setCadastroConcluido(true);
+          router.refresh();
+        }}
+      />
     </Modal>
   );
 }
