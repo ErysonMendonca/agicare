@@ -15,6 +15,8 @@ import {
   ArrowDownUp,
   Ticket,
   Users,
+  Hash,
+  ArrowRight,
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
@@ -55,6 +57,34 @@ function compararFila(a: FilaItem, b: FilaItem, ord: Ordenacao): number {
   const ha = a.hora === "—" ? "99:99" : a.hora;
   const hb = b.hora === "—" ? "99:99" : b.hora;
   return ha.localeCompare(hb);
+}
+
+/**
+ * Etapa atual + próximo passo derivados do status do item (sem ir ao backend).
+ * Visão curta para a recepção: recepção → triagem → atendimento → conclusão.
+ */
+function fluxoDoStatus(
+  statusRaw: string,
+): { etapa: string; proximo: string | null } | null {
+  switch (statusRaw) {
+    case "na_recepcao":
+      return { etapa: "Na recepção", proximo: "Triagem" };
+    case "triagem":
+      return { etapa: "Na triagem", proximo: "Atendimento" };
+    case "aguardando":
+    case "aguardando_atendimento":
+      return { etapa: "Aguardando", proximo: "Atendimento" };
+    case "chamado":
+      return { etapa: "Chamado", proximo: "Atendimento" };
+    case "em_atendimento":
+      return { etapa: "Em atendimento", proximo: "Conclusão" };
+    case "finalizado":
+      return { etapa: "Finalizado", proximo: null };
+    case "desistencia":
+      return { etapa: "Desistência", proximo: null };
+    default:
+      return null;
+  }
 }
 
 /** Opções do filtro de status (valor = statusRaw do banco). */
@@ -412,6 +442,12 @@ export function FilaClient({
                       <h3 className="font-semibold text-ink">
                         {item.paciente}
                       </h3>
+                      {item.atendimentoCodigo && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-muted-surface px-2 py-0.5 text-xs font-medium text-muted">
+                          <Hash className="h-3 w-3" />
+                          {item.atendimentoCodigo}
+                        </span>
+                      )}
                       {item.tags?.map((tag) => (
                         <Badge key={tag.label} status={tag.status}>
                           {tag.label}
@@ -432,6 +468,23 @@ export function FilaClient({
                         <CreditCard className="h-4 w-4" /> {item.convenio}
                       </span>
                     </div>
+                    {(() => {
+                      const fluxo = fluxoDoStatus(item.statusRaw);
+                      if (!fluxo) return null;
+                      return (
+                        <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600">
+                          {fluxo.etapa}
+                          {fluxo.proximo && (
+                            <>
+                              <ArrowRight className="h-3 w-3" />
+                              <span className="text-muted">
+                                próximo: {fluxo.proximo}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <Badge status={item.status.tone} className="flex-none">

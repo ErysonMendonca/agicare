@@ -138,6 +138,8 @@ export type CheckInTotemResult = {
   ok?: boolean;
   error?: string;
   ticketCode?: string;
+  /** Numeração de atendimento (ficha): 6 dígitos, única por clínica. */
+  attendanceCode?: string;
 };
 
 /**
@@ -147,6 +149,15 @@ export type CheckInTotemResult = {
 function genTicketCode(priority: string, seq: number): string {
   const prefix = priority === "preferencial" ? "P" : "A";
   return `${prefix}${String(seq).padStart(3, "0")}`;
+}
+
+/**
+ * Sorteia a numeração de atendimento (ficha): 6 dígitos (100000–999999),
+ * ALEATÓRIA. A unicidade por clínica é garantida pelo índice único; em caso de
+ * colisão (23505), o insert é refeito com novo código (ver checkInTotem).
+ */
+function genAttendanceCode(): string {
+  return String(100000 + Math.floor(Math.random() * 900000));
 }
 
 /** Início (00:00) e fim (24:00) do dia atual em ISO. */
@@ -173,9 +184,13 @@ export async function checkInTotem(
   const data = parsed.data;
 
   if (isDemoMode()) {
-    // Sem banco no modo demo: senha sequencial fictícia (3 dígitos).
+    // Sem banco no modo demo: senha sequencial fictícia (3 dígitos) + ficha.
     const seq = Math.floor(Math.random() * 900) + 100;
-    return { ok: true, ticketCode: genTicketCode(data.priority, seq) };
+    return {
+      ok: true,
+      ticketCode: genTicketCode(data.priority, seq),
+      attendanceCode: genAttendanceCode(),
+    };
   }
 
   const clinicId = await requireClinic();
@@ -210,7 +225,9 @@ export async function checkInTotem(
     }
   }
 
-  const { error } = await supabase.from("queue_entries").insert({
+  // Payload base do insert; o attendance_code é sorteado por tentativa (retry
+  // em caso de colisão no índice único (clinic_id, attendance_code)).
+  const baseRow = {
     clinic_id: clinicId,
     ticket_code: ticketCode,
     patient_id: data.patientId ?? null,
@@ -222,15 +239,35 @@ export async function checkInTotem(
     status: "aguardando",
     arrived_at: new Date().toISOString(),
     appointment_id: data.appointmentId ?? null,
-  });
+  };
 
-  if (error) return { error: "Não foi possível registrar o check-in." };
+  // Insere com retry: se o código de atendimento colidir (Postgres 23505),
+  // sorteia outro e tenta de novo (até 5 vezes).
+  let attendanceCode = "";
+  let inserted = false;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    attendanceCode = genAttendanceCode();
+    const { error } = await supabase
+      .from("queue_entries")
+      .insert({ ...baseRow, attendance_code: attendanceCode });
+
+    if (!error) {
+      inserted = true;
+      break;
+    }
+    // Só faz retry em violação de unicidade; outros erros abortam.
+    if (error.code !== "23505") {
+      return { error: "Não foi possível registrar o check-in." };
+    }
+  }
+
+  if (!inserted) return { error: "Não foi possível registrar o check-in." };
 
   // Carimba a chegada real no agendamento vinculado (BI de tempo de espera).
   if (data.appointmentId) await stampAppointmentCheckIn(data.appointmentId);
 
   revalidateFila();
-  return { ok: true, ticketCode };
+  return { ok: true, ticketCode, attendanceCode };
 }
 
 // ── Dados de Atendimento (persistência da Fila — escopo 4.2) ─────────

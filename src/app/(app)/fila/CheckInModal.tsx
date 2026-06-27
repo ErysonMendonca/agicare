@@ -53,6 +53,7 @@ export function CheckInModal({
   const [pending, startTransition] = useTransition();
   const [prioridade, setPrioridade] = useState<Prioridade>("normal");
   const [senha, setSenha] = useState<string | null>(null);
+  const [atendimentoCodigo, setAtendimentoCodigo] = useState<string | null>(null);
   const [emitidoEm, setEmitidoEm] = useState<Date | null>(null);
 
   // Paciente AVULSO (0049): cadastro mínimo pendente → cadastro completo antes do check-in.
@@ -94,6 +95,7 @@ export function CheckInModal({
 
       if (res?.ticketCode) {
         setSenha(res.ticketCode);
+        setAtendimentoCodigo(res.attendanceCode ?? null);
         setEmitidoEm(new Date());
         toast.success(`Check-in realizado. Senha ${res.ticketCode}.`);
         // Atualiza as listas (paciente sai de "agendados" e entra na fila).
@@ -217,6 +219,16 @@ export function CheckInModal({
           <span className="mt-1 text-6xl font-extrabold tracking-tight text-brand-700">
             {senha}
           </span>
+          {atendimentoCodigo && (
+            <span className="mt-3 flex flex-col items-center border-t border-brand-200 pt-3 text-center">
+              <span className="text-xs font-medium uppercase tracking-wide text-brand-600">
+                Nº do Atendimento
+              </span>
+              <span className="text-2xl font-bold tracking-[0.2em] text-brand-700">
+                {atendimentoCodigo}
+              </span>
+            </span>
+          )}
         </div>
       )}
 
@@ -225,7 +237,7 @@ export function CheckInModal({
       {emitida && senha && (
         <FichaImpressao
           senha={senha}
-          item={{ ...agendado, paciente: nomeAtual, convenio: convenioAtual ?? agendado.convenio }}
+          item={{ ...agendado, paciente: nomeAtual, convenio: convenioAtual ?? agendado.convenio, atendimentoCodigo }}
           prioridade={prioridade}
           emitidoEm={emitidoEm ?? undefined}
         />

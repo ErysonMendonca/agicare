@@ -2,6 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getViewScope, getMyProfessionalId } from "@/lib/permissions";
 import { type Status } from "@/components/ui/Badge";
+import { requireClinic } from "@/lib/tenant";
+import { getAttendanceFlow } from "@/lib/data/attendance-flow";
+import {
+  DEFAULT_STAGES,
+  hasTriagem,
+  nextStatus,
+  stageForStatus,
+  type FlowStage,
+} from "@/lib/data/attendance-flow.shared";
 
 export type Tag = { label: string; status: "danger" | "warn" };
 
@@ -9,6 +18,8 @@ export type FilaItem = {
   id: string;
   patientId: string | null;
   codigo: string;
+  /** Numeração de atendimento (ficha): 6 dígitos, única por clínica. */
+  atendimentoCodigo: string | null;
   paciente: string;
   hora: string;
   especialidade: string;
@@ -104,6 +115,7 @@ const MOCK: FilaItem[] = [
     id: "mock-1",
     patientId: "mock-p1",
     codigo: "A001",
+    atendimentoCodigo: "100001",
     paciente: "Maria Silva Santos",
     hora: "08:00",
     especialidade: "Cardiologia",
@@ -117,6 +129,7 @@ const MOCK: FilaItem[] = [
     id: "mock-2",
     patientId: "mock-p2",
     codigo: "A002",
+    atendimentoCodigo: "100002",
     paciente: "João Pedro Oliveira",
     hora: "08:15",
     especialidade: "Cardiologia",
@@ -131,6 +144,7 @@ const MOCK: FilaItem[] = [
     id: "mock-3",
     patientId: "mock-p3",
     codigo: "P001",
+    atendimentoCodigo: "100003",
     paciente: "Ana Paula Costa",
     hora: "08:20",
     especialidade: "Cardiologia",
@@ -145,6 +159,7 @@ const MOCK: FilaItem[] = [
     id: "mock-4",
     patientId: "mock-p4",
     codigo: "A003",
+    atendimentoCodigo: "100004",
     paciente: "Roberto Carlos Lima",
     hora: "08:30",
     especialidade: "Cardiologia",
@@ -177,7 +192,7 @@ export async function listQueue(opts?: {
   let query = supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, patient_name, priority, specialty, insurance, status, created_at, appointment_id, appointments(starts_at), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, appointment_id, appointments(starts_at), professionals(profiles(full_name))",
     )
     .order("created_at", { ascending: false });
 
@@ -226,6 +241,7 @@ export async function listQueue(opts?: {
       id: r.id as string,
       patientId: (r.patient_id as string | null) ?? null,
       codigo: r.ticket_code ?? "—",
+      atendimentoCodigo: (r.attendance_code as string | null) ?? null,
       paciente: r.patient_name ?? "",
       hora: formatHora(horaFonte),
       especialidade: r.specialty ?? "—",
@@ -247,6 +263,7 @@ const MOCK_AGENDADOS: FilaItem[] = [
     id: "mock-ag-1",
     patientId: "mock-ag-p1",
     codigo: "—",
+    atendimentoCodigo: null,
     paciente: "Beatriz Nogueira Reis",
     hora: "09:00",
     especialidade: "Cardiologia",
@@ -264,6 +281,7 @@ const MOCK_AGENDADOS: FilaItem[] = [
     id: "mock-ag-2",
     patientId: "mock-ag-p2",
     codigo: "—",
+    atendimentoCodigo: null,
     paciente: "Marcos Vinícius Teixeira",
     hora: "09:30",
     especialidade: "Cardiologia",
@@ -279,6 +297,7 @@ const MOCK_AGENDADOS: FilaItem[] = [
     id: "mock-ag-3",
     patientId: "mock-ag-p3",
     codigo: "—",
+    atendimentoCodigo: null,
     paciente: "Helena Castro Dias",
     hora: "10:15",
     especialidade: "Clínica Geral",
@@ -362,6 +381,7 @@ export async function listAgendadosHoje(opts?: {
           id: r.id as string,
           patientId: (r.patient_id as string | null) ?? null,
           codigo: "—",
+    atendimentoCodigo: null,
           paciente: patient?.full_name ?? "—",
           hora: formatHora(r.starts_at as string | null),
           // Agendamento por especialidade (sem profissional): usa appointments.specialty.
@@ -382,4 +402,225 @@ export async function listAgendadosHoje(opts?: {
   } catch {
     return [];
   }
+}
+
+// ── Acompanhamento (linha do tempo por número de atendimento) ─────────
+
+export type AcompEtapaEstado = "feito" | "atual" | "pendente";
+export type AcompEtapa = {
+  chave: "recepcao" | "triagem" | "atendimento";
+  rotulo: string;
+  estado: AcompEtapaEstado;
+  em: string | null;
+};
+export type Acompanhamento = {
+  encontrado: boolean;
+  codigo: string;
+  paciente: string | null;
+  /** Senha (ticket_code). */
+  senha: string | null;
+  /** Rótulo legível do status atual. */
+  statusAtual: string | null;
+  /** Rótulo da próxima etapa, ou "Finalizado"/null. */
+  proximoPasso: string | null;
+  /** Onde o paciente está registrado agora (legível). */
+  ondeRegistrado: string | null;
+  etapas: AcompEtapa[];
+};
+
+/** Rótulo legível de cada etapa canônica. */
+const STAGE_ROTULO: Record<FlowStage, string> = {
+  recepcao: "Recepção",
+  triagem: "Triagem",
+  atendimento: "Atendimento",
+};
+
+/** Acompanhamento vazio (não encontrado). */
+function acompVazio(codigo: string): Acompanhamento {
+  return {
+    encontrado: false,
+    codigo,
+    paciente: null,
+    senha: null,
+    statusAtual: null,
+    proximoPasso: null,
+    ondeRegistrado: null,
+    etapas: [],
+  };
+}
+
+/**
+ * Monta a linha do tempo (recepção → [triagem] → atendimento) de uma entrada da
+ * fila a partir do status atual e dos marcos registrados. Parte pura, reutilizada
+ * pelo caminho real e pelo modo demo.
+ */
+function montarAcompanhamento(args: {
+  codigo: string;
+  paciente: string | null;
+  senha: string | null;
+  status: string;
+  stages: FlowStage[];
+  recepcaoFeita: boolean;
+  triagemFeita: boolean;
+  arrivedAt: string | null;
+  calledAt: string | null;
+  startedAt: string | null;
+}): Acompanhamento {
+  const {
+    codigo,
+    paciente,
+    senha,
+    status,
+    stages,
+    recepcaoFeita,
+    triagemFeita,
+    arrivedAt,
+    calledAt,
+    startedAt,
+  } = args;
+
+  const finalizado = status === "finalizado";
+  const desistiu = status === "desistencia";
+  // Estados terminais não têm etapa "atual" nem próximo passo.
+  const terminal = finalizado || desistiu;
+  const mostrarTriagem = hasTriagem(stages);
+  const etapasChave: FlowStage[] = mostrarTriagem
+    ? ["recepcao", "triagem", "atendimento"]
+    : ["recepcao", "atendimento"];
+
+  // Posição da etapa atual (pelo status) na ordem mostrada.
+  const stageAtual = stageForStatus(status); // null p/ agendado/terminal
+  const idxAtual = stageAtual ? etapasChave.indexOf(stageAtual) : 0;
+
+  const marco: Record<FlowStage, boolean> = {
+    recepcao: recepcaoFeita,
+    triagem: triagemFeita,
+    atendimento: finalizado,
+  };
+  const em: Record<FlowStage, string | null> = {
+    recepcao: arrivedAt,
+    triagem: calledAt,
+    atendimento: startedAt,
+  };
+
+  // 1ª passada: define "feito" por marco ou por já ter passado da etapa.
+  const feito = etapasChave.map(
+    (chave, i) => finalizado || marco[chave] || i < idxAtual,
+  );
+  // "atual" = primeira etapa não-feita (só se não finalizado).
+  const idxPrimeiraPendente = feito.findIndex((f) => !f);
+
+  const etapas: AcompEtapa[] = etapasChave.map((chave, i) => {
+    let estado: AcompEtapaEstado;
+    if (feito[i]) estado = "feito";
+    else if (!terminal && i === idxPrimeiraPendente) estado = "atual";
+    else estado = "pendente";
+    return {
+      chave,
+      rotulo: STAGE_ROTULO[chave],
+      estado,
+      em: estado === "pendente" ? null : em[chave],
+    };
+  });
+
+  // Próximo passo (rótulo) a partir do status atual.
+  let proximoPasso: string | null;
+  if (terminal) {
+    proximoPasso = null;
+  } else {
+    const next = nextStatus(status, stages);
+    proximoPasso = next ? mapStatus(next).label : "Finalizado";
+  }
+
+  // Onde está registrado agora (legível).
+  const etapaAtual = etapas.find((e) => e.estado === "atual");
+  const ondeRegistrado = finalizado
+    ? "Prontuário do paciente"
+    : desistiu
+      ? "Atendimento encerrado (desistência)"
+      : etapaAtual?.rotulo ?? STAGE_ROTULO.recepcao;
+
+  return {
+    encontrado: true,
+    codigo,
+    paciente,
+    senha,
+    statusAtual: mapStatus(status).label,
+    proximoPasso,
+    ondeRegistrado,
+    etapas,
+  };
+}
+
+/**
+ * Acompanhamento do paciente pelo NÚMERO DE ATENDIMENTO (ficha). Busca a entrada
+ * na fila pelo `attendance_code` na clínica ativa (RLS) e monta a linha do tempo
+ * recepção → [triagem] → atendimento, com base no status e nos marcos registrados
+ * (attendance_records / triage_records). Não expõe PII além do nome.
+ */
+export async function getAcompanhamento(
+  codigo: string,
+): Promise<Acompanhamento> {
+  const code = codigo.trim();
+  if (!code) return acompVazio(codigo);
+
+  if (isDemoMode()) {
+    const item = MOCK.find((m) => m.atendimentoCodigo === code);
+    if (!item) return acompVazio(code);
+    return montarAcompanhamento({
+      codigo: code,
+      paciente: item.paciente,
+      senha: item.codigo,
+      status: item.statusRaw,
+      stages: DEFAULT_STAGES,
+      recepcaoFeita: item.statusRaw !== "aguardando",
+      triagemFeita: false,
+      arrivedAt: null,
+      calledAt: null,
+      startedAt: null,
+    });
+  }
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+
+  const { data: entry, error } = await supabase
+    .from("queue_entries")
+    .select(
+      "id, attendance_code, ticket_code, patient_name, status, arrived_at, called_at, started_at",
+    )
+    .eq("clinic_id", clinicId)
+    .eq("attendance_code", code)
+    .maybeSingle();
+
+  if (error || !entry) return acompVazio(code);
+
+  const queueEntryId = entry.id as string;
+
+  // Marcos: recepção (attendance_records) e triagem (triage_records) por entry.
+  const [{ count: recCount }, { count: triCount }] = await Promise.all([
+    supabase
+      .from("attendance_records")
+      .select("id", { count: "exact", head: true })
+      .eq("queue_entry_id", queueEntryId),
+    supabase
+      .from("triage_records")
+      .select("id", { count: "exact", head: true })
+      .eq("queue_entry_id", queueEntryId),
+  ]);
+
+  const stages = await getAttendanceFlow();
+
+  return montarAcompanhamento({
+    codigo: code,
+    paciente: (entry.patient_name as string | null) ?? null,
+    senha: (entry.ticket_code as string | null) ?? null,
+    status: (entry.status as string | null) ?? "aguardando",
+    stages,
+    recepcaoFeita: (recCount ?? 0) > 0,
+    triagemFeita: (triCount ?? 0) > 0,
+    arrivedAt: (entry.arrived_at as string | null) ?? null,
+    calledAt: (entry.called_at as string | null) ?? null,
+    startedAt: (entry.started_at as string | null) ?? null,
+  });
 }
