@@ -738,6 +738,54 @@ async function acharPacientePorCpf(
   return found ? (found.id as string) : null;
 }
 
+/**
+ * Busca um paciente da clínica pelo CPF para o fluxo de agendamento avulso:
+ * VALIDA o dígito verificador primeiro e só então procura. Se existir, devolve
+ * os dados para a tela exibir/decidir (reusar o cadastro). Não cria nada.
+ */
+export async function buscarPacientePorCpf(cpf: string): Promise<{
+  ok?: boolean;
+  found?: boolean;
+  patientId?: string;
+  nome?: string;
+  registrationComplete?: boolean;
+  error?: string;
+}> {
+  const so = (cpf ?? "").replace(/\D/g, "");
+  if (so.length !== 11 || !isValidCPF(cpf)) {
+    return { error: "CPF inválido (dígito verificador)." };
+  }
+
+  if (isDemoMode()) return { ok: true, found: false };
+
+  const guard = await requirePacientesAccess();
+  if ("error" in guard) return { error: guard.error };
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("patients")
+    .select("id, cpf, full_name, registration_complete")
+    .eq("clinic_id", clinicId)
+    .or(`cpf.eq.${so},cpf.eq.${formatCpf(so)}`)
+    .limit(10);
+  if (error) return { error: "Não foi possível consultar o CPF." };
+
+  const p = (data ?? []).find(
+    (r) => ((r.cpf as string | null) ?? "").replace(/\D/g, "") === so,
+  );
+  if (!p) return { ok: true, found: false };
+
+  return {
+    ok: true,
+    found: true,
+    patientId: p.id as string,
+    nome: (p.full_name as string | null) ?? "—",
+    registrationComplete: (p.registration_complete as boolean | null) !== false,
+  };
+}
+
 // ── Anexo de prontuário manual (Storage: bucket `prontuarios`) ──────
 const anexoSchema = z.object({
   patientId: z.string().min(1, "Paciente inválido."),
