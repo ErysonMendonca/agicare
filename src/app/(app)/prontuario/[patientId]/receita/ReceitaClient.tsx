@@ -15,6 +15,7 @@ type Clinica = {
 type Paciente = {
   nome: string;
   registro: string;
+  atendimentoCodigo: string | null;
   idade: string;
   convenio: string;
 };
@@ -111,6 +112,7 @@ function montarDocumento(
   <div class="pac">
     <span><span class="label">Paciente:</span> <strong>${esc(paciente.nome)}</strong></span>
     <span><span class="label">Registro:</span> ${esc(limpo(paciente.registro) || "—")}</span>
+    <span><span class="label">Atendimento:</span> ${paciente.atendimentoCodigo ? "#" + esc(paciente.atendimentoCodigo) : "—"}</span>
     <span><span class="label">Idade:</span> ${esc(limpo(paciente.idade) || "—")}</span>
     <span><span class="label">Convênio:</span> ${esc(limpo(paciente.convenio) || "—")}</span>
     <br /><span><span class="label">Data:</span> ${esc(prescricao.dataHora)}</span>
@@ -201,6 +203,10 @@ export function ReceitaClient({
           <p>
             <span className="text-muted">Registro:</span>{" "}
             {limpo(paciente.registro) || "—"}
+          </p>
+          <p>
+            <span className="text-muted">Atendimento:</span>{" "}
+            {paciente.atendimentoCodigo ? `#${paciente.atendimentoCodigo}` : "—"}
           </p>
           <p>
             <span className="text-muted">Idade:</span> {limpo(paciente.idade) || "—"}
