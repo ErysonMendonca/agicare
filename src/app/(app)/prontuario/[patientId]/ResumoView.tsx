@@ -175,16 +175,35 @@ export function ResumoView({ resumo }: { resumo: Resumo }) {
                   </span>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Vital icon={<HeartPulse />} label="Pressão Arterial" value={triagem.pa} tone="text-red-500" />
-                <Vital icon={<Activity />} label="Freq. Cardíaca" value={triagem.fc} tone="text-brand-600" />
-                <Vital icon={<Wind />} label="Freq. Respiratória" value={triagem.fr} tone="text-blue-500" />
-                <Vital icon={<Thermometer />} label="Temperatura" value={triagem.temp} tone="text-orange-500" />
-                <Vital icon={<Weight />} label="Peso" value={triagem.peso} tone="text-purple-600" />
-                <Vital icon={<Ruler />} label="Altura" value={triagem.altura} tone="text-ink" />
-                <Vital icon={<Gauge />} label="Saturação O₂" value={triagem.spo2} tone="text-brand-600" />
-                <Vital icon={<Droplet />} label="Glicemia" value={triagem.glucose} tone="text-red-500" />
-              </div>
+              {/* Registros novos: render genérico a partir do template (label:
+                  value). Registros antigos (sem `data`): cai nos sinais vitais
+                  estruturados de sempre. */}
+              {triagem.data.length > 0 ? (
+                <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+                  {triagem.data
+                    .filter((d) => d.id !== "notes")
+                    .map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-baseline justify-between gap-3 border-b border-line/60 py-1.5 text-sm"
+                    >
+                      <span className="text-muted">{d.label}</span>
+                      <span className="font-medium text-ink">{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Vital icon={<HeartPulse />} label="Pressão Arterial" value={triagem.pa} tone="text-red-500" />
+                  <Vital icon={<Activity />} label="Freq. Cardíaca" value={triagem.fc} tone="text-brand-600" />
+                  <Vital icon={<Wind />} label="Freq. Respiratória" value={triagem.fr} tone="text-blue-500" />
+                  <Vital icon={<Thermometer />} label="Temperatura" value={triagem.temp} tone="text-orange-500" />
+                  <Vital icon={<Weight />} label="Peso" value={triagem.peso} tone="text-purple-600" />
+                  <Vital icon={<Ruler />} label="Altura" value={triagem.altura} tone="text-ink" />
+                  <Vital icon={<Gauge />} label="Saturação O₂" value={triagem.spo2} tone="text-brand-600" />
+                  <Vital icon={<Droplet />} label="Glicemia" value={triagem.glucose} tone="text-red-500" />
+                </div>
+              )}
               {triagem.notes && (
                 <p className="mt-3 text-sm text-muted">
                   <span className="font-medium text-ink">Observações:</span>{" "}
