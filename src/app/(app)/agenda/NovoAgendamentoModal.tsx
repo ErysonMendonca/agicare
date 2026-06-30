@@ -35,7 +35,7 @@ import {
   enviarComprovante,
   type Slot,
 } from "@/lib/actions/appointments";
-import { criarPacienteAvulso } from "@/lib/actions/pacientes";
+import { criarPacienteAvulso, buscarPacientePorCpf } from "@/lib/actions/pacientes";
 import { isValidCPF } from "@/lib/cpf";
 
 const TIPOS = ["Consulta", "Retorno", "Exame", "Procedimento"];
@@ -97,6 +97,35 @@ export function NovoAgendamentoModal({
   // digitados, para não acusar enquanto o usuário ainda digita).
   const avulsoCpfInvalido =
     avulsoCpf.replace(/\D/g, "").length === 11 && !isValidCPF(avulsoCpf);
+
+  // Paciente já cadastrado com o CPF digitado (avulso). Preenchido ao sair do
+  // campo CPF (após validar o dígito): se existir, a tela mostra os dados e o
+  // agendamento reaproveita o cadastro existente.
+  const [pacienteExistente, setPacienteExistente] = useState<{
+    nome: string;
+    registrationComplete: boolean;
+  } | null>(null);
+  const [buscandoCpf, startBuscaCpf] = useTransition();
+
+  function checarCpfExistente() {
+    const so = avulsoCpf.replace(/\D/g, "");
+    // Valida o dígito ANTES de procurar; CPF incompleto/ inválido limpa o aviso.
+    if (so.length !== 11 || !isValidCPF(avulsoCpf)) {
+      setPacienteExistente(null);
+      return;
+    }
+    startBuscaCpf(async () => {
+      const res = await buscarPacientePorCpf(avulsoCpf);
+      setPacienteExistente(
+        res?.found
+          ? {
+              nome: res.nome ?? "—",
+              registrationComplete: res.registrationComplete !== false,
+            }
+          : null,
+      );
+    });
+  }
 
   // QR Code REAL do comprovante (gerado do protocolo, sem rede). Vazio até
   // haver protocolo válido (passo 4).
@@ -167,6 +196,7 @@ export function NovoAgendamentoModal({
     setAvulsoNome("");
     setAvulsoTel("");
     setAvulsoCpf("");
+    setPacienteExistente(null);
   }
 
   function fechar() {
@@ -357,7 +387,11 @@ export function NovoAgendamentoModal({
                   label="CPF"
                   placeholder="000.000.000-00"
                   value={avulsoCpf}
-                  onChange={(e) => setAvulsoCpf(e.target.value)}
+                  onChange={(e) => {
+                    setAvulsoCpf(e.target.value);
+                    setPacienteExistente(null);
+                  }}
+                  onBlur={checarCpfExistente}
                   aria-invalid={avulsoCpfInvalido}
                 />
                 {avulsoCpfInvalido && (
@@ -365,7 +399,27 @@ export function NovoAgendamentoModal({
                     CPF inválido (dígito verificador).
                   </p>
                 )}
+                {buscandoCpf && (
+                  <p className="mt-1 text-xs text-muted">Verificando CPF...</p>
+                )}
               </div>
+
+              {pacienteExistente && (
+                <div className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm">
+                  <Info className="mt-0.5 h-4 w-4 flex-none text-amber-600" />
+                  <div className="text-amber-800">
+                    <p className="font-medium">
+                      Já existe paciente com este CPF: {pacienteExistente.nome}
+                    </p>
+                    <p className="text-xs">
+                      O agendamento usará este cadastro existente
+                      {pacienteExistente.registrationComplete
+                        ? "."
+                        : " (cadastro a completar no check-in)."}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div>

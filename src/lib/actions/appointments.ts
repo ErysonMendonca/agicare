@@ -32,6 +32,24 @@ function toIso(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
 }
 
+/** Fuso da clínica (BR). O servidor pode rodar em UTC; comparar horários de
+ *  parede (wall-clock) neste fuso evita o falso "já passou". */
+const TZ_CLINICA = "America/Sao_Paulo";
+
+/**
+ * O agendamento (`date`+`time`) está no passado em relação ao AGORA do fuso da
+ * clínica? Compara wall-clock vs wall-clock (string ISO "YYYY-MM-DDTHH:mm"), o
+ * que é correto mesmo quando o servidor roda em UTC — antes, `Date.now()` (UTC)
+ * marcava 18:20 como "passado" às 16:00 BRT (servidor 3h à frente).
+ */
+function horarioNoPassado(date: string, time: string): boolean {
+  const agoraLocal = new Date()
+    .toLocaleString("sv-SE", { timeZone: TZ_CLINICA }) // "YYYY-MM-DD HH:mm:ss"
+    .slice(0, 16)
+    .replace(" ", "T"); // "YYYY-MM-DDTHH:mm"
+  return `${date}T${time}` < agoraLocal;
+}
+
 /** Soma minutos a um ISO e devolve novo ISO. */
 function addMinutes(iso: string, minutes: number): string {
   return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString();
@@ -85,7 +103,7 @@ export async function createAppointment(
   const d = parsed.data;
   const startsAt = toIso(d.date, d.time);
   // Não permite agendar no passado (vale tanto no demo quanto no real).
-  if (new Date(startsAt).getTime() < Date.now()) {
+  if (horarioNoPassado(d.date, d.time)) {
     return { error: "Não é possível agendar em um horário que já passou." };
   }
   const endsAt = addMinutes(startsAt, d.slot_minutes);
@@ -162,7 +180,7 @@ export async function remarcarAppointment(
   const d = parsed.data;
   const startsAt = toIso(d.date, d.time);
   // Não permite remarcar para um horário que já passou.
-  if (new Date(startsAt).getTime() < Date.now()) {
+  if (horarioNoPassado(d.date, d.time)) {
     return { error: "Não é possível remarcar para um horário que já passou." };
   }
   return updateAppointment(d.id, {

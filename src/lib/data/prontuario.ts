@@ -415,7 +415,7 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
   // o CPF. Sem entrada na fila (paciente fora de atendimento) → "—".
   const { data: ultimaEntrada } = await supabase
     .from("queue_entries")
-    .select("ticket_code, attendance_code")
+    .select("ticket_code, attendance_code, insurance")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -472,7 +472,13 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
       nascimento: fmtData(p.birth_date as string | null),
       genero: GENERO[genero] ?? (genero || "—"),
       nomeMae: (p.mother_name as string | null) ?? "—",
-      convenio: (p.convenio as string | null) ?? "—",
+      // Convênio do cadastro; se vazio (ex.: paciente avulso), cai no convênio
+      // do último atendimento (queue_entries.insurance) para a receita não ficar
+      // sem convênio.
+      convenio:
+        (p.convenio as string | null) ||
+        (ultimaEntrada?.insurance as string | null) ||
+        "—",
       manualRecord: (p.manual_record as string | null) ?? null,
       manualRecordPath: (p.manual_record_path as string | null) ?? null,
       manualRecordName: (p.manual_record_name as string | null) ?? null,
