@@ -30,6 +30,11 @@ import {
   type FlowStage,
 } from "@/lib/data/attendance-flow.shared";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options";
+import {
+  fallbackTriageTemplate,
+  type TriageTemplate,
+} from "@/lib/data/triage-templates.shared";
+import { chaveEspecialidade } from "@/lib/clinico/anamnese-config";
 import { AcoesPacienteModal } from "./AcoesPacienteModal";
 import { TriagemModal } from "./TriagemModal";
 import { DadosAtendimentoModal } from "./DadosAtendimentoModal";
@@ -105,6 +110,7 @@ export function FilaClient({
   agendados = [],
   stages = DEFAULT_STAGES,
   attendanceOptions,
+  triageTemplates = [],
   kpis,
   dataSelecionada,
   isHoje = true,
@@ -115,6 +121,8 @@ export function FilaClient({
   agendados?: FilaItem[];
   stages?: FlowStage[];
   attendanceOptions?: AttendanceOptionsByCategory;
+  /** Modelos de triagem por especialidade (gestor pode customizar). */
+  triageTemplates?: TriageTemplate[];
   kpis?: {
     aguardando: number;
     chamados: number;
@@ -135,6 +143,22 @@ export function FilaClient({
 
   const [selected, setSelected] = useState<FilaItem | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
+
+  // Modelo de triagem do paciente selecionado: casa a especialidade do item com
+  // os templates da clínica (chave normalizada). Sem match → "Geral" ou fallback.
+  const triageTemplate = useMemo<TriageTemplate>(() => {
+    const especialidade = selected?.especialidade ?? null;
+    const chave = chaveEspecialidade(especialidade);
+    const match = triageTemplates.find(
+      (t) => chaveEspecialidade(t.specialty) === chave,
+    );
+    return (
+      match ??
+      triageTemplates.find((t) => t.specialty === "Geral") ??
+      triageTemplates[0] ??
+      fallbackTriageTemplate(especialidade ?? "Geral")
+    );
+  }, [selected, triageTemplates]);
 
   // Check-in (totem/recepção)
   const [checkInAlvo, setCheckInAlvo] = useState<FilaItem | null>(null);
@@ -517,6 +541,7 @@ export function FilaClient({
           />
           <TriagemModal
             item={selected}
+            template={triageTemplate}
             open={modal === "triagem"}
             onClose={fechar}
             onStatusChange={onStatusChange}

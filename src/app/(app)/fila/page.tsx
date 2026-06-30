@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { listQueue, listAgendadosHoje } from "@/lib/data/queue";
 import { getAttendanceFlow } from "@/lib/data/attendance-flow";
 import { listAttendanceOptions } from "@/lib/data/attendance-options";
+import { listTriageTemplates } from "@/lib/data/triage-templates";
 import { requireView } from "@/lib/permissions";
 import { getRole } from "@/lib/auth";
 import { FilaClient } from "./FilaClient";
@@ -35,13 +36,15 @@ export default async function FilaPage({
   const dataSelecionada = todoPeriodo ? "" : dataParam || hoje;
   const isHoje = !todoPeriodo && dataSelecionada === hoje;
 
-  const [fila, agendados, stages, attendanceOptions] = await Promise.all([
-    listQueue(todoPeriodo ? {} : { date: dataSelecionada }),
-    // "Aguardando chegada" só faz sentido para o dia de hoje.
-    isHoje ? listAgendadosHoje() : Promise.resolve([]),
-    getAttendanceFlow(),
-    listAttendanceOptions(),
-  ]);
+  const [fila, agendados, stages, attendanceOptions, triageTemplates] =
+    await Promise.all([
+      listQueue(todoPeriodo ? {} : { date: dataSelecionada }),
+      // "Aguardando chegada" só faz sentido para o dia de hoje.
+      isHoje ? listAgendadosHoje() : Promise.resolve([]),
+      getAttendanceFlow(),
+      listAttendanceOptions(),
+      listTriageTemplates(),
+    ]);
 
   const aguardando = fila.filter((i) => i.status.label === "Aguardando").length;
   const chamados = fila.filter((i) => i.status.label === "Chamado").length;
@@ -62,6 +65,7 @@ export default async function FilaPage({
         agendados={agendados}
         stages={stages}
         attendanceOptions={attendanceOptions}
+        triageTemplates={triageTemplates}
         kpis={{ aguardando, chamados, emAtendimento, total }}
         dataSelecionada={dataSelecionada}
         isHoje={isHoje}

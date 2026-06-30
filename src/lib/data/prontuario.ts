@@ -40,6 +40,9 @@ export type RiscoTriagem =
   | "laranja"
   | "vermelho";
 
+/** Resposta denormalizada de um campo configurável da triagem. */
+export type TriagemDataItem = { id: string; label: string; value: string };
+
 /** Triagem do paciente: sinais vitais aferidos + classificação de risco. */
 export type Triagem = {
   recordedAt: string;
@@ -53,6 +56,8 @@ export type Triagem = {
   glucose: string;
   riskLevel: RiscoTriagem | null;
   notes: string | null;
+  /** Respostas configuráveis (template) — vazio em registros antigos. */
+  data: TriagemDataItem[];
 } | null;
 
 export type Evolucao = {
@@ -246,6 +251,7 @@ const DEMO_RESUMO: Resumo = {
     glucose: "98 mg/dL",
     riskLevel: "amarelo",
     notes: "Dor torácica leve à entrada; classificada como urgente.",
+    data: [],
   },
   evolucoes: [
     {
@@ -445,6 +451,15 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
         glucose: t.glucose ? `${t.glucose} mg/dL` : "—",
         riskLevel: (t.risk_level as RiscoTriagem | null) ?? null,
         notes: (t.notes as string | null) ?? null,
+        data: Array.isArray(t.data)
+          ? (t.data as unknown[]).filter(
+              (it): it is TriagemDataItem =>
+                !!it &&
+                typeof it === "object" &&
+                typeof (it as TriagemDataItem).label === "string" &&
+                typeof (it as TriagemDataItem).value === "string",
+            )
+          : [],
       }
     : null;
 

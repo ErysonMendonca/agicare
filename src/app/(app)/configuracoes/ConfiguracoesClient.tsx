@@ -42,8 +42,10 @@ import type { ClinicSettings } from "@/lib/data/settings";
 import type { FlowStage } from "@/lib/data/attendance-flow.shared";
 import { FluxoAtendimento } from "./FluxoAtendimento";
 import type { AnamneseTemplate } from "@/lib/data/anamnese-templates.shared";
+import type { TriageTemplate } from "@/lib/data/triage-templates.shared";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 import { AnamneseBuilder } from "./AnamneseBuilder";
+import { TriagemBuilder } from "./TriagemBuilder";
 import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
 
 const BASE_TABS = [
@@ -56,25 +58,33 @@ const BASE_TABS = [
   "Anamnese",
 ] as const;
 
+const TRIAGEM_TAB = "Triagem";
 const ATENDIMENTO_TAB = "Dados de Atendimento";
 
-type Tab = (typeof BASE_TABS)[number] | typeof ATENDIMENTO_TAB;
+type Tab =
+  | (typeof BASE_TABS)[number]
+  | typeof TRIAGEM_TAB
+  | typeof ATENDIMENTO_TAB;
 
 export function ConfiguracoesClient({
   settings,
   stages,
   anamneseTemplates,
+  triageTemplates,
   attendanceOptions,
   isGestor,
 }: {
   settings: ClinicSettings;
   stages: FlowStage[];
   anamneseTemplates: AnamneseTemplate[];
+  triageTemplates: TriageTemplate[];
   attendanceOptions: AttendanceOptionsByCategory;
   isGestor: boolean;
 }) {
-  // "Dados de Atendimento" é uma aba extra só para gestor.
-  const tabs: Tab[] = isGestor ? [...BASE_TABS, ATENDIMENTO_TAB] : [...BASE_TABS];
+  // "Triagem" e "Dados de Atendimento" são abas extras só para gestor.
+  const tabs: Tab[] = isGestor
+    ? [...BASE_TABS, TRIAGEM_TAB, ATENDIMENTO_TAB]
+    : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
     salvarConfiguracoes,
@@ -518,6 +528,12 @@ export function ConfiguracoesClient({
           por isso vive fora do form de configurações. */}
       {tabAtiva === "Anamnese" && (
         <AnamneseBuilder templates={anamneseTemplates} />
+      )}
+
+      {/* Construtor de triagem — salvamento próprio (Server Action dedicada),
+          gestor-only, fora do form de configurações. */}
+      {isGestor && tabAtiva === TRIAGEM_TAB && (
+        <TriagemBuilder templates={triageTemplates} />
       )}
 
       {/* Opções da ficha de atendimento — editor próprio (gestor-only),
