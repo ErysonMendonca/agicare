@@ -293,7 +293,12 @@ export function FilaClient({
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
                         <span className="flex items-center gap-1.5">
-                          <Clock className="h-4 w-4" /> {item.hora}
+                          <CalendarClock className="h-4 w-4" /> Agendado:{" "}
+                          {item.agendamentoEm ?? item.hora}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-4 w-4" /> Entrada:{" "}
+                          {item.entradaEm ?? "—"}
                         </span>
                         <span className="flex items-center gap-1.5">
                           <Stethoscope className="h-4 w-4" />{" "}
@@ -456,7 +461,11 @@ export function FilaClient({
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-muted">
                       <span className="flex items-center gap-1.5">
-                        <Clock className="h-4 w-4" /> {item.hora}
+                        <CalendarClock className="h-4 w-4" /> Agendado:{" "}
+                        {item.agendamentoEm ?? item.hora}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-4 w-4" /> Entrada: {item.entradaEm ?? "—"}
                       </span>
                       <span className="flex items-center gap-1.5">
                         <Stethoscope className="h-4 w-4" /> {item.especialidade}
