@@ -141,6 +141,18 @@ export function CadastroProdutoModal({
                 label="Registro ANVISA"
                 placeholder="Ex.: 1.0000.0000.000-0"
               />
+              <Input
+                id="pr-ncm"
+                name="ncm"
+                label="NCM"
+                placeholder="Ex.: 3004.90.69"
+              />
+              <Input
+                id="pr-cest"
+                name="cest"
+                label="CEST"
+                placeholder="Ex.: 13.001.00"
+              />
             </div>
           </fieldset>
 
@@ -211,6 +223,8 @@ export function CadastroProdutoModal({
               <Input id="pr-minimo" name="min_quantity" label="Estoque mínimo" type="number" min={0} step="0.01" defaultValue={0} />
               <Input id="pr-maximo" name="max_quantity" label="Estoque máximo" type="number" min={0} step="0.01" defaultValue={0} />
               <Input id="pr-local" name="location" label="Localização" placeholder="Ex.: Prateleira A3" />
+              <Input id="pr-lote" name="lot" label="Lote" placeholder="Ex.: ABC1234" />
+              <Input id="pr-validade" name="expiry" label="Validade" type="date" />
             </div>
           </fieldset>
 
