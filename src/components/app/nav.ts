@@ -12,7 +12,6 @@ import {
   BarChart3,
   Settings,
   ShieldCheck,
-  Route,
   type LucideIcon,
 } from "lucide-react";
 import type { ModuleSlug } from "@/lib/permissions.shared";
@@ -46,7 +45,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "dashboard" },
       { label: "Fila de Atendimento", href: "/fila", icon: ListChecks, badge: 6, module: "fila" },
-      { label: "Acompanhamento", href: "/acompanhamento", icon: Route, module: "fila", hideCounter: true },
       { label: "Pacientes", href: "/pacientes", icon: Users, module: "pacientes" },
       { label: "Agenda", href: "/agenda", icon: CalendarDays, module: "agenda" },
       { label: "Prontuário", href: "/prontuario", icon: FileText, module: "prontuario" },
