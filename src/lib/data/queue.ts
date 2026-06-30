@@ -13,6 +13,10 @@ export type FilaItem = {
   atendimentoCodigo: string | null;
   paciente: string;
   hora: string;
+  /** Data+hora do horário marcado do agendamento ("dd/MM HH:MM"); "—" se avulso. */
+  agendamentoEm?: string;
+  /** Data+hora da entrada na fila (chegada/check-in: arrived_at ?? created_at). */
+  entradaEm?: string;
   especialidade: string;
   medico: string;
   convenio: string;
@@ -100,6 +104,16 @@ function formatHora(createdAt: string | null): string {
   });
 }
 
+/** Formata um timestamp em "dd/MM HH:MM" (data + hora). "—" se vazio/ inválido. */
+function formatDataHora(ts: string | null): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  const data = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${data} ${hora}`;
+}
+
 /** Mock usado no modo demo (espelha o Figma). */
 const MOCK: FilaItem[] = [
   {
@@ -183,7 +197,7 @@ export async function listQueue(opts?: {
   let query = supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, appointment_id, appointments(starts_at), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at), professionals(profiles(full_name))",
     )
     .order("created_at", { ascending: false });
 
@@ -235,6 +249,14 @@ export async function listQueue(opts?: {
       atendimentoCodigo: (r.attendance_code as string | null) ?? null,
       paciente: r.patient_name ?? "",
       hora: formatHora(horaFonte),
+      // Agendamento: horário marcado (starts_at). Entrada: chegada na fila
+      // (arrived_at) ou, na falta, o momento do check-in (created_at).
+      agendamentoEm: formatDataHora(
+        (agendamento?.starts_at as string | null) ?? null,
+      ),
+      entradaEm: formatDataHora(
+        (r.arrived_at as string | null) ?? (r.created_at as string | null),
+      ),
       especialidade: r.specialty ?? "—",
       medico: profile?.full_name ?? "—",
       convenio: r.insurance ?? "—",
@@ -375,6 +397,9 @@ export async function listAgendadosHoje(opts?: {
     atendimentoCodigo: null,
           paciente: patient?.full_name ?? "—",
           hora: formatHora(r.starts_at as string | null),
+          // Agendado ainda não fez check-in → sem horário de entrada.
+          agendamentoEm: formatDataHora(r.starts_at as string | null),
+          entradaEm: "—",
           // Agendamento por especialidade (sem profissional): usa appointments.specialty.
           especialidade:
             professional?.specialty ?? (r.specialty as string | null) ?? "—",
