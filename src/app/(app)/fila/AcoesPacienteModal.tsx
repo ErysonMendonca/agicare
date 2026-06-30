@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Monitor, UserCheck, Eye, UserX, Stethoscope } from "lucide-react";
+import { Monitor, UserCheck, Eye, UserX, Stethoscope, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { type FilaItem } from "@/lib/data/queue";
@@ -17,7 +17,10 @@ import {
   atenderRecepcao,
 } from "@/lib/actions/queue";
 import { PacienteResumo } from "./PacienteResumo";
+import { FichaImpressao } from "./FichaImpressao";
 import { tocarBeep } from "./sound";
+
+type Prioridade = "normal" | "preferencial" | "urgente";
 
 const TERMINAIS = ["finalizado", "desistencia"];
 
@@ -114,6 +117,13 @@ export function AcoesPacienteModal({
     });
   }
 
+  // Reimprime a ficha de atendimento (senha + nº de atendimento) do paciente já
+  // na fila, sem refazer o check-in. Os dados já vêm no FilaItem carregado.
+  const podeReimprimir = !!item.codigo;
+  function handleReimprimir() {
+    window.print();
+  }
+
   function handleVisualizar() {
     onClose();
     // Abre o resumo 360º do paciente (sem alterar o status da fila).
@@ -129,6 +139,15 @@ export function AcoesPacienteModal({
       subtitle="Selecione a ação que deseja realizar para este paciente"
     >
       <PacienteResumo item={item} />
+
+      {/* Ficha oculta na tela (visível só na impressão) para permitir reimpressão. */}
+      {podeReimprimir && (
+        <FichaImpressao
+          senha={item.codigo}
+          item={item}
+          prioridade={(item.priorityRaw as Prioridade) ?? "normal"}
+        />
+      )}
 
       <div className="mt-5 grid grid-cols-2 gap-3">
         <ActionButton
@@ -167,6 +186,13 @@ export function AcoesPacienteModal({
           icon={<UserX className="h-5 w-5" />}
           label="Desistência"
           className="border border-red-300 bg-white text-red-600 hover:bg-red-50"
+        />
+        <ActionButton
+          onClick={handleReimprimir}
+          disabled={pending || !podeReimprimir}
+          icon={<Printer className="h-5 w-5" />}
+          label="Reimprimir Ficha"
+          className="border border-line bg-white text-ink hover:bg-muted-surface"
         />
       </div>
     </Modal>
