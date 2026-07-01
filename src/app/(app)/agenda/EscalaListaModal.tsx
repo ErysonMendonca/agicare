@@ -30,6 +30,21 @@ const DIAS_LABEL_LONGO: Record<number, string> = {
 };
 
 /** Resumo legível dos dias da semana (ordem Seg→Dom). */
+/** "YYYY-MM-DD" → "dd/MM/yyyy" (vazio → ""). */
+function fmtData(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return y && m && d ? `${d}/${m}/${y}` : "";
+}
+
+/** Resumo da vigência (data inicial/final) da escala. */
+function resumoVigencia(startDate: string, endDate: string): string {
+  const ini = fmtData(startDate);
+  const fim = fmtData(endDate);
+  if (!ini && !fim) return "Sem período definido";
+  return `${ini || "—"} até ${fim || "—"}`;
+}
+
 function resumoDias(weekdays: number[]): string {
   const ordem = [1, 2, 3, 4, 5, 6, 0];
   return ordem
@@ -189,6 +204,10 @@ export function EscalaListaModal({
                 <p className="mt-0.5 text-xs text-muted">
                   {resumoDias(e.weekdays) || "Sem dias"} · {e.startTime}–{e.endTime}{" "}
                   · {e.slotMinutes} min
+                </p>
+                <p className="mt-0.5 flex items-center gap-1 text-xs text-muted">
+                  <CalendarRange className="h-3.5 w-3.5 shrink-0" />
+                  Vigência: {resumoVigencia(e.startDate, e.endDate)}
                 </p>
               </div>
               <Button
