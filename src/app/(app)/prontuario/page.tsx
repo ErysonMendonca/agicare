@@ -3,6 +3,7 @@ import {
   Clock,
   Activity,
   CheckCircle2,
+  CalendarClock,
   Stethoscope,
   Search,
   X,
@@ -16,7 +17,7 @@ import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { FilaClient } from "@/app/(app)/fila/FilaClient";
-import { listQueue } from "@/lib/data/queue";
+import { listQueue, listAgendadosHoje } from "@/lib/data/queue";
 import { getMySpecialty, listAtendimentosPorData } from "@/lib/data/prontuario";
 import { getCurrentUser } from "@/lib/auth";
 import { requireView } from "@/lib/permissions";
@@ -77,6 +78,25 @@ export default async function ProntuarioPage({
   if (reg) filtrada = filtrada.filter((i) => i.codigo.toLowerCase().includes(reg));
   if (pac)
     filtrada = filtrada.filter((i) => i.paciente.toLowerCase().includes(pac));
+
+  // "Agendados": pacientes com agendamento de HOJE que ainda não chegaram
+  // (status agendado/confirmado, sem check-in) — só faz sentido na visão de
+  // hoje (no histórico não há agenda futura a contabilizar).
+  let agendadosBase = isHistorico
+    ? []
+    : await listAgendadosHoje({ specialty: queueSpecialty });
+  if (souProfissional && myName) {
+    agendadosBase = agendadosBase.filter((i) => i.medico === myName);
+  }
+  if (reg)
+    agendadosBase = agendadosBase.filter((i) =>
+      i.codigo.toLowerCase().includes(reg),
+    );
+  if (pac)
+    agendadosBase = agendadosBase.filter((i) =>
+      i.paciente.toLowerCase().includes(pac),
+    );
+  const agendados = agendadosBase.length;
 
   const todos = filtrada.length;
   const aguardando = filtrada.filter(
@@ -174,9 +194,12 @@ export default async function ProntuarioPage({
       </Card>
 
       {/* KPIs */}
-      <Stagger className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Stagger className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <FadeInUp>
           <StatCard icon={<FileText className="h-5 w-5" />} value={String(todos)} label="Todos" tone="neutral" />
+        </FadeInUp>
+        <FadeInUp>
+          <StatCard icon={<CalendarClock className="h-5 w-5" />} value={String(agendados)} label="Agendados" tone="info" />
         </FadeInUp>
         <FadeInUp>
           <StatCard icon={<Clock className="h-5 w-5" />} value={String(aguardando)} label="Aguardando Atendimento" tone="info" />

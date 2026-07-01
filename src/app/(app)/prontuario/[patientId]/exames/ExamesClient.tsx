@@ -9,6 +9,7 @@ import {
   Scan,
   CheckCircle2,
   RotateCcw,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
@@ -25,6 +26,7 @@ import {
 import {
   criarPedidoExame,
   atualizarStatusExame,
+  enviarResultadoExameEmail,
 } from "@/lib/actions/exames";
 
 const CATEGORIA_LABEL: Record<ExamCategoria, string> = {
@@ -51,6 +53,7 @@ export function ExamesClient({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [updating, setUpdating] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState<string | null>(null);
   const [form, setForm] = useState(false);
 
   const [tuss, setTuss] = useState(EXAMES_TUSS[0]?.tuss ?? "");
@@ -86,6 +89,22 @@ export function ExamesClient({
         router.refresh();
       } else {
         toast.error(res?.error ?? "Não foi possível solicitar o exame.");
+      }
+    });
+  }
+
+  function enviarResultado(e: ExamOrder) {
+    setEnviando(e.id);
+    startTransition(async () => {
+      const res = await enviarResultadoExameEmail({
+        examId: e.id,
+        patientId,
+      });
+      setEnviando(null);
+      if (res?.ok) {
+        toast.success("Resultado enviado por e-mail ao paciente.");
+      } else {
+        toast.error(res?.error ?? "Não foi possível enviar o resultado.");
       }
     });
   }
@@ -158,22 +177,37 @@ export function ExamesClient({
                       )}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant={e.status === "concluido" ? "ghost" : "outline"}
-                    disabled={pending && updating === e.id}
-                    onClick={() => alternarStatus(e)}
-                  >
-                    {e.status === "concluido" ? (
-                      <>
-                        <RotateCcw className="h-4 w-4" /> Reabrir
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="h-4 w-4" /> Marcar concluído
-                      </>
+                  <div className="flex flex-none flex-wrap items-center gap-2">
+                    {e.status === "concluido" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={pending && enviando === e.id}
+                        onClick={() => enviarResultado(e)}
+                      >
+                        <Mail className="h-4 w-4" />
+                        {pending && enviando === e.id
+                          ? "Enviando…"
+                          : "Enviar resultado por e-mail"}
+                      </Button>
                     )}
-                  </Button>
+                    <Button
+                      size="sm"
+                      variant={e.status === "concluido" ? "ghost" : "outline"}
+                      disabled={pending && updating === e.id}
+                      onClick={() => alternarStatus(e)}
+                    >
+                      {e.status === "concluido" ? (
+                        <>
+                          <RotateCcw className="h-4 w-4" /> Reabrir
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" /> Marcar concluído
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </Card>
             </FadeInUp>
