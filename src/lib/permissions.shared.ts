@@ -77,13 +77,23 @@ export const MODULE_LABELS: Record<ModuleSlug, string> = {
  * Regra do seed:
  *  - admin    → todos os módulos can_view=true
  *  - paciente → todos false (não usa o painel interno)
- *  - medico/recepcao → tudo true, exceto 'procedimentos' e 'permissoes'
+ *  - medico   → tudo true, exceto 'procedimentos', 'permissoes' e 'fila'
+ *               (o médico vê seus pacientes na tela de PRONTUÁRIO, não na Fila)
+ *  - recepcao → tudo true, exceto 'procedimentos' e 'permissoes'
  *  - scope sempre 'all' (comportamento vigente).
  */
 export function defaultCanView(role: Role, module: ModuleSlug): boolean {
   if (role === "admin") return true;
   if (role === "paciente") return false;
-  // medico/recepcao
+  // O médico não acessa a Fila de Atendimento — a lista dos pacientes dele
+  // (mesma regra de especialidade/atribuição) fica na tela de Prontuário.
+  if (role === "medico")
+    return (
+      module !== "procedimentos" &&
+      module !== "permissoes" &&
+      module !== "fila"
+    );
+  // recepcao
   return module !== "procedimentos" && module !== "permissoes";
 }
 
