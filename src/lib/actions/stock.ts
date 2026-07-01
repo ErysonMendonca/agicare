@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
-import { requireClinico } from "@/lib/auth";
+import { requireClinico, isGestor } from "@/lib/auth";
 import {
   listItensPrescritosPaciente,
   type ItemPrescrito,
@@ -97,6 +97,74 @@ export async function createStockProduct(
     active: d.active !== "false",
     notes: d.notes || null,
   });
+
+  if (error) return { error: error.message };
+
+  revalidateEstoque();
+  return { ok: true };
+}
+
+// ── Edição de produto ───────────────────────────────────────────────
+// Espelha o cadastro-mestre, mas EDITA apenas os campos que a listagem
+// (`ProdutoEstoque`) expõe para pré-preenchimento — não tocamos colunas que a
+// UI de edição não mostra (ex.: EAN, ANVISA, princípio ativo), evitando
+// sobrescrevê-las com vazio. `code`/`code_number` NÃO são editáveis.
+const produtoUpdateSchema = z.object({
+  id: z.string().min(1, "Produto inválido."),
+  name: z.string().trim().min(2, "Nome muito curto."),
+  category: z.string().trim().optional().or(z.literal("")),
+  unit: z.string().trim().optional().or(z.literal("")),
+  quantity: numeroOpcional,
+  min_quantity: numeroOpcional,
+  lot: z.string().trim().optional().or(z.literal("")),
+  location: z.string().trim().optional().or(z.literal("")),
+  cost: numeroOpcional,
+  price: numeroOpcional,
+  active: z.string().optional(),
+});
+
+/**
+ * Edita um produto de estoque existente (UPDATE por id + clinic_id/RLS). Custo
+ * e preço só são gravados quando o usuário é gestor (mesmo gate do cadastro),
+ * para que um não-gestor não zere os valores financeiros ao salvar.
+ */
+export async function updateStockProduct(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = produtoUpdateSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+
+  if (isDemoMode()) return { ok: true };
+
+  const d = parsed.data;
+  const clinicId = await requireClinic();
+  const gestor = await isGestor();
+  const supabase = await createClient();
+
+  const patch: Record<string, unknown> = {
+    name: d.name,
+    category: d.category || null,
+    unit: d.unit || "un",
+    quantity: d.quantity,
+    min_quantity: d.min_quantity,
+    lot: d.lot || null,
+    location: d.location || null,
+    active: d.active !== "false",
+  };
+  // Financeiro só quando gestor (não-gestor nem vê os campos no form).
+  if (gestor) {
+    patch.cost = d.cost;
+    patch.price = d.price;
+  }
+
+  const { error } = await supabase
+    .from("stock_products")
+    .update(patch)
+    .eq("id", d.id)
+    .eq("clinic_id", clinicId);
 
   if (error) return { error: error.message };
 

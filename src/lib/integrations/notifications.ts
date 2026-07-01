@@ -86,6 +86,17 @@ const TEMPLATES: Record<string, TemplateFn> = {
       (p.profissional ? `Profissional: ${str(p.profissional)}\n` : '') +
       `Apresente o protocolo (ou o QR Code do comprovante) na recepção.`,
   }),
+  // Resultado de exame concluído (envio ao paciente por e-mail).
+  resultado_exame: (p) => ({
+    assunto: `Resultado do exame ${str(p.exame, '')}`.trim(),
+    corpo:
+      (p.paciente ? `Olá, ${str(p.paciente)}.\n\n` : '') +
+      `O resultado do seu exame está disponível.\n` +
+      `Exame: ${str(p.exame, '—')}\n` +
+      `Status: Concluído\n` +
+      (p.observacoes ? `\nObservações:\n${str(p.observacoes)}\n` : '') +
+      `\nEm caso de dúvidas, procure a sua clínica.`,
+  }),
 }
 
 function render(template: string, payload: Record<string, unknown>): Rendered {

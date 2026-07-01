@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Package, MapPin } from "lucide-react";
+import { Search, Package, MapPin, Pencil } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { type ProdutoEstoque, type Fornecedor } from "@/lib/data/stock";
 import { CadastroProdutoModal } from "./CadastroProdutoModal";
 import { moedaBR } from "./format";
@@ -21,6 +22,7 @@ export function CadastroTab({
 }) {
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("todas");
+  const [editar, setEditar] = useState<ProdutoEstoque | null>(null);
 
   const categorias = useMemo(
     () => Array.from(new Set(produtos.map((p) => p.categoria))).sort(),
@@ -88,12 +90,13 @@ export function CadastroTab({
                 {gestor && <th className="px-5 py-3 font-medium">Custo</th>}
                 {gestor && <th className="px-5 py-3 font-medium">Preço</th>}
                 <th className="px-5 py-3 font-medium">Status</th>
+                <th className="px-5 py-3 text-right font-medium">Ações</th>
               </tr>
             </thead>
             <tbody>
               {filtrados.length === 0 ? (
                 <tr>
-                  <td colSpan={gestor ? 9 : 7} className="px-5 py-10 text-center text-muted">
+                  <td colSpan={gestor ? 10 : 8} className="px-5 py-10 text-center text-muted">
                     <Package className="mx-auto mb-2 h-8 w-8 opacity-50" />
                     Nenhum produto encontrado.
                   </td>
@@ -118,6 +121,16 @@ export function CadastroTab({
                     <td className="px-5 py-3">
                       <Badge status={p.status.tone}>{p.status.label}</Badge>
                     </td>
+                    <td className="px-5 py-3 text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditar(p)}
+                        aria-label={`Editar ${p.produto}`}
+                      >
+                        <Pencil className="h-4 w-4" /> Editar
+                      </Button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -125,6 +138,18 @@ export function CadastroTab({
           </table>
         </div>
       </Card>
+
+      {/* Modal de edição (controlado) — reaproveita o modal de cadastro. */}
+      {editar && (
+        <CadastroProdutoModal
+          key={editar.id}
+          fornecedores={fornecedores}
+          gestor={gestor}
+          produto={editar}
+          open={editar !== null}
+          onClose={() => setEditar(null)}
+        />
+      )}
     </div>
   );
 }

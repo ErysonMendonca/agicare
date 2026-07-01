@@ -8,6 +8,7 @@ import { requireClinico } from "@/lib/auth";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
 import { logAccess } from "@/lib/audit";
+import { enviarNotificacao } from "@/lib/integrations/notifications";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -93,5 +94,74 @@ export async function atualizarStatusExame(
 
   revalidatePath(`/prontuario/${parsed.data.patientId}/exames`);
   revalidatePath(`/prontuario/${parsed.data.patientId}`);
+  return { ok: true };
+}
+
+const enviarResultadoSchema = z.object({
+  examId: z.string().min(1, "Exame inválido."),
+  patientId: z.string().min(1, "Paciente inválido."),
+});
+
+export type EnviarResultadoInput = z.infer<typeof enviarResultadoSchema>;
+
+/**
+ * Envia o RESULTADO de um exame CONCLUÍDO ao e-mail do paciente, reusando o
+ * mesmo dispatcher (`enviarNotificacao` → Resend) do comprovante. Só canal
+ * e-mail. Acesso clínico (LGPD) exigido; escopo de clínica pela RLS.
+ */
+export async function enviarResultadoExameEmail(
+  input: EnviarResultadoInput,
+): Promise<ActionState> {
+  const parsed = enviarResultadoSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  if (isDemoMode()) return { ok: true };
+
+  const guard = await requireClinico();
+  if ("error" in guard) return { error: guard.error };
+
+  const { examId, patientId } = parsed.data;
+  const supabase = await createClient();
+
+  // Exame (deve pertencer ao paciente e estar concluído).
+  const { data: exame, error: exErr } = await supabase
+    .from("exam_orders")
+    .select("id, exam_name, notes, status")
+    .eq("id", examId)
+    .eq("patient_id", patientId)
+    .maybeSingle();
+  if (exErr) return { error: exErr.message };
+  if (!exame) return { error: "Exame não encontrado." };
+  if (exame.status !== "concluido") {
+    return { error: "Só é possível enviar o resultado de exames concluídos." };
+  }
+
+  // E-mail do paciente (escopo de clínica via RLS).
+  const { data: paciente, error: pacErr } = await supabase
+    .from("patients")
+    .select("full_name, email")
+    .eq("id", patientId)
+    .maybeSingle();
+  if (pacErr) return { error: pacErr.message };
+  const email = (paciente?.email as string | null)?.trim();
+  if (!email) return { error: "Paciente sem e-mail cadastrado." };
+
+  const res = await enviarNotificacao({
+    canal: "email",
+    destino: email,
+    template: "resultado_exame",
+    payload: {
+      exame: (exame.exam_name as string | null) ?? "—",
+      observacoes: (exame.notes as string | null) ?? "",
+      paciente: (paciente?.full_name as string | null) ?? "",
+    },
+    patientId,
+  });
+
+  if (res.status === "erro") {
+    return { error: res.error ?? "Falha ao enviar o resultado por e-mail." };
+  }
+
+  await logAccess({ patientId, module: "exames", action: "update" });
   return { ok: true };
 }

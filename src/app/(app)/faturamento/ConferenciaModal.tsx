@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Lock,
   Loader2,
+  QrCode,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 import { EmBreve } from "@/components/ui/EmBreve";
+import { qrToSvg } from "@/lib/integrations/qrcode";
 import { type Evento, type ItemCheckout } from "@/lib/data/billing";
 import { registrarCheckout, carregarItensCheckout } from "./actions";
 
@@ -65,6 +67,9 @@ export function ConferenciaModal({
   const [nfPrazos, setNfPrazos] = useState("");
   const [itens, setItens] = useState<ItemCheckout[]>([]);
   const [carregando, setCarregando] = useState(true);
+  // QR PIX de DEMONSTRAÇÃO (sem PSP real). Gerado localmente a partir de um
+  // payload textual simples — não é um BR Code EMV válido para pagamento.
+  const [pixQr, setPixQr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -289,6 +294,51 @@ export function ConferenciaModal({
               A forma de pagamento é registrada no check-out; a cobrança
               eletrônica junto ao PSP será habilitada em breve.
             </p>
+
+            {/* Exemplo/demonstração de cobrança PIX (sem gateway real). */}
+            {pagamento === "pix" && (
+              <div className="mt-1 rounded-xl border border-line p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                    Exemplo / demonstração — sem gateway real
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() =>
+                      setPixQr(
+                        qrToSvg(
+                          `PIX-DEMO|${evento.codigo}|BRL${totalFinal.toFixed(2)}`,
+                          160,
+                        ),
+                      )
+                    }
+                  >
+                    <QrCode className="h-4 w-4" /> Gerar cobrança PIX (exemplo)
+                  </Button>
+                </div>
+                {pixQr && (
+                  <div className="mt-3 flex items-center gap-4">
+                    <span
+                      className="inline-block h-40 w-40 flex-none"
+                      // QR gerado localmente (SVG estático, sem dado externo).
+                      dangerouslySetInnerHTML={{ __html: pixQr }}
+                    />
+                    <div className="text-sm">
+                      <div className="text-xs text-muted">Valor da cobrança</div>
+                      <div className="text-lg font-semibold text-brand-600">
+                        {gestor ? formatBRL(totalFinal) : "—"}
+                      </div>
+                      <p className="mt-1 text-xs text-muted">
+                        Escaneie para simular o pagamento. Este QR é apenas
+                        ilustrativo e não realiza uma transação real.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
         {forma === "convenio" && (
