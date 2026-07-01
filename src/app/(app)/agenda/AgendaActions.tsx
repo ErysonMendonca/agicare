@@ -76,6 +76,7 @@ export function AgendaActions({
         onClose={() => setModal(null)}
         profissionais={profissionais}
         procedimentos={procedimentos}
+        escalas={escalas}
         escalaParaEditar={escalaEdit}
       />
     </>
