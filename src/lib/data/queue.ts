@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
-import { getViewScope, getMyProfessionalId } from "@/lib/permissions";
+import { getMyProfessional } from "@/lib/permissions";
+import { getRole } from "@/lib/auth";
 import { type Status } from "@/components/ui/Badge";
 
 export type Tag = { label: string; status: "danger" | "warn" };
@@ -262,13 +263,26 @@ export async function listQueue(opts?: {
     query = query.gte("created_at", startISO).lt("created_at", endISO);
   }
 
-  // Escopo 'own' (módulo 'fila'): o papel só enxerga as entradas do próprio
-  // profissional. Admin é sempre 'all' (seed) → sem filtro. Sem vínculo de
-  // profissional, não filtra (evita esconder tudo de quem não é profissional).
-  const scope = await getViewScope("fila");
-  if (scope === "own") {
-    const myProfessionalId = await getMyProfessionalId();
-    if (myProfessionalId) query = query.eq("professional_id", myProfessionalId);
+  // Fila do MÉDICO: quem tem vínculo de profissional vê a fila da SUA
+  // especialidade (ou pacientes SEM especialidade, "livres gerais", p/ não sumir
+  // da fila de ninguém) e só os SEM profissional atribuído ou já atribuídos a
+  // ELE (após atender = reivindicar). Admin/recepção (sem vínculo, ou admin
+  // explícito) não filtram — veem a fila inteira.
+  const [me, role] = await Promise.all([getMyProfessional(), getRole()]);
+  if (me && role !== "admin") {
+    const UUID_RE =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    // Especialidade: a dele OU nula. Valor entre aspas (JSON) → seguro no filtro
+    // textual `.or` mesmo com espaços/parênteses/acentos.
+    if (me.specialty) {
+      query = query.or(
+        `specialty.eq.${JSON.stringify(me.specialty)},specialty.is.null`,
+      );
+    }
+    // Só interpola o id no `.or` se for uuid válido (defesa em profundidade).
+    if (UUID_RE.test(me.id)) {
+      query = query.or(`professional_id.is.null,professional_id.eq.${me.id}`);
+    }
   }
 
   const { data, error } = await query;

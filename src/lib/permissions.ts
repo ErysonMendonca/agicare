@@ -133,23 +133,38 @@ export async function getViewScope(module: ModuleSlug): Promise<Scope> {
  * Demo → null (sem filtro). Resiliente a erro → null.
  */
 export const getMyProfessionalId = cache(async (): Promise<string | null> => {
-  if (isDemoMode()) return null;
-
-  const current = await getCurrentUser();
-  if (!current) return null;
-
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("professionals")
-      .select("id")
-      .eq("profile_id", current.userId)
-      .maybeSingle();
-    return (data?.id as string | null) ?? null;
-  } catch {
-    return null;
-  }
+  return (await getMyProfessional())?.id ?? null;
 });
+
+/**
+ * Profissional (id + especialidade) vinculado ao usuário logado. Usado pela fila
+ * do médico: ele vê a fila da SUA especialidade (e só pacientes sem profissional
+ * atribuído ou atribuídos a ele). Demo → null. Resiliente a erro → null.
+ */
+export const getMyProfessional = cache(
+  async (): Promise<{ id: string; specialty: string | null } | null> => {
+    if (isDemoMode()) return null;
+
+    const current = await getCurrentUser();
+    if (!current) return null;
+
+    try {
+      const supabase = await createClient();
+      const { data } = await supabase
+        .from("professionals")
+        .select("id, specialty")
+        .eq("profile_id", current.userId)
+        .maybeSingle();
+      if (!data?.id) return null;
+      return {
+        id: data.id as string,
+        specialty: (data.specialty as string | null) ?? null,
+      };
+    } catch {
+      return null;
+    }
+  },
+);
 
 // ── Guard de rota (Server Component) ─────────────────────────────
 /**
