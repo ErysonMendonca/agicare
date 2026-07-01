@@ -268,6 +268,56 @@ function periodoInvalido(d: { start_date: string; end_date: string }): boolean {
   return d.end_date < d.start_date;
 }
 
+/** "YYYY-MM-DD" → "dd/mm/aaaa" (para mensagens ao usuário). */
+function dataBR(iso: unknown): string {
+  const s = String(iso ?? "").slice(0, 10);
+  const [y, m, d] = s.split("-");
+  return y && m && d ? `${d}/${m}/${y}` : s;
+}
+
+/**
+ * Escala ÚNICA por especialidade: procura uma escala ATIVA da MESMA especialidade
+ * cuja vigência SE SOBREPÕE ao período [start_date, end_date] informado. Ignora a
+ * própria escala (excludeId) na edição. Sobreposição: a.start <= b.end && b.start
+ * <= a.end (datas "YYYY-MM-DD" comparadas como string). RLS escopa por clínica.
+ * Devolve a escala conflitante (code + período) ou null.
+ */
+async function escalaConflitante(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  clinicId: string,
+  specialty: string,
+  start_date: string,
+  end_date: string,
+  excludeId?: string,
+): Promise<{ code: string; start: string; end: string } | null> {
+  const { data } = await supabase
+    .from("schedules")
+    .select("id, code, start_date, end_date")
+    .eq("clinic_id", clinicId) // defesa em profundidade (além da RLS)
+    .eq("specialty", specialty)
+    .eq("active", true);
+
+  const hit = (data ?? []).find((e) => {
+    if (excludeId && e.id === excludeId) return false;
+    const s = String(e.start_date ?? "").slice(0, 10);
+    const en = String(e.end_date ?? "").slice(0, 10);
+    // Escala legada SEM vigência definida não entra no conflito (evita bloquear
+    // tudo e mensagem quebrada). Só conta quando o período está completo.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(en))
+      return false;
+    return s <= end_date && start_date <= en;
+  });
+
+  return hit
+    ? { code: (hit.code as string | null) ?? "escala", start: String(hit.start_date), end: String(hit.end_date) }
+    : null;
+}
+
+/** Mensagem padrão de conflito de escala (mesma especialidade, período sobreposto). */
+function msgConflitoEscala(c: { code: string; start: string; end: string }): string {
+  return `Já existe uma escala ativa desta especialidade no período (${c.code}, de ${dataBR(c.start)} a ${dataBR(c.end)}). Ajuste o período ou desative a escala existente.`;
+}
+
 /**
  * `dateISO` (YYYY-MM-DD) cai dentro da vigência da escala? Limites nulos/vazios
  * = sem fronteira (escalas antigas sem datas seguem sempre válidas).
@@ -356,6 +406,20 @@ export async function createSchedule(
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
+
+  // Escala única por especialidade: bloqueia se já houver uma ativa da mesma
+  // especialidade com vigência sobreposta ao período informado.
+  if (d.specialty) {
+    const conflito = await escalaConflitante(
+      supabase,
+      clinicId,
+      d.specialty,
+      d.start_date,
+      d.end_date,
+    );
+    if (conflito) return { error: msgConflitoEscala(conflito) };
+  }
+
   const { error } = await supabase.from("schedules").insert({
     clinic_id: clinicId,
     code,
@@ -410,7 +474,22 @@ export async function updateSchedule(
 
   if (isDemoMode()) return { ok: true };
 
+  const clinicId = await requireClinic();
   const supabase = await createClient();
+
+  // Escala única por especialidade (na edição, ignora a própria escala).
+  if (d.specialty) {
+    const conflito = await escalaConflitante(
+      supabase,
+      clinicId,
+      d.specialty,
+      d.start_date,
+      d.end_date,
+      idParsed.data,
+    );
+    if (conflito) return { error: msgConflitoEscala(conflito) };
+  }
+
   const { error } = await supabase
     .from("schedules")
     .update({

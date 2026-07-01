@@ -10,6 +10,7 @@ import {
   Search,
   X,
   Repeat,
+  TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
@@ -46,6 +47,12 @@ type Bloco = { time: string; reason: string };
 /** Faixa + bloqueios próprios de um dia da semana. */
 type DiaFaixa = { start: string; end: string; blocks: Bloco[] };
 
+/** "YYYY-MM-DD" → "dd/mm/aaaa" (para mensagens ao usuário). */
+function fmtDataBR(iso: string): string {
+  const [y, m, d] = (iso || "").slice(0, 10).split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+}
+
 /** Gera horários "HH:mm" entre início e fim com passo em minutos. */
 function gerarHorarios(start: string, end: string, stepMin: number): string[] {
   const toMin = (t: string) => {
@@ -68,12 +75,15 @@ export function EscalaHorariosModal({
   onClose,
   profissionais,
   procedimentos,
+  escalas = [],
   escalaParaEditar,
 }: {
   open: boolean;
   onClose: () => void;
   profissionais: Profissional[];
   procedimentos: Procedimento[];
+  /** Escalas existentes — usadas p/ avisar de conflito (escala única por especialidade). */
+  escalas?: Escala[];
   /** Quando presente, o modal abre em modo edição (pré-preenche + updateSchedule). */
   escalaParaEditar?: Escala;
 }) {
@@ -134,6 +144,27 @@ export function EscalaHorariosModal({
   // Vigência da escala (período de validade).
   const [dataInicio, setDataInicio] = useState(esc?.startDate ?? "");
   const [dataFim, setDataFim] = useState(esc?.endDate ?? "");
+
+  // Escala única por especialidade: procura uma escala ATIVA da MESMA
+  // especialidade com vigência sobreposta ao período informado (ignora a
+  // própria na edição). Aviso em tempo real; o servidor também bloqueia.
+  const conflito = useMemo(() => {
+    const esp = especialidade.trim();
+    if (!esp || !dataInicio || !dataFim || dataFim < dataInicio) return null;
+    return (
+      escalas.find((e) => {
+        if (!e.active) return false;
+        if (e.specialty !== esp) return false;
+        if (escalaParaEditar && e.id === escalaParaEditar.id) return false;
+        const s = (e.startDate || "").slice(0, 10);
+        const en = (e.endDate || "").slice(0, 10);
+        // Escala legada sem vigência completa não entra no conflito.
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(en))
+          return false;
+        return s <= dataFim && dataInicio <= en;
+      }) ?? null
+    );
+  }, [escalas, especialidade, dataInicio, dataFim, escalaParaEditar]);
   // Diálogo de bloqueio do horário no dia selecionado: alvo + motivo.
   const [bloqueioAlvo, setBloqueioAlvo] = useState<string | null>(null);
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
@@ -285,6 +316,14 @@ export function EscalaHorariosModal({
       setAba("horarios");
       return;
     }
+    // Escala única por especialidade: bloqueia se houver conflito de período.
+    if (conflito) {
+      toast.error(
+        `Já existe a escala ${conflito.code} (${conflito.specialty}) no período de ${fmtDataBR(conflito.startDate)} a ${fmtDataBR(conflito.endDate)}. Ajuste o período ou desative a escala existente.`,
+      );
+      setAba("horarios");
+      return;
+    }
     // Valida cada dia (fim > início) e monta o week_hours (com bloqueios do dia)
     // + envelope base. Bloqueios agora são por dia; recurring_blocks fica vazio.
     const week_hours: Record<string, DiaFaixa> = {};
@@ -369,7 +408,16 @@ export function EscalaHorariosModal({
           <Button variant="ghost" onClick={onClose}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={salvar} disabled={pending}>
+          <Button
+            variant="primary"
+            onClick={salvar}
+            disabled={pending || Boolean(conflito)}
+            title={
+              conflito
+                ? "Já existe uma escala desta especialidade neste período."
+                : undefined
+            }
+          >
             <Save className="h-4 w-4" />
             {pending
               ? "Salvando..."
@@ -573,6 +621,20 @@ export function EscalaHorariosModal({
             <p className="mt-1 text-xs text-muted">
               A escala só vale (gera horários na agenda) dentro deste período.
             </p>
+            {conflito && (
+              <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Já existe a escala <strong>{conflito.code}</strong> de{" "}
+                  <strong>{especialidade.trim()}</strong> no período{" "}
+                  <strong>
+                    {fmtDataBR(conflito.startDate)} a {fmtDataBR(conflito.endDate)}
+                  </strong>
+                  . Só pode haver <strong>uma escala por especialidade</strong> no
+                  mesmo período — ajuste as datas ou desative a escala existente.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Horário próprio por dia */}
