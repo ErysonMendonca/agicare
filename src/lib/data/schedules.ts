@@ -16,6 +16,12 @@ export type Escala = {
   weekdays: number[];
   startTime: string;
   endTime: string;
+  /**
+   * Horário próprio por dia da semana ("0"=Dom.."6"=Sáb → {start,end} em HH:MM).
+   * Só os dias com horário diferente do base; dias ausentes usam startTime/endTime.
+   * Vazio ({}) = horário uniforme (comportamento retrocompatível).
+   */
+  weekHours: Record<string, { start: string; end: string }>;
   active: boolean;
   /** Vigência da escala (YYYY-MM-DD); "" = sem limite. */
   startDate: string;
@@ -46,6 +52,7 @@ const MOCK: Escala[] = [
     weekdays: [1, 2, 3, 4, 5],
     startTime: "08:00",
     endTime: "12:00",
+    weekHours: {},
     active: true,
     startDate: "",
     endDate: "",
@@ -66,6 +73,7 @@ const MOCK: Escala[] = [
     weekdays: [1, 3, 5],
     startTime: "13:00",
     endTime: "18:00",
+    weekHours: {},
     active: true,
     startDate: "",
     endDate: "",
@@ -78,6 +86,35 @@ const MOCK: Escala[] = [
 /** "HH:mm:ss" | "HH:mm" → "HH:mm". */
 function hhmm(t: unknown): string {
   return String(t ?? "").slice(0, 5);
+}
+
+/**
+ * Normaliza o jsonb `week_hours` defensivamente. Aceita só chaves "0".."6" com
+ * `{start,end}` no formato HH:MM; ignora entradas malformadas.
+ */
+function parseWeekHours(
+  raw: unknown,
+): Record<string, { start: string; end: string }> {
+  let obj: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      obj = JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return {};
+  const out: Record<string, { start: string; end: string }> = {};
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    if (!/^[0-6]$/.test(k)) continue;
+    const o = v as { start?: unknown; end?: unknown };
+    const start = typeof o?.start === "string" ? o.start.slice(0, 5) : "";
+    const end = typeof o?.end === "string" ? o.end.slice(0, 5) : "";
+    if (/^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end)) {
+      out[k] = { start, end };
+    }
+  }
+  return out;
 }
 
 /** Normaliza o jsonb `recurring_blocks` (array de {time, reason}) defensivamente. */
@@ -122,7 +159,7 @@ export async function listSchedules(filtro?: EscalaFiltro): Promise<Escala[]> {
   let query = supabase
     .from("schedules")
     .select(
-      "id, code, description, professional_id, specialty, service_type, slot_minutes, overbook_limit, weekdays, start_time, end_time, active, start_date, end_date, procedure_codes, exam_tuss_codes, recurring_blocks, professionals(profiles(full_name))",
+      "id, code, description, professional_id, specialty, service_type, slot_minutes, overbook_limit, weekdays, start_time, end_time, week_hours, active, start_date, end_date, procedure_codes, exam_tuss_codes, recurring_blocks, professionals(profiles(full_name))",
     )
     .order("specialty", { ascending: true })
     .order("description", { ascending: true });
@@ -157,6 +194,7 @@ export async function listSchedules(filtro?: EscalaFiltro): Promise<Escala[]> {
       weekdays: Array.isArray(r.weekdays) ? (r.weekdays as number[]) : [],
       startTime: hhmm(r.start_time),
       endTime: hhmm(r.end_time),
+      weekHours: parseWeekHours(r.week_hours),
       active: !!r.active,
       startDate: r.start_date ? String(r.start_date) : "",
       endDate: r.end_date ? String(r.end_date) : "",

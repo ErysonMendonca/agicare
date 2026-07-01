@@ -226,6 +226,17 @@ const escalaSchema = z.object({
   weekdays: z.array(z.coerce.number().int().min(0).max(6)).default([]),
   start_time: z.string().min(1, "Informe o horário inicial."),
   end_time: z.string().min(1, "Informe o horário final."),
+  // Horário próprio por dia da semana ("0".."6" → {start,end} em HH:MM). Só os
+  // dias com horário diferente do base. Vazio = horário uniforme (base).
+  week_hours: z
+    .record(
+      z.string().regex(/^[0-6]$/),
+      z.object({
+        start: z.string().regex(/^\d{2}:\d{2}$/, "Horário inicial inválido."),
+        end: z.string().regex(/^\d{2}:\d{2}$/, "Horário final inválido."),
+      }),
+    )
+    .default({}),
   // Vigência da escala (obrigatória): a grade só vale dentro do período.
   start_date: z.string().min(1, "Informe a data inicial."),
   end_date: z.string().min(1, "Informe a data final."),
@@ -256,6 +267,37 @@ function naVigencia(dateISO: string, start: unknown, end: unknown): boolean {
   const s = start ? String(start).slice(0, 10) : "";
   const e = end ? String(end).slice(0, 10) : "";
   return (!s || dateISO >= s) && (!e || dateISO <= e);
+}
+
+/**
+ * Resolve a faixa de horário [start,end] (HH:MM) de uma escala para um dia da
+ * semana (0=Dom..6=Sáb): usa `week_hours[dia]` se houver horário próprio válido,
+ * senão cai no `start_time`/`end_time` base. Retrocompatível: escala sem
+ * week_hours ({}) sempre usa o base.
+ */
+function faixaDoDia(
+  weekday: number,
+  base: { start: string; end: string },
+  weekHoursRaw: unknown,
+): { start: string; end: string } {
+  let obj: unknown = weekHoursRaw;
+  if (typeof weekHoursRaw === "string") {
+    try {
+      obj = JSON.parse(weekHoursRaw);
+    } catch {
+      return base;
+    }
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return base;
+  const v = (obj as Record<string, unknown>)[String(weekday)] as
+    | { start?: unknown; end?: unknown }
+    | undefined;
+  if (!v) return base;
+  const start = typeof v.start === "string" ? v.start.slice(0, 5) : "";
+  const end = typeof v.end === "string" ? v.end.slice(0, 5) : "";
+  return /^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end)
+    ? { start, end }
+    : base;
 }
 
 /** Bloqueio fixo/recorrente da escala (vale em todos os dias dela). */
@@ -316,6 +358,7 @@ export async function createSchedule(
     weekdays: d.weekdays,
     start_time: d.start_time,
     end_time: d.end_time,
+    week_hours: d.week_hours,
     start_date: d.start_date,
     end_date: d.end_date,
     procedure_codes: d.procedure_codes,
@@ -371,6 +414,7 @@ export async function updateSchedule(
       weekdays: d.weekdays,
       start_time: d.start_time,
       end_time: d.end_time,
+      week_hours: d.week_hours,
       start_date: d.start_date,
       end_date: d.end_date,
       procedure_codes: d.procedure_codes,
@@ -686,7 +730,7 @@ export async function listSlots(
   const { data: escalas } = await supabase
     .from("schedules")
     .select(
-      "professional_id, specialty, slot_minutes, weekdays, start_time, end_time, active, start_date, end_date, recurring_blocks",
+      "professional_id, specialty, slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks",
     )
     .eq("active", true);
 
@@ -699,12 +743,18 @@ export async function listSlots(
   );
 
   const slotMinutes = escala ? Number(escala.slot_minutes) || 30 : 30;
-  const horarios = escala
-    ? gerarHorarios(
-        String(escala.start_time).slice(0, 5),
-        String(escala.end_time).slice(0, 5),
-        slotMinutes,
+  const faixa = escala
+    ? faixaDoDia(
+        weekday,
+        {
+          start: String(escala.start_time).slice(0, 5),
+          end: String(escala.end_time).slice(0, 5),
+        },
+        escala.week_hours,
       )
+    : null;
+  const horarios = faixa
+    ? gerarHorarios(faixa.start, faixa.end, slotMinutes)
     : gradePadrao();
 
   // Ocupação: agendamentos do dia (considerando a DURAÇÃO real) + bloqueios.
@@ -842,24 +892,42 @@ export async function listSlotsBySpecialty(
   const { data: escalas } = await supabase
     .from("schedules")
     .select(
-      "slot_minutes, weekdays, start_time, end_time, active, start_date, end_date, recurring_blocks",
+      "slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks",
     )
     .eq("specialty", specialty)
     .eq("active", true);
 
-  const escala = (escalas ?? []).find(
+  // Escalas ativas da especialidade válidas nesse dia/data.
+  const doDia = (escalas ?? []).filter(
     (e) =>
       (Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false) &&
       naVigencia(dateISO, e.start_date, e.end_date),
   );
+  const escala = doDia[0];
 
   const slotMinutes = escala ? Number(escala.slot_minutes) || 30 : 30;
+  // Agrega a grade de TODAS as escalas do dia, cada uma resolvendo a SUA faixa
+  // (horário próprio do dia via week_hours, ou o base). União ordenada e única.
   const horarios = escala
-    ? gerarHorarios(
-        String(escala.start_time).slice(0, 5),
-        String(escala.end_time).slice(0, 5),
-        slotMinutes,
-      )
+    ? Array.from(
+        new Set(
+          doDia.flatMap((e) => {
+            const faixa = faixaDoDia(
+              weekday,
+              {
+                start: String(e.start_time).slice(0, 5),
+                end: String(e.end_time).slice(0, 5),
+              },
+              e.week_hours,
+            );
+            return gerarHorarios(
+              faixa.start,
+              faixa.end,
+              Number(e.slot_minutes) || 30,
+            );
+          }),
+        ),
+      ).sort((a, b) => a.localeCompare(b))
     : gradePadrao();
 
   // Capacidade = profissionais ativos da especialidade (mín. 1).
@@ -883,9 +951,11 @@ export async function listSlotsBySpecialty(
   // Conta agendamentos que SOBREPÕEM cada slot (considera a duração real), não
   // só os que começam exatamente na hora do slot. Ocupado ao atingir a capacidade.
   const intervalos = ocupacaoIntervalos(ags ?? [], slotMinutes);
-  // Bloqueios fixos/recorrentes da escala valem em todos os dias dela.
+  // Bloqueios fixos/recorrentes das escalas do dia valem em todos os dias delas.
   const bloqueados = new Set(
-    parseRecurringBlocks(escala?.recurring_blocks).map((r) => r.time),
+    doDia.flatMap((e) =>
+      parseRecurringBlocks(e.recurring_blocks).map((r) => r.time),
+    ),
   );
 
   return {
