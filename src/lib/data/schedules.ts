@@ -17,11 +17,12 @@ export type Escala = {
   startTime: string;
   endTime: string;
   /**
-   * Horário próprio por dia da semana ("0"=Dom.."6"=Sáb → {start,end} em HH:MM).
+   * Horário próprio por dia da semana ("0"=Dom.."6"=Sáb → {start,end,blocks?}).
    * Só os dias com horário diferente do base; dias ausentes usam startTime/endTime.
-   * Vazio ({}) = horário uniforme (comportamento retrocompatível).
+   * `blocks` = horários bloqueados SÓ naquele dia (fixos). Vazio ({}) = horário
+   * uniforme sem bloqueio por dia (comportamento retrocompatível).
    */
-  weekHours: Record<string, { start: string; end: string }>;
+  weekHours: Record<string, DiaHorario>;
   active: boolean;
   /** Vigência da escala (YYYY-MM-DD); "" = sem limite. */
   startDate: string;
@@ -33,6 +34,11 @@ export type Escala = {
   /** Bloqueios fixos/recorrentes: horários sempre indisponíveis nessa escala. */
   recurringBlocks: { time: string; reason: string }[];
 };
+
+/** Bloqueio fixo de um horário (indisponível). */
+export type BlocoHorario = { time: string; reason: string };
+/** Config de um dia no week_hours: faixa própria + bloqueios daquele dia. */
+export type DiaHorario = { start: string; end: string; blocks?: BlocoHorario[] };
 
 /** Filtro opcional da listagem de escalas. */
 export type EscalaFiltro = { specialty?: string; professionalId?: string };
@@ -92,9 +98,7 @@ function hhmm(t: unknown): string {
  * Normaliza o jsonb `week_hours` defensivamente. Aceita só chaves "0".."6" com
  * `{start,end}` no formato HH:MM; ignora entradas malformadas.
  */
-function parseWeekHours(
-  raw: unknown,
-): Record<string, { start: string; end: string }> {
+function parseWeekHours(raw: unknown): Record<string, DiaHorario> {
   let obj: unknown = raw;
   if (typeof raw === "string") {
     try {
@@ -104,14 +108,15 @@ function parseWeekHours(
     }
   }
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) return {};
-  const out: Record<string, { start: string; end: string }> = {};
+  const out: Record<string, DiaHorario> = {};
   for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
     if (!/^[0-6]$/.test(k)) continue;
-    const o = v as { start?: unknown; end?: unknown };
+    const o = v as { start?: unknown; end?: unknown; blocks?: unknown };
     const start = typeof o?.start === "string" ? o.start.slice(0, 5) : "";
     const end = typeof o?.end === "string" ? o.end.slice(0, 5) : "";
     if (/^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end)) {
-      out[k] = { start, end };
+      const blocks = parseRecurringBlocks(o?.blocks);
+      out[k] = blocks.length ? { start, end, blocks } : { start, end };
     }
   }
   return out;

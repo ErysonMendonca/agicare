@@ -234,6 +234,15 @@ const escalaSchema = z.object({
       z.object({
         start: z.string().regex(/^\d{2}:\d{2}$/, "Horário inicial inválido."),
         end: z.string().regex(/^\d{2}:\d{2}$/, "Horário final inválido."),
+        // Bloqueios SÓ deste dia (fixos). Opcional/retrocompatível.
+        blocks: z
+          .array(
+            z.object({
+              time: z.string().regex(/^\d{2}:\d{2}$/, "Horário inválido."),
+              reason: z.string().trim().default(""),
+            }),
+          )
+          .optional(),
       }),
     )
     .default({}),
@@ -279,25 +288,27 @@ function faixaDoDia(
   weekday: number,
   base: { start: string; end: string },
   weekHoursRaw: unknown,
-): { start: string; end: string } {
+): { start: string; end: string; blocks: RecurringBlock[] } {
   let obj: unknown = weekHoursRaw;
   if (typeof weekHoursRaw === "string") {
     try {
       obj = JSON.parse(weekHoursRaw);
     } catch {
-      return base;
+      return { ...base, blocks: [] };
     }
   }
-  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return base;
+  if (!obj || typeof obj !== "object" || Array.isArray(obj))
+    return { ...base, blocks: [] };
   const v = (obj as Record<string, unknown>)[String(weekday)] as
-    | { start?: unknown; end?: unknown }
+    | { start?: unknown; end?: unknown; blocks?: unknown }
     | undefined;
-  if (!v) return base;
+  if (!v) return { ...base, blocks: [] };
   const start = typeof v.start === "string" ? v.start.slice(0, 5) : "";
   const end = typeof v.end === "string" ? v.end.slice(0, 5) : "";
+  const blocks = parseRecurringBlocks(v.blocks);
   return /^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end)
-    ? { start, end }
-    : base;
+    ? { start, end, blocks }
+    : { ...base, blocks };
 }
 
 /** Bloqueio fixo/recorrente da escala (vale em todos os dias dela). */
@@ -780,7 +791,9 @@ export async function listSlots(
   const intervalos = ocupacaoIntervalos(ags ?? [], slotMinutes);
   const bloqueados = new Set<string>();
   for (const b of blocks ?? []) bloqueados.add(String(b.start_time).slice(0, 5));
-  // Bloqueios fixos/recorrentes da escala valem em todos os dias dela.
+  // Bloqueios fixos DO DIA (week_hours[dia].blocks) + os globais legados
+  // (recurring_blocks, que valem em todos os dias) — união é restritiva/segura.
+  for (const r of faixa?.blocks ?? []) bloqueados.add(r.time);
   for (const r of parseRecurringBlocks(escala?.recurring_blocks))
     bloqueados.add(r.time);
 
@@ -951,11 +964,23 @@ export async function listSlotsBySpecialty(
   // Conta agendamentos que SOBREPÕEM cada slot (considera a duração real), não
   // só os que começam exatamente na hora do slot. Ocupado ao atingir a capacidade.
   const intervalos = ocupacaoIntervalos(ags ?? [], slotMinutes);
-  // Bloqueios fixos/recorrentes das escalas do dia valem em todos os dias delas.
+  // Bloqueios do dia: por dia (week_hours[dia].blocks) + globais legados
+  // (recurring_blocks) de cada escala da especialidade.
   const bloqueados = new Set(
-    doDia.flatMap((e) =>
-      parseRecurringBlocks(e.recurring_blocks).map((r) => r.time),
-    ),
+    doDia.flatMap((e) => {
+      const faixa = faixaDoDia(
+        weekday,
+        {
+          start: String(e.start_time).slice(0, 5),
+          end: String(e.end_time).slice(0, 5),
+        },
+        e.week_hours,
+      );
+      return [
+        ...faixa.blocks.map((r) => r.time),
+        ...parseRecurringBlocks(e.recurring_blocks).map((r) => r.time),
+      ];
+    }),
   );
 
   return {

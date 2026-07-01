@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Save,
-  Sparkles,
   Plus,
   Unlock,
   CalendarRange,
@@ -42,7 +41,10 @@ type Aba = "dados" | "horarios";
  * a faixa de horários; o (único) estado operacional é o bloqueio fixo
  * (recorrente), mantido à parte em `recorrentes`.
  */
-type SlotEscala = { hora: string };
+/** Bloqueio fixo de um horário no dia. */
+type Bloco = { time: string; reason: string };
+/** Faixa + bloqueios próprios de um dia da semana. */
+type DiaFaixa = { start: string; end: string; blocks: Bloco[] };
 
 /** Gera horários "HH:mm" entre início e fim com passo em minutos. */
 function gerarHorarios(start: string, end: string, stepMin: number): string[] {
@@ -104,42 +106,47 @@ export function EscalaHorariosModal({
   // já salvo na escala (para não perder a faixa de escalas antigas sem week_hours).
   const inicio = esc?.startTime ?? "08:00";
   const fim = esc?.endTime ?? "18:00";
-  // Horário PRÓPRIO por dia (0=Dom..6=Sáb). Ao editar uma escala antiga sem
-  // week_hours, cada dia já selecionado vem preenchido com o horário base.
-  const [horariosPorDia, setHorariosPorDia] = useState<
-    Record<number, { start: string; end: string }>
-  >(() => {
-    const baseStart = esc?.startTime ?? "08:00";
-    const baseEnd = esc?.endTime ?? "18:00";
-    const diasIniciais = esc?.weekdays ?? [1, 2, 3, 4, 5];
-    const out: Record<number, { start: string; end: string }> = {};
-    for (const d of diasIniciais) {
-      const wh = esc?.weekHours?.[String(d)];
-      out[d] = wh
-        ? { start: wh.start, end: wh.end }
-        : { start: baseStart, end: baseEnd };
-    }
-    return out;
-  });
+  // Horário PRÓPRIO por dia (0=Dom..6=Sáb): faixa + bloqueios daquele dia. Ao
+  // editar uma escala antiga sem week_hours, cada dia vem com o horário base; os
+  // bloqueios do dia vêm do week_hours[dia].blocks (ou, legado, dos globais).
+  const [horariosPorDia, setHorariosPorDia] = useState<Record<number, DiaFaixa>>(
+    () => {
+      const baseStart = esc?.startTime ?? "08:00";
+      const baseEnd = esc?.endTime ?? "18:00";
+      const diasIniciais = esc?.weekdays ?? [1, 2, 3, 4, 5];
+      const legado = esc?.recurringBlocks ?? [];
+      const out: Record<number, DiaFaixa> = {};
+      for (const d of diasIniciais) {
+        const wh = esc?.weekHours?.[String(d)];
+        out[d] = {
+          start: wh?.start ?? baseStart,
+          end: wh?.end ?? baseEnd,
+          blocks: wh?.blocks ? wh.blocks.map((b) => ({ ...b })) : legado.map((b) => ({ ...b })),
+        };
+      }
+      return out;
+    },
+  );
+  // Dia selecionado para gerar/ver a grade de horários (bloqueios são por dia).
+  const [diaGrade, setDiaGrade] = useState<number | null>(
+    () => (esc?.weekdays ?? [1, 2, 3, 4, 5])[0] ?? null,
+  );
   // Vigência da escala (período de validade).
   const [dataInicio, setDataInicio] = useState(esc?.startDate ?? "");
   const [dataFim, setDataFim] = useState(esc?.endDate ?? "");
-  // Edição já monta a grade a partir do que está salvo (sem exigir "Gerar Grade").
-  const [slots, setSlots] = useState<SlotEscala[]>(() =>
-    esc
-      ? gerarHorarios(esc.startTime, esc.endTime, esc.slotMinutes).map(
-          (hora) => ({ hora }),
-        )
-      : [],
-  );
-  const [manual, setManual] = useState("");
-  // Diálogo de bloqueio fixo (recorrente): horário-alvo + motivo (obrigatório).
+  // Diálogo de bloqueio do horário no dia selecionado: alvo + motivo.
   const [bloqueioAlvo, setBloqueioAlvo] = useState<string | null>(null);
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
-  // Bloqueios recorrentes (fixos) da escala — persistidos ao salvar a escala.
-  const [recorrentes, setRecorrentes] = useState<
-    { time: string; reason: string }[]
-  >(esc?.recurringBlocks ?? []);
+
+  // Bloqueios do dia atualmente selecionado na grade.
+  const blocosDoDia =
+    diaGrade != null ? (horariosPorDia[diaGrade]?.blocks ?? []) : [];
+  // Grade DERIVADA do dia selecionado (início/fim daquele dia + duração).
+  // Deriva de diaGrade → nunca dessincroniza (some a classe de bugs de estado).
+  const gradeHoras = useMemo(() => {
+    const faixa = diaGrade != null ? horariosPorDia[diaGrade] : undefined;
+    return faixa ? gerarHorarios(faixa.start, faixa.end, slotMin) : [];
+  }, [diaGrade, horariosPorDia, slotMin]);
 
   const especialidades = useMemo(
     () =>
@@ -159,9 +166,19 @@ export function EscalaHorariosModal({
       setHorariosPorDia((h) => {
         const next = { ...h };
         if (jaTem) delete next[n];
-        else next[n] = { start: inicio, end: fim };
+        else next[n] = { start: inicio, end: fim, blocks: [] };
         return next;
       });
+      // Ao ligar, passa a editar a grade desse dia; ao desligar o dia atual,
+      // escolhe outro dia selecionado (ou nenhum).
+      if (jaTem) {
+        if (diaGrade === n) {
+          const resto = cur.filter((d) => d !== n);
+          setDiaGrade(resto.length ? resto[0] : null);
+        }
+      } else {
+        setDiaGrade(n);
+      }
       return jaTem ? cur.filter((d) => d !== n) : [...cur, n];
     });
   }
@@ -170,7 +187,7 @@ export function EscalaHorariosModal({
   function setHorarioDia(n: number, campo: "start" | "end", valor: string) {
     setHorariosPorDia((h) => ({
       ...h,
-      [n]: { ...(h[n] ?? { start: inicio, end: fim }), [campo]: valor },
+      [n]: { ...(h[n] ?? { start: inicio, end: fim, blocks: [] }), [campo]: valor },
     }));
   }
 
@@ -201,77 +218,45 @@ export function EscalaHorariosModal({
     [dias],
   );
 
-  function gerarGrade() {
-    // Prévia pelo 1º dia selecionado (cada dia pode ter horário próprio).
-    const primeiro = diasOrdenados[0];
-    const faixa = primeiro
-      ? horariosPorDia[primeiro.n] ?? { start: inicio, end: fim }
-      : { start: inicio, end: fim };
-    const horas = gerarHorarios(faixa.start, faixa.end, slotMin);
-    if (horas.length === 0) {
-      toast.error("Horário final deve ser maior que o inicial.");
-      return;
-    }
-    setSlots(horas.map((hora) => ({ hora })));
-    toast.success(
-      primeiro
-        ? `${horas.length} horários gerados (prévia de ${primeiro.label}).`
-        : `${horas.length} horários gerados.`,
-    );
-  }
-
-  function adicionarManual() {
-    if (!/^\d{2}:\d{2}$/.test(manual)) {
-      toast.error("Informe um horário válido (HH:mm).");
-      return;
-    }
-    if (slots.some((s) => s.hora === manual)) {
-      toast.error("Horário já existe na grade.");
-      return;
-    }
-    setSlots((cur) =>
-      [...cur, { hora: manual }].sort((a, b) => a.hora.localeCompare(b.hora)),
-    );
-    setManual("");
+  /** Altera os bloqueios do dia selecionado na grade. */
+  function setBlocosDoDia(fn: (cur: Bloco[]) => Bloco[]) {
+    if (diaGrade == null) return;
+    setHorariosPorDia((h) => {
+      const atual = h[diaGrade] ?? { start: inicio, end: fim, blocks: [] };
+      return { ...h, [diaGrade]: { ...atual, blocks: fn(atual.blocks) } };
+    });
   }
 
   /**
-   * Clique num horário. Como a escala é por especialidade, o único estado
-   * operacional é o bloqueio fixo (recorrente): se já bloqueado → remove;
-   * se livre → abre o diálogo para informar o motivo.
+   * Clique num horário da grade do dia selecionado. Bloqueio vale SÓ neste dia:
+   * se já bloqueado → libera; se livre → abre o diálogo para informar o motivo.
    */
   function aoClicarSlot(hora: string) {
-    if (recorrentes.some((r) => r.time === hora)) {
-      setRecorrentes((cur) => cur.filter((r) => r.time !== hora));
-      toast.info(
-        `Bloqueio fixo de ${hora} removido — salve a escala para confirmar.`,
-      );
+    if (diaGrade == null) return;
+    if (blocosDoDia.some((r) => r.time === hora)) {
+      setBlocosDoDia((cur) => cur.filter((r) => r.time !== hora));
+      toast.info(`${hora} liberado — salve a escala para confirmar.`);
       return;
     }
     setMotivoBloqueio("");
     setBloqueioAlvo(hora);
   }
 
-  /** Confirma o bloqueio fixo (recorrente) do horário-alvo com o motivo. */
+  /** Confirma o bloqueio do horário-alvo (no dia selecionado) com o motivo. */
   function confirmarBloqueio() {
     const hora = bloqueioAlvo;
-    if (!hora) return;
+    if (!hora || diaGrade == null) return;
     const motivo = motivoBloqueio.trim();
     if (motivo.length < 3) {
       toast.error("Descreva o motivo do bloqueio (mínimo 3 caracteres).");
       return;
     }
-    // Bloqueio fixo fica na escala (recurring_blocks), salvo ao salvar a escala.
-    setRecorrentes((cur) =>
-      cur.some((r) => r.time === hora)
-        ? cur
-        : [...cur, { time: hora, reason: motivo }],
+    setBlocosDoDia((cur) =>
+      cur.some((r) => r.time === hora) ? cur : [...cur, { time: hora, reason: motivo }],
     );
     setBloqueioAlvo(null);
     setMotivoBloqueio("");
-    toast.success(
-      `Bloqueio fixo de ${hora} adicionado — salve a escala para confirmar.`,
-    );
+    toast.success(`${hora} bloqueado — salve a escala para confirmar.`);
   }
 
   function salvar() {
@@ -300,12 +285,13 @@ export function EscalaHorariosModal({
       setAba("horarios");
       return;
     }
-    // Valida cada dia (fim > início) e monta o week_hours + envelope base.
-    const week_hours: Record<string, { start: string; end: string }> = {};
+    // Valida cada dia (fim > início) e monta o week_hours (com bloqueios do dia)
+    // + envelope base. Bloqueios agora são por dia; recurring_blocks fica vazio.
+    const week_hours: Record<string, DiaFaixa> = {};
     let envInicio = "";
     let envFim = "";
     for (const d of diasOrdenados) {
-      const faixa = horariosPorDia[d.n] ?? { start: inicio, end: fim };
+      const faixa = horariosPorDia[d.n] ?? { start: inicio, end: fim, blocks: [] };
       if (
         !/^\d{2}:\d{2}$/.test(faixa.start) ||
         !/^\d{2}:\d{2}$/.test(faixa.end) ||
@@ -317,7 +303,16 @@ export function EscalaHorariosModal({
         setAba("horarios");
         return;
       }
-      week_hours[String(d.n)] = { start: faixa.start, end: faixa.end };
+      // Mantém só os bloqueios DENTRO da faixa do dia (descarta órfãos, ex.:
+      // globais legados copiados para um dia de faixa mais estreita).
+      const blocosNaFaixa = (faixa.blocks ?? []).filter(
+        (b) => b.time >= faixa.start && b.time < faixa.end,
+      );
+      week_hours[String(d.n)] = {
+        start: faixa.start,
+        end: faixa.end,
+        blocks: blocosNaFaixa,
+      };
       if (!envInicio || faixa.start < envInicio) envInicio = faixa.start;
       if (!envFim || faixa.end > envFim) envFim = faixa.end;
     }
@@ -340,7 +335,8 @@ export function EscalaHorariosModal({
         // Só guarda o conjunto do tipo atual; limpa o outro ao trocar de tipo.
         procedure_codes: tipo === "Procedimento" ? procedureCodes : [],
         exam_tuss_codes: tipo === "Exame" ? examCodes : [],
-        recurring_blocks: recorrentes,
+        // Bloqueios agora são por dia (em week_hours[dia].blocks); global vazio.
+        recurring_blocks: [],
       };
       const res = escalaParaEditar
         ? await updateSchedule(escalaParaEditar.id, { ...payload, active: ativo })
@@ -625,27 +621,47 @@ export function EscalaHorariosModal({
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            <Button variant="primary" size="sm" onClick={gerarGrade}>
-              <Sparkles className="h-4 w-4" />
-              Gerar Grade Automática
-            </Button>
-            <div className="flex items-center gap-2">
-              <Input
-                type="time"
-                value={manual}
-                onChange={(e) => setManual(e.target.value)}
-                className="w-32"
-                aria-label="Horário manual"
-              />
-              <Button variant="outline" size="sm" onClick={adicionarManual}>
-                <Plus className="h-4 w-4" />
-                Adicionar Horário
-              </Button>
+          {/* Grade por DIA: escolha o dia e gere/edite os horários dele */}
+          {diasOrdenados.length > 0 && (
+            <div>
+              <span className="mb-2 block text-sm font-medium text-ink">
+                Grade do dia
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {diasOrdenados.map((d) => {
+                  const on = diaGrade === d.n;
+                  const nBlocks = horariosPorDia[d.n]?.blocks?.length ?? 0;
+                  return (
+                    <button
+                      key={d.n}
+                      type="button"
+                      onClick={() => setDiaGrade(d.n)}
+                      className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                        on
+                          ? "border-brand-500 bg-brand-500 text-white"
+                          : "border-line text-ink hover:bg-muted-surface"
+                      }`}
+                    >
+                      {d.label}
+                      {nBlocks > 0 && (
+                        <span className={on ? "text-white/80" : "text-amber-600"}>
+                          {" "}
+                          ({nBlocks})
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                Escolha um dia: a grade dele é gerada automaticamente a partir do
+                horário do dia. Clique num horário para bloquear/liberar — vale{" "}
+                <strong>só naquele dia</strong>.
+              </p>
             </div>
-          </div>
+          )}
 
-          {slots.length > 0 && (
+          {gradeHoras.length > 0 && (
             <div className="space-y-2">
               {/* Legenda dos estados */}
               <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted">
@@ -655,53 +671,58 @@ export function EscalaHorariosModal({
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="h-3 w-3 rounded border border-amber-300 bg-amber-50" />
-                  Bloqueado fixo (recorrente)
+                  Bloqueado (neste dia)
                 </span>
               </div>
               <p className="text-xs text-muted">
-                Clique num horário livre para bloqueá-lo de forma fixa
-                (recorrente) — será pedido o motivo. Clique num bloqueado para
-                liberar. O bloqueio fixo vale em todos os dias da escala e é
-                salvo ao salvar a escala.
+                Grade de{" "}
+                <strong>
+                  {DIAS.find((d) => d.n === diaGrade)?.label ?? "—"}
+                </strong>
+                . Clique num horário livre para bloqueá-lo{" "}
+                <strong>só neste dia</strong> (será pedido o motivo); clique num
+                bloqueado para liberar. Salvo ao salvar a escala.
               </p>
             </div>
           )}
 
-          {/* Grade gerada */}
-          {slots.length === 0 ? (
+          {/* Grade gerada (derivada do dia selecionado) */}
+          {gradeHoras.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line px-6 py-10 text-center">
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-500">
                 <CalendarRange className="h-6 w-6" />
               </span>
               <p className="mt-3 text-sm text-muted">
-                Gere a grade automática ou adicione horários manualmente
+                {diasOrdenados.length === 0
+                  ? "Selecione os dias de atendimento acima."
+                  : "Escolha um dia em “Grade do dia” para ver os horários."}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {slots.map((s) => {
-                const recorrente = recorrentes.find((r) => r.time === s.hora);
-                const estilo = recorrente
+              {gradeHoras.map((hora) => {
+                const bloqueado = blocosDoDia.find((r) => r.time === hora);
+                const estilo = bloqueado
                   ? "border-amber-300 bg-amber-50 text-amber-700"
                   : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100";
                 return (
                   <button
-                    key={s.hora}
+                    key={hora}
                     type="button"
-                    onClick={() => aoClicarSlot(s.hora)}
+                    onClick={() => aoClicarSlot(hora)}
                     className={`flex h-10 items-center justify-center gap-1.5 rounded-lg border text-sm font-medium transition-colors ${estilo}`}
                     title={
-                      recorrente
-                        ? `Bloqueio fixo: ${recorrente.reason || "sem motivo"} — clique para remover`
-                        : "Bloquear horário (fixo)"
+                      bloqueado
+                        ? `Bloqueado neste dia: ${bloqueado.reason || "sem motivo"} — clique para liberar`
+                        : "Bloquear horário (só neste dia)"
                     }
                   >
-                    {recorrente ? (
+                    {bloqueado ? (
                       <Repeat className="h-3.5 w-3.5" />
                     ) : (
                       <Unlock className="h-3.5 w-3.5" />
                     )}
-                    {s.hora}
+                    {hora}
                   </button>
                 );
               })}
@@ -710,7 +731,7 @@ export function EscalaHorariosModal({
         </div>
       )}
 
-      {/* Diálogo de motivo do bloqueio fixo — exige o porquê antes de aplicar. */}
+      {/* Diálogo de motivo do bloqueio do dia — exige o porquê antes de aplicar. */}
       {bloqueioAlvo && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div
@@ -720,10 +741,13 @@ export function EscalaHorariosModal({
           <div className="relative z-10 w-full max-w-md rounded-2xl bg-surface p-5 shadow-xl">
             <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
               <Repeat className="h-4 w-4 text-amber-500" />
-              Bloqueio fixo de {bloqueioAlvo}
+              Bloquear {bloqueioAlvo}
+              {diaGrade != null
+                ? ` — ${DIAS.find((d) => d.n === diaGrade)?.label ?? ""}`
+                : ""}
             </h3>
             <p className="mt-0.5 text-sm text-muted">
-              Vale em todos os dias desta escala. Informe o motivo.
+              Vale só neste dia. Informe o motivo.
             </p>
 
             <label className="mt-4 block">
@@ -745,7 +769,7 @@ export function EscalaHorariosModal({
               </Button>
               <Button variant="primary" onClick={confirmarBloqueio}>
                 <Repeat className="h-4 w-4" />
-                Confirmar bloqueio fixo
+                Confirmar bloqueio
               </Button>
             </div>
           </div>
