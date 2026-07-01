@@ -169,7 +169,9 @@ export function actionsForEntry(
     case "triagem":
       return ["triar"];
     case "chamado":
-      return ["chamar"];
+      // "Aguardando atendimento": o médico pode CHAMAR (painel/senha) ou ATENDER
+      // direto (um clique → prontuário + em atendimento), sem exigir chamar antes.
+      return ["chamar", "atender"];
     case "em_atendimento":
       return ["atender"];
     case "finalizado":

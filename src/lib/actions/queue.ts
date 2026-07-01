@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser, getRole } from "@/lib/auth";
+import { getMyProfessionalId } from "@/lib/permissions";
 import { requireClinic } from "@/lib/tenant";
 import { getAttendanceFlow } from "@/lib/data/attendance-flow";
 import { statusAfterStage } from "@/lib/data/attendance-flow.shared";
@@ -100,6 +101,39 @@ export async function chamarPaciente(id: string): Promise<ActionState> {
 export async function atenderPaciente(id: string): Promise<ActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  // REIVINDICAÇÃO: se o paciente está só por especialidade (professional_id
+  // vazio), o médico que atende passa a ser o profissional dele — some da fila
+  // dos outros médicos da mesma especialidade. O `.is("professional_id", null)`
+  // garante que NÃO rouba um paciente já atribuído a outro profissional; e
+  // conferimos a corrida (dois médicos clicando ao mesmo tempo).
+  if (!isDemoMode()) {
+    const myProfId = await getMyProfessionalId();
+    if (myProfId) {
+      const supabase = await createClient();
+      const { data: claimed } = await supabase
+        .from("queue_entries")
+        .update({ professional_id: myProfId })
+        .eq("id", parsed.data)
+        .is("professional_id", null)
+        .select("id");
+      // Não reivindicou (0 linhas): ou já é dele, ou outro médico assumiu.
+      if (!claimed || claimed.length === 0) {
+        const { data: cur } = await supabase
+          .from("queue_entries")
+          .select("professional_id")
+          .eq("id", parsed.data)
+          .maybeSingle();
+        const dono = (cur?.professional_id as string | null) ?? null;
+        if (dono && dono !== myProfId) {
+          return {
+            error: "Paciente já está sendo atendido por outro profissional.",
+          };
+        }
+      }
+    }
+  }
+
   const res = await updateQueueStatus(parsed.data, { status: "em_atendimento" });
   if (res?.ok) await stampQueueTime(parsed.data, "started_at");
   return res;
@@ -225,6 +259,24 @@ export async function checkInTotem(
     }
   }
 
+  // Vínculo do profissional: agendamento com médico específico → o paciente já
+  // entra vinculado a ele (só ESSE médico o vê na fila). Agendamento por
+  // especialidade → professional_id null (fica "livre" p/ qualquer médico da
+  // especialidade até alguém atender e reivindicar).
+  let professionalId = data.professionalId ?? null;
+  let specialty = data.specialty ?? null;
+  if (!professionalId && data.appointmentId) {
+    const { data: ap } = await supabase
+      .from("appointments")
+      .select("professional_id, specialty")
+      .eq("id", data.appointmentId)
+      .maybeSingle();
+    if (ap) {
+      professionalId = (ap.professional_id as string | null) ?? null;
+      if (!specialty) specialty = (ap.specialty as string | null) ?? null;
+    }
+  }
+
   // Payload base do insert; o attendance_code é sorteado por tentativa (retry
   // em caso de colisão no índice único (clinic_id, attendance_code)).
   const baseRow = {
@@ -233,8 +285,8 @@ export async function checkInTotem(
     patient_id: data.patientId ?? null,
     patient_name: patientName,
     priority: data.priority,
-    professional_id: data.professionalId ?? null,
-    specialty: data.specialty ?? null,
+    professional_id: professionalId,
+    specialty: specialty,
     insurance: insurance,
     status: "aguardando",
     arrived_at: new Date().toISOString(),
