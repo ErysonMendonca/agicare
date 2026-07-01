@@ -99,9 +99,11 @@ export function EscalaHorariosModal({
   const [examCodes, setExamCodes] = useState<string[]>(esc?.examTussCodes ?? []);
 
   const [dias, setDias] = useState<number[]>(esc?.weekdays ?? [1, 2, 3, 4, 5]);
-  // Horário BASE (padrão para dias recém-marcados).
-  const [inicio, setInicio] = useState(esc?.startTime ?? "08:00");
-  const [fim, setFim] = useState(esc?.endTime ?? "18:00");
+  // Ponto de partida ao marcar um novo dia — NÃO é editável na UI (o que vale é
+  // sempre o horário por dia). Criação parte de 08–18; edição parte do horário
+  // já salvo na escala (para não perder a faixa de escalas antigas sem week_hours).
+  const inicio = esc?.startTime ?? "08:00";
+  const fim = esc?.endTime ?? "18:00";
   // Horário PRÓPRIO por dia (0=Dom..6=Sáb). Ao editar uma escala antiga sem
   // week_hours, cada dia já selecionado vem preenchido com o horário base.
   const [horariosPorDia, setHorariosPorDia] = useState<
@@ -545,9 +547,9 @@ export function EscalaHorariosModal({
               })}
             </div>
             <p className="mt-1.5 text-xs text-muted">
-              Cada dia marcado pode ter seu <strong>próprio horário</strong>{" "}
-              (ex.: Seg 08–13 e Ter 08–18). Ao marcar um dia, ele começa com o
-              horário base abaixo — ajuste por dia se precisar.
+              Cada dia marcado tem seu <strong>próprio horário</strong> (ex.:
+              Seg 08–18 e Ter 08–13). Marque os dias e ajuste o horário de cada
+              um logo abaixo.
             </p>
           </div>
 
@@ -574,31 +576,6 @@ export function EscalaHorariosModal({
             </div>
             <p className="mt-1 text-xs text-muted">
               A escala só vale (gera horários na agenda) dentro deste período.
-            </p>
-          </div>
-
-          {/* Faixa de horário BASE (padrão para dias recém-marcados) */}
-          <div>
-            <span className="mb-2 block text-sm font-medium text-ink">
-              Horário Base (padrão)
-            </span>
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Horário Inicial"
-                type="time"
-                value={inicio}
-                onChange={(e) => setInicio(e.target.value)}
-              />
-              <Input
-                label="Horário Final"
-                type="time"
-                value={fim}
-                onChange={(e) => setFim(e.target.value)}
-              />
-            </div>
-            <p className="mt-1 text-xs text-muted">
-              Usado como ponto de partida ao marcar um novo dia. O horário que
-              vale é o definido por dia abaixo.
             </p>
           </div>
 
