@@ -172,8 +172,8 @@ export type CheckInTotemResult = {
   ok?: boolean;
   error?: string;
   ticketCode?: string;
-  /** Numeração de atendimento (ficha): 6 dígitos, única por clínica. */
-  attendanceCode?: string;
+  /** id da entrada criada em queue_entries (p/ abrir os Dados no modo sem totem). */
+  queueEntryId?: string;
 };
 
 /**
@@ -218,12 +218,12 @@ export async function checkInTotem(
   const data = parsed.data;
 
   if (isDemoMode()) {
-    // Sem banco no modo demo: senha sequencial fictícia (3 dígitos) + ficha.
+    // Sem banco no modo demo: senha sequencial fictícia (3 dígitos).
     const seq = Math.floor(Math.random() * 900) + 100;
     return {
       ok: true,
       ticketCode: genTicketCode(data.priority, seq),
-      attendanceCode: genAttendanceCode(),
+      queueEntryId: "demo",
     };
   }
 
@@ -277,49 +277,34 @@ export async function checkInTotem(
     }
   }
 
-  // Payload base do insert; o attendance_code é sorteado por tentativa (retry
-  // em caso de colisão no índice único (clinic_id, attendance_code)).
-  const baseRow = {
-    clinic_id: clinicId,
-    ticket_code: ticketCode,
-    patient_id: data.patientId ?? null,
-    patient_name: patientName,
-    priority: data.priority,
-    professional_id: professionalId,
-    specialty: specialty,
-    insurance: insurance,
-    status: "aguardando",
-    arrived_at: new Date().toISOString(),
-    appointment_id: data.appointmentId ?? null,
-  };
+  // Insere a entrada na fila. O NÚMERO DE ATENDIMENTO (attendance_code) NÃO é
+  // gerado aqui — ele nasce só ao SALVAR os Dados de Atendimento (salvarAtendimento).
+  // attendance_code fica null (o índice único ignora NULLs no Postgres).
+  const { data: novo, error: insErr } = await supabase
+    .from("queue_entries")
+    .insert({
+      clinic_id: clinicId,
+      ticket_code: ticketCode,
+      patient_id: data.patientId ?? null,
+      patient_name: patientName,
+      priority: data.priority,
+      professional_id: professionalId,
+      specialty: specialty,
+      insurance: insurance,
+      status: "aguardando",
+      arrived_at: new Date().toISOString(),
+      appointment_id: data.appointmentId ?? null,
+    })
+    .select("id")
+    .single();
 
-  // Insere com retry: se o código de atendimento colidir (Postgres 23505),
-  // sorteia outro e tenta de novo (até 5 vezes).
-  let attendanceCode = "";
-  let inserted = false;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    attendanceCode = genAttendanceCode();
-    const { error } = await supabase
-      .from("queue_entries")
-      .insert({ ...baseRow, attendance_code: attendanceCode });
-
-    if (!error) {
-      inserted = true;
-      break;
-    }
-    // Só faz retry em violação de unicidade; outros erros abortam.
-    if (error.code !== "23505") {
-      return { error: "Não foi possível registrar o check-in." };
-    }
-  }
-
-  if (!inserted) return { error: "Não foi possível registrar o check-in." };
+  if (insErr || !novo) return { error: "Não foi possível registrar o check-in." };
 
   // Carimba a chegada real no agendamento vinculado (BI de tempo de espera).
   if (data.appointmentId) await stampAppointmentCheckIn(data.appointmentId);
 
   revalidateFila();
-  return { ok: true, ticketCode, attendanceCode };
+  return { ok: true, ticketCode, queueEntryId: novo.id as string };
 }
 
 // ── Dados de Atendimento (persistência da Fila — escopo 4.2) ─────────
@@ -432,6 +417,19 @@ export async function salvarAtendimento(
   // Guard por status garante que só avança quem estava em atendimento da recepção.
   const queueEntryId = emptyToNull(d.queueEntryId);
   if (queueEntryId) {
+    // NÚMERO DE ATENDIMENTO: gerado agora (ao concluir os Dados), só se ainda não
+    // existir. Retry na colisão do índice único (clinic_id, attendance_code).
+    // `.is("attendance_code", null)` torna idempotente (re-salvar não re-gera).
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = genAttendanceCode();
+      const { error: acErr } = await supabase
+        .from("queue_entries")
+        .update({ attendance_code: code })
+        .eq("id", queueEntryId)
+        .is("attendance_code", null);
+      if (!acErr || acErr.code !== "23505") break;
+    }
+
     const stages = await getAttendanceFlow();
     const next = statusAfterStage("recepcao", stages);
     await supabase

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { type FilaItem } from "@/lib/data/queue";
-import { checkInTotem } from "@/lib/actions/queue";
+import { checkInTotem, atenderRecepcao } from "@/lib/actions/queue";
 import { getPacienteEditavel } from "@/lib/actions/pacientes";
 import { EditarPacienteModal } from "@/app/(app)/pacientes/EditarPacienteModal";
 import { FichaImpressao } from "./FichaImpressao";
@@ -44,10 +44,16 @@ export function CheckInModal({
   agendado,
   open,
   onClose,
+  totemEnabled = true,
+  onConfirmarPresenca,
 }: {
   agendado: FilaItem | null;
   open: boolean;
   onClose: () => void;
+  /** Totem ligado: emite senha (fluxo atual). Desligado: confirma presença. */
+  totemEnabled?: boolean;
+  /** Sem totem: chamado após confirmar a presença, com a entrada já em 'na_recepcao'. */
+  onConfirmarPresenca?: (item: FilaItem) => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -93,16 +99,41 @@ export function CheckInModal({
         insurance: limpar(convenioAtual),
       });
 
-      if (res?.ticketCode) {
-        setSenha(res.ticketCode);
-        setAtendimentoCodigo(res.attendanceCode ?? null);
-        setEmitidoEm(new Date());
-        toast.success(`Check-in realizado. Senha ${res.ticketCode}.`);
-        // Atualiza as listas (paciente sai de "agendados" e entra na fila).
-        router.refresh();
-      } else {
+      if (!res?.ok || !res.queueEntryId) {
         toast.error(res?.error ?? "Não foi possível realizar o check-in.");
+        return;
       }
+
+      // Modo SEM totem: confirma a presença e abre os Dados de Atendimento direto.
+      if (!totemEnabled) {
+        // Recepção "assume" o paciente (aguardando → na_recepcao) para que, ao
+        // salvar os Dados, o fluxo avance corretamente. Se falhar, aborta com
+        // aviso (não abre os Dados com status "mentiroso").
+        const rec = await atenderRecepcao(res.queueEntryId);
+        if (rec?.error) {
+          toast.error(rec.error);
+          router.refresh();
+          return;
+        }
+        toast.success("Presença confirmada.");
+        onConfirmarPresenca?.({
+          ...agendado,
+          id: res.queueEntryId,
+          paciente: nomeAtual,
+          convenio: limpar(convenioAtual) ?? "",
+          statusRaw: "na_recepcao",
+          codigo: res.ticketCode ?? "—",
+        });
+        return;
+      }
+
+      // Modo TOTEM: emite a senha (fluxo atual). O nº de atendimento nasce só
+      // ao salvar os Dados de Atendimento.
+      setSenha(res.ticketCode ?? null);
+      setAtendimentoCodigo(null);
+      setEmitidoEm(new Date());
+      toast.success(`Check-in realizado. Senha ${res.ticketCode ?? ""}.`);
+      router.refresh();
     });
   }
 
@@ -121,8 +152,10 @@ export function CheckInModal({
         emitida
           ? "Imprima a ficha e oriente o paciente a aguardar a chamada."
           : bloqueado
-            ? "Cadastro pendente: complete o cadastro do paciente para emitir a senha."
-            : "Confirme a prioridade para emitir a senha de atendimento."
+            ? "Cadastro pendente: complete o cadastro do paciente para prosseguir."
+            : totemEnabled
+              ? "Confirme a prioridade para emitir a senha de atendimento."
+              : "Confirme a presença do paciente para iniciar o atendimento."
       }
       footer={
         emitida ? (
@@ -146,7 +179,11 @@ export function CheckInModal({
               disabled={pending || bloqueado}
             >
               <UserCheck className="h-4 w-4" />
-              {pending ? "Emitindo…" : "Emitir Senha"}
+              {pending
+                ? "Confirmando…"
+                : totemEnabled
+                  ? "Emitir Senha"
+                  : "Confirmar presença"}
             </Button>
           </>
         )

@@ -31,6 +31,8 @@ const settingsSchema = z.object({
   date_format: texto,
   time_format: texto,
   currency: texto,
+  // Módulo Totem (senha + Chamar). false = confirma presença + Dados direto.
+  totem_enabled: checkbox,
   // Segurança
   sec_two_factor: checkbox,
   sec_password_policy: texto,
@@ -139,6 +141,7 @@ export async function salvarConfiguracoes(
     date_format: d.date_format || "dmy",
     time_format: d.time_format || "24h",
     currency: d.currency || "brl",
+    totem_enabled: d.totem_enabled,
     two_factor: securityJson.twoFactor,
     password_policy: securityJson.passwordPolicy,
     backup_frequency: backupJson.frequency,

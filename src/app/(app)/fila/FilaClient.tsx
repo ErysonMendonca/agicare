@@ -116,6 +116,7 @@ export function FilaClient({
   isHoje = true,
   todoPeriodo = false,
   isMedico = false,
+  totemEnabled = false,
 }: {
   fila: FilaItem[];
   agendados?: FilaItem[];
@@ -137,6 +138,8 @@ export function FilaClient({
   todoPeriodo?: boolean;
   /** true quando o usuário é médico → "Atender" leva ao prontuário do paciente. */
   isMedico?: boolean;
+  /** Módulo Totem ligado: mostra senha + Chamar. Desligado: nº atendimento + Dados direto. */
+  totemEnabled?: boolean;
 }) {
   const router = useRouter();
   const [navegando, startNavegacao] = useTransition();
@@ -182,7 +185,8 @@ export function FilaClient({
         const casaTexto =
           termo === "" ||
           item.paciente.toLowerCase().includes(termo) ||
-          item.codigo.toLowerCase().includes(termo);
+          item.codigo.toLowerCase().includes(termo) ||
+          (item.atendimentoCodigo?.toLowerCase().includes(termo) ?? false);
         const casaStatus =
           statusFiltro === "todos" || item.statusRaw === statusFiltro;
         return casaTexto && casaStatus;
@@ -343,7 +347,7 @@ export function FilaClient({
                       className="flex h-10 flex-none items-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-1"
                     >
                       <Ticket className="h-4 w-4" />
-                      Check-in / Emitir Senha
+                      {totemEnabled ? "Check-in / Emitir Senha" : "Confirmar presença"}
                     </button>
                   </div>
                 </Card>
@@ -360,8 +364,16 @@ export function FilaClient({
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <Input
               type="search"
-              aria-label="Buscar paciente por nome ou senha"
-              placeholder="Buscar por nome ou senha..."
+              aria-label={
+                totemEnabled
+                  ? "Buscar paciente por nome ou senha"
+                  : "Buscar paciente por nome ou nº de atendimento"
+              }
+              placeholder={
+                totemEnabled
+                  ? "Buscar por nome ou senha..."
+                  : "Buscar por nome ou nº de atendimento..."
+              }
               className="pl-9"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -463,7 +475,9 @@ export function FilaClient({
               >
                 <div className="flex items-center gap-4">
                   <span className="flex h-14 w-14 flex-none items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-white">
-                    {item.codigo}
+                    {/* Totem ligado: senha. Desligado: nº de atendimento (— até
+                        preencher os Dados de Atendimento). */}
+                    {totemEnabled ? item.codigo : (item.atendimentoCodigo ?? "—")}
                   </span>
 
                   <div className="min-w-0 flex-1">
@@ -471,7 +485,8 @@ export function FilaClient({
                       <h3 className="font-semibold text-ink">
                         {item.paciente}
                       </h3>
-                      {item.atendimentoCodigo && (
+                      {/* Sem totem, o nº já aparece no quadrado — evita repetir. */}
+                      {totemEnabled && item.atendimentoCodigo && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-muted-surface px-2 py-0.5 text-xs font-medium text-muted">
                           <Hash className="h-3 w-3" />
                           {item.atendimentoCodigo}
@@ -547,6 +562,7 @@ export function FilaClient({
             onAtender={() => setModal("atendimento")}
             onDesistir={() => setModal("desistencia")}
             isMedico={isMedico}
+            totemEnabled={totemEnabled}
           />
           <TriagemModal
             item={selected}
@@ -577,6 +593,16 @@ export function FilaClient({
           agendado={checkInAlvo}
           open={checkInOpen}
           onClose={fecharCheckIn}
+          totemEnabled={totemEnabled}
+          onConfirmarPresenca={(item) => {
+            // Modo sem totem: check-in confirmou a presença (paciente já em
+            // 'na_recepcao') → abre os Dados de Atendimento direto.
+            setCheckInOpen(false);
+            setCheckInAlvo(null);
+            setSelected(item);
+            setModal("atendimento");
+            router.refresh();
+          }}
         />
       )}
     </>

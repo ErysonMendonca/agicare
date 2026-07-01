@@ -63,6 +63,8 @@ export type ClinicSettings = {
   dateFormat: string;
   timeFormat: string;
   currency: string;
+  /** Módulo Totem ligado (senha + Chamar). false = confirma presença + Dados direto. */
+  totemEnabled: boolean;
   // Notificações (canais legados — mantidos por compat)
   notifyEmail: boolean;
   notifySms: boolean;
@@ -121,6 +123,7 @@ const DEFAULTS: ClinicSettings = {
   dateFormat: "dmy",
   timeFormat: "24h",
   currency: "brl",
+  totemEnabled: false,
   notifyEmail: true,
   notifySms: false,
   notifyPush: true,
@@ -228,6 +231,7 @@ export const getSettings = cache(async (): Promise<ClinicSettings> => {
     dateFormat: (data.date_format as string | null) ?? DEFAULTS.dateFormat,
     timeFormat: (data.time_format as string | null) ?? DEFAULTS.timeFormat,
     currency: (data.currency as string | null) ?? DEFAULTS.currency,
+    totemEnabled: data.totem_enabled ?? DEFAULTS.totemEnabled,
     notifyEmail: data.notify_email ?? DEFAULTS.notifyEmail,
     notifySms: data.notify_sms ?? DEFAULTS.notifySms,
     notifyPush: data.notify_push ?? DEFAULTS.notifyPush,
