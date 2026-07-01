@@ -99,8 +99,26 @@ export function EscalaHorariosModal({
   const [examCodes, setExamCodes] = useState<string[]>(esc?.examTussCodes ?? []);
 
   const [dias, setDias] = useState<number[]>(esc?.weekdays ?? [1, 2, 3, 4, 5]);
+  // Horário BASE (padrão para dias recém-marcados).
   const [inicio, setInicio] = useState(esc?.startTime ?? "08:00");
   const [fim, setFim] = useState(esc?.endTime ?? "18:00");
+  // Horário PRÓPRIO por dia (0=Dom..6=Sáb). Ao editar uma escala antiga sem
+  // week_hours, cada dia já selecionado vem preenchido com o horário base.
+  const [horariosPorDia, setHorariosPorDia] = useState<
+    Record<number, { start: string; end: string }>
+  >(() => {
+    const baseStart = esc?.startTime ?? "08:00";
+    const baseEnd = esc?.endTime ?? "18:00";
+    const diasIniciais = esc?.weekdays ?? [1, 2, 3, 4, 5];
+    const out: Record<number, { start: string; end: string }> = {};
+    for (const d of diasIniciais) {
+      const wh = esc?.weekHours?.[String(d)];
+      out[d] = wh
+        ? { start: wh.start, end: wh.end }
+        : { start: baseStart, end: baseEnd };
+    }
+    return out;
+  });
   // Vigência da escala (período de validade).
   const [dataInicio, setDataInicio] = useState(esc?.startDate ?? "");
   const [dataFim, setDataFim] = useState(esc?.endDate ?? "");
@@ -134,9 +152,24 @@ export function EscalaHorariosModal({
   );
 
   function toggleDia(n: number) {
-    setDias((cur) =>
-      cur.includes(n) ? cur.filter((d) => d !== n) : [...cur, n],
-    );
+    setDias((cur) => {
+      const jaTem = cur.includes(n);
+      setHorariosPorDia((h) => {
+        const next = { ...h };
+        if (jaTem) delete next[n];
+        else next[n] = { start: inicio, end: fim };
+        return next;
+      });
+      return jaTem ? cur.filter((d) => d !== n) : [...cur, n];
+    });
+  }
+
+  /** Ajusta o horário próprio (início/fim) de um dia específico. */
+  function setHorarioDia(n: number, campo: "start" | "end", valor: string) {
+    setHorariosPorDia((h) => ({
+      ...h,
+      [n]: { ...(h[n] ?? { start: inicio, end: fim }), [campo]: valor },
+    }));
   }
 
   /** Marca/desmarca um item (código) num conjunto de seleção (exames/procedimentos). */
@@ -160,14 +193,29 @@ export function EscalaHorariosModal({
     if (p && p.duracaoNum > 0) setSlotMin(p.duracaoNum);
   }
 
+  // Dias selecionados na ordem de exibição (Seg→Dom).
+  const diasOrdenados = useMemo(
+    () => DIAS.filter((d) => dias.includes(d.n)),
+    [dias],
+  );
+
   function gerarGrade() {
-    const horas = gerarHorarios(inicio, fim, slotMin);
+    // Prévia pelo 1º dia selecionado (cada dia pode ter horário próprio).
+    const primeiro = diasOrdenados[0];
+    const faixa = primeiro
+      ? horariosPorDia[primeiro.n] ?? { start: inicio, end: fim }
+      : { start: inicio, end: fim };
+    const horas = gerarHorarios(faixa.start, faixa.end, slotMin);
     if (horas.length === 0) {
       toast.error("Horário final deve ser maior que o inicial.");
       return;
     }
     setSlots(horas.map((hora) => ({ hora })));
-    toast.success(`${horas.length} horários gerados.`);
+    toast.success(
+      primeiro
+        ? `${horas.length} horários gerados (prévia de ${primeiro.label}).`
+        : `${horas.length} horários gerados.`,
+    );
   }
 
   function adicionarManual() {
@@ -250,6 +298,27 @@ export function EscalaHorariosModal({
       setAba("horarios");
       return;
     }
+    // Valida cada dia (fim > início) e monta o week_hours + envelope base.
+    const week_hours: Record<string, { start: string; end: string }> = {};
+    let envInicio = "";
+    let envFim = "";
+    for (const d of diasOrdenados) {
+      const faixa = horariosPorDia[d.n] ?? { start: inicio, end: fim };
+      if (
+        !/^\d{2}:\d{2}$/.test(faixa.start) ||
+        !/^\d{2}:\d{2}$/.test(faixa.end) ||
+        faixa.end <= faixa.start
+      ) {
+        toast.error(
+          `Horário inválido em ${d.label}: o fim deve ser maior que o início.`,
+        );
+        setAba("horarios");
+        return;
+      }
+      week_hours[String(d.n)] = { start: faixa.start, end: faixa.end };
+      if (!envInicio || faixa.start < envInicio) envInicio = faixa.start;
+      if (!envFim || faixa.end > envFim) envFim = faixa.end;
+    }
     startTransition(async () => {
       const payload = {
         description: descricao,
@@ -260,8 +329,10 @@ export function EscalaHorariosModal({
         slot_minutes: slotMin,
         overbook_limit: encaixe,
         weekdays: dias,
-        start_time: inicio,
-        end_time: fim,
+        // Envelope base = menor início e maior fim entre os dias.
+        start_time: envInicio || inicio,
+        end_time: envFim || fim,
+        week_hours,
         start_date: dataInicio,
         end_date: dataFim,
         // Só guarda o conjunto do tipo atual; limpa o outro ao trocar de tipo.
@@ -474,10 +545,9 @@ export function EscalaHorariosModal({
               })}
             </div>
             <p className="mt-1.5 text-xs text-muted">
-              Cada escala tem um único horário, válido para todos os dias
-              marcados. Para horários diferentes por dia (ex.: Seg/Qua/Sex
-              08–13 e Ter/Qui 13–18), crie <strong>escalas separadas</strong>{" "}
-              para a mesma especialidade.
+              Cada dia marcado pode ter seu <strong>próprio horário</strong>{" "}
+              (ex.: Seg 08–13 e Ter 08–18). Ao marcar um dia, ele começa com o
+              horário base abaixo — ajuste por dia se precisar.
             </p>
           </div>
 
@@ -507,21 +577,76 @@ export function EscalaHorariosModal({
             </p>
           </div>
 
-          {/* Faixa de horário */}
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Horário Inicial"
-              type="time"
-              value={inicio}
-              onChange={(e) => setInicio(e.target.value)}
-            />
-            <Input
-              label="Horário Final"
-              type="time"
-              value={fim}
-              onChange={(e) => setFim(e.target.value)}
-            />
+          {/* Faixa de horário BASE (padrão para dias recém-marcados) */}
+          <div>
+            <span className="mb-2 block text-sm font-medium text-ink">
+              Horário Base (padrão)
+            </span>
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="Horário Inicial"
+                type="time"
+                value={inicio}
+                onChange={(e) => setInicio(e.target.value)}
+              />
+              <Input
+                label="Horário Final"
+                type="time"
+                value={fim}
+                onChange={(e) => setFim(e.target.value)}
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted">
+              Usado como ponto de partida ao marcar um novo dia. O horário que
+              vale é o definido por dia abaixo.
+            </p>
           </div>
+
+          {/* Horário próprio por dia */}
+          {diasOrdenados.length > 0 && (
+            <div>
+              <span className="mb-2 block text-sm font-medium text-ink">
+                Horário por Dia
+              </span>
+              <div className="space-y-2">
+                {diasOrdenados.map((d) => {
+                  const faixa = horariosPorDia[d.n] ?? {
+                    start: inicio,
+                    end: fim,
+                  };
+                  return (
+                    <div
+                      key={d.n}
+                      className="flex items-center gap-3 rounded-lg border border-line px-3 py-2"
+                    >
+                      <span className="w-10 shrink-0 text-sm font-semibold text-ink">
+                        {d.label}
+                      </span>
+                      <Input
+                        type="time"
+                        aria-label={`Início de ${d.label}`}
+                        value={faixa.start}
+                        onChange={(e) =>
+                          setHorarioDia(d.n, "start", e.target.value)
+                        }
+                        className="w-32"
+                      />
+                      <span className="text-sm text-muted">até</span>
+                      <Input
+                        type="time"
+                        aria-label={`Fim de ${d.label}`}
+                        value={faixa.end}
+                        onChange={(e) =>
+                          setHorarioDia(d.n, "end", e.target.value)
+                        }
+                        className="w-32"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <Button variant="primary" size="sm" onClick={gerarGrade}>
