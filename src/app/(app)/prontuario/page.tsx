@@ -20,6 +20,7 @@ import { FilaClient } from "@/app/(app)/fila/FilaClient";
 import { listQueue, listAgendadosHoje } from "@/lib/data/queue";
 import { getMySpecialty, listAtendimentosPorData } from "@/lib/data/prontuario";
 import { getCurrentUser, getRole } from "@/lib/auth";
+import { getSettings } from "@/lib/data/settings";
 import { requireView } from "@/lib/permissions";
 
 /** Data local de hoje em yyyy-mm-dd (coerente com <input type="date">). */
@@ -50,6 +51,7 @@ export default async function ProntuarioPage({
   // Médico opera a partir do Prontuário (não tem mais a Fila): "Atender" leva
   // ao prontuário do paciente, igual à Fila.
   const isMedico = (await getRole()) === "medico";
+  const { totemEnabled } = await getSettings();
   // Nome do médico logado p/ o default "meus atendimentos" (só se for clínico,
   // evitando chamar getCurrentUser em demo). Leitura apenas.
   const myName = souProfissional
@@ -236,7 +238,7 @@ export default async function ProntuarioPage({
           </p>
         </Card>
       ) : (
-        <FilaClient fila={filtrada} isMedico={isMedico} />
+        <FilaClient fila={filtrada} isMedico={isMedico} totemEnabled={totemEnabled} />
       )}
     </>
   );

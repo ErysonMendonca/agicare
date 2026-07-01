@@ -46,6 +46,32 @@ function resolveOptions(
   }));
 }
 
+/** Normaliza texto p/ comparação (sem acento, minúsculo, sem prefixo "N - "). */
+function norm(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/^\s*\d+\s*-\s*/, "") // remove "2 - " de "2 - CARDIOLOGIA"
+    .trim();
+}
+
+/**
+ * Casa o dado do AGENDAMENTO (ex.: especialidade "Cardiologia", médico "Dr. X")
+ * com uma das opções configuráveis (ex.: "2 - CARDIOLOGIA"). Devolve o `value`
+ * da opção correspondente; se não achar, o 1º item (comportamento atual).
+ * Assim o modal já abre pré-preenchido, sem re-selecionar.
+ */
+function matchOption(opts: AttendanceOption[], alvo: string | null | undefined): string {
+  const first = opts[0]?.value ?? "";
+  const t = norm(alvo ?? "");
+  if (!t || t === "—") return first;
+  // Só casa EXATO (após normalizar, "2 - CARDIOLOGIA" vira "cardiologia" e casa
+  // "Cardiologia"). Evita casar parcial errado (ex.: "Cardiologia Pediátrica").
+  const hit = opts.find((o) => norm(o.label) === t || norm(o.value) === t);
+  return hit?.value ?? first;
+}
+
 type DraftShape = {
   fields: Record<string, string>;
   convenio: string;
@@ -71,9 +97,11 @@ export function DadosAtendimentoModal({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
-  const [convenio, setConvenio] = useState<string>(
-    () => item.convenio || resolveOptions(options, "convenio")[0]?.value || "",
-  );
+  const [convenio, setConvenio] = useState<string>(() => {
+    // "—" (placeholder de agendado sem convênio) NÃO é valor válido → cai no 1º.
+    const doItem = item.convenio && item.convenio !== "—" ? item.convenio : "";
+    return doItem || resolveOptions(options, "convenio")[0]?.value || "";
+  });
   const [plano, setPlano] = useState("");
   // "Particular" não tem convênio → não exige plano nem dados de carteirinha.
   const isParticular = /particular/i.test(convenio);
@@ -353,7 +381,7 @@ export function DadosAtendimentoModal({
               <Select
                 name="medico"
                 label="Profissional"
-                defaultValue={oMedico[0]?.value}
+                defaultValue={matchOption(oMedico, item.medico)}
               >
                 {oMedico.map((o) => (
                   <option key={o.id} value={o.value}>
@@ -364,7 +392,7 @@ export function DadosAtendimentoModal({
               <Select
                 name="especialidade"
                 label="Especialidade"
-                defaultValue={oEspec[0]?.value}
+                defaultValue={matchOption(oEspec, item.especialidade)}
               >
                 {oEspec.map((o) => (
                   <option key={o.id} value={o.value}>

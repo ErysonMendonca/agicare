@@ -34,6 +34,7 @@ export function AcoesPacienteModal({
   onAtender,
   onDesistir,
   isMedico = false,
+  totemEnabled = true,
 }: {
   item: FilaItem;
   stages?: FlowStage[];
@@ -45,6 +46,8 @@ export function AcoesPacienteModal({
   onDesistir: () => void;
   /** Médico: ao Atender vai direto ao prontuário do paciente (não abre o modal admin). */
   isMedico?: boolean;
+  /** Totem ligado: mostra "Chamar" e "Reimprimir Ficha" (senha). Desligado: oculta. */
+  totemEnabled?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -140,8 +143,8 @@ export function AcoesPacienteModal({
     >
       <PacienteResumo item={item} />
 
-      {/* Ficha oculta na tela (visível só na impressão) para permitir reimpressão. */}
-      {podeReimprimir && (
+      {/* Ficha oculta na tela (visível só na impressão) — só no modo totem. */}
+      {totemEnabled && podeReimprimir && (
         <FichaImpressao
           senha={item.codigo}
           item={item}
@@ -150,13 +153,16 @@ export function AcoesPacienteModal({
       )}
 
       <div className="mt-5 grid grid-cols-2 gap-3">
-        <ActionButton
-          onClick={handleChamar}
-          disabled={pending || !podeChamar}
-          icon={<Monitor className="h-5 w-5" />}
-          label="Chamar"
-          className="bg-brand-500 text-white hover:bg-brand-600 disabled:hover:bg-brand-500"
-        />
+        {/* "Chamar" (painel/senha) só existe no modo totem. */}
+        {totemEnabled && (
+          <ActionButton
+            onClick={handleChamar}
+            disabled={pending || !podeChamar}
+            icon={<Monitor className="h-5 w-5" />}
+            label="Chamar"
+            className="bg-brand-500 text-white hover:bg-brand-600 disabled:hover:bg-brand-500"
+          />
+        )}
         {podeTriar && (
           <ActionButton
             onClick={onTriar}
@@ -187,13 +193,15 @@ export function AcoesPacienteModal({
           label="Desistência"
           className="border border-red-300 bg-white text-red-600 hover:bg-red-50"
         />
-        <ActionButton
-          onClick={handleReimprimir}
-          disabled={pending || !podeReimprimir}
-          icon={<Printer className="h-5 w-5" />}
-          label="Reimprimir Ficha"
-          className="border border-line bg-white text-ink hover:bg-muted-surface"
-        />
+        {totemEnabled && (
+          <ActionButton
+            onClick={handleReimprimir}
+            disabled={pending || !podeReimprimir}
+            icon={<Printer className="h-5 w-5" />}
+            label="Reimprimir Ficha"
+            className="border border-line bg-white text-ink hover:bg-muted-surface"
+          />
+        )}
       </div>
     </Modal>
   );

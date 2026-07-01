@@ -25,6 +25,7 @@ import {
   Upload,
   RotateCcw,
   KeyRound,
+  Ticket,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -266,6 +267,24 @@ export function ConfiguracoesClient({
                     <option value="eur">EUR - Euro (€)</option>
                   </Select>
                 </div>
+              </CardBody>
+            </Card>
+
+            {/* Módulo Totem (liga/desliga o fluxo de senha + chamada) */}
+            <Card className="max-w-2xl">
+              <CardBody>
+                <BlocoHeader
+                  icon={<Ticket className="h-5 w-5" />}
+                  tone="bg-teal-50 text-teal-600"
+                  title="Módulo Totem"
+                  subtitle="Como a recepção recebe o paciente na fila"
+                />
+                <ToggleRow
+                  name="totem_enabled"
+                  label="Ativar módulo Totem (senha e chamada)"
+                  desc="Ligado: o check-in emite senha e a fila usa o botão “Chamar” (painel/totem). Desligado: o check-in apenas confirma a presença e abre os Dados de Atendimento direto, sem senha."
+                  defaultChecked={settings.totemEnabled}
+                />
               </CardBody>
             </Card>
           </div>

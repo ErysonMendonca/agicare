@@ -5,6 +5,7 @@ import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { listTriageTemplates } from "@/lib/data/triage-templates";
 import { requireView } from "@/lib/permissions";
 import { getRole } from "@/lib/auth";
+import { getSettings } from "@/lib/data/settings";
 import { FilaClient } from "./FilaClient";
 
 /** Data local de hoje em yyyy-mm-dd (coerente com <input type="date">). */
@@ -36,7 +37,7 @@ export default async function FilaPage({
   const dataSelecionada = todoPeriodo ? "" : dataParam || hoje;
   const isHoje = !todoPeriodo && dataSelecionada === hoje;
 
-  const [fila, agendados, stages, attendanceOptions, triageTemplates] =
+  const [fila, agendados, stages, attendanceOptions, triageTemplates, settings] =
     await Promise.all([
       listQueue(todoPeriodo ? {} : { date: dataSelecionada }),
       // "Aguardando chegada" só faz sentido para o dia de hoje.
@@ -44,6 +45,7 @@ export default async function FilaPage({
       getAttendanceFlow(),
       listAttendanceOptions(),
       listTriageTemplates(),
+      getSettings(),
     ]);
 
   const aguardando = fila.filter((i) => i.status.label === "Aguardando").length;
@@ -71,6 +73,7 @@ export default async function FilaPage({
         isHoje={isHoje}
         todoPeriodo={todoPeriodo}
         isMedico={isMedico}
+        totemEnabled={settings.totemEnabled}
       />
     </>
   );
