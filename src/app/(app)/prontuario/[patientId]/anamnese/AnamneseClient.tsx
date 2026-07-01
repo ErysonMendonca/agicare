@@ -75,6 +75,14 @@ export function AnamneseClient({
     return m;
   }, [templates]);
 
+  // Imagem de fundo pré-fixada da lousa por especialidade (URL assinada).
+  const lousaBgBySpecialty = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of templates)
+      if (t.lousaImageUrl) m.set(t.specialty, t.lousaImageUrl);
+    return m;
+  }, [templates]);
+
   // Agrupa os campos da especialidade selecionada por seção (preserva a ordem).
   const blocos = useMemo(() => {
     const campos = fieldsBySpecialty.get(specialty) ?? [];
@@ -200,6 +208,10 @@ export function AnamneseClient({
         <LousaRascunho
           patientId={patientId}
           lousas={lousas}
+          // Fundo pela especialidade da FICHA (estável) — não segue o Select do
+          // modal nem a signed URL (que muda a cada refresh) → sem perda do desenho.
+          backgroundKey={especialidadeInicial}
+          backgroundUrl={lousaBgBySpecialty.get(especialidadeInicial)}
           onSaved={() => router.refresh()}
         />
       </div>
