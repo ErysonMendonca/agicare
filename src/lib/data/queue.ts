@@ -93,24 +93,78 @@ function mapPriority(priority: string): Tag[] | undefined {
   return undefined;
 }
 
-/** Formata um timestamp em HH:MM. */
-function formatHora(createdAt: string | null): string {
-  if (!createdAt) return "—";
-  const d = new Date(createdAt);
+/** Fuso da clínica para exibir INSTANTES reais (arrived_at/created_at = now()). */
+const TZ_CLINICA = "America/Sao_Paulo";
+
+/**
+ * Timestamps têm DUAS semânticas neste sistema:
+ *  - INSTANTES reais (arrived_at/created_at, gravados com `now().toISOString()`):
+ *    exibir no fuso da clínica (America/Sao_Paulo). Sem isso, o servidor em UTC
+ *    mostra 3h adiantado (bug da "entrada" na fila).
+ *  - HORÁRIO AGENDADO (appointments.starts_at): gravado como "wall-clock em UTC"
+ *    (`new Date("YYYY-MM-DDTHH:mm").toISOString()` num servidor UTC). Para exibir
+ *    o horário MARCADO, formatamos em UTC — independente do fuso do servidor.
+ */
+
+/** HH:MM de um INSTANTE real, no fuso da clínica. */
+function formatHora(ts: string | null): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleTimeString("pt-BR", {
+    timeZone: TZ_CLINICA,
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-/** Formata um timestamp em "dd/MM HH:MM" (data + hora). "—" se vazio/ inválido. */
+/** "dd/MM HH:MM" de um INSTANTE real, no fuso da clínica. */
 function formatDataHora(ts: string | null): string {
   if (!ts) return "—";
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return "—";
-  const data = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-  const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const opts = { timeZone: TZ_CLINICA } as const;
+  const data = d.toLocaleDateString("pt-BR", {
+    ...opts,
+    day: "2-digit",
+    month: "2-digit",
+  });
+  const hora = d.toLocaleTimeString("pt-BR", {
+    ...opts,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${data} ${hora}`;
+}
+
+/** HH:MM de um HORÁRIO AGENDADO (starts_at wall-clock em UTC). */
+function formatHoraAgendada(ts: string | null): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("pt-BR", {
+    timeZone: "UTC",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** "dd/MM HH:MM" de um HORÁRIO AGENDADO (starts_at wall-clock em UTC). */
+function formatDataHoraAgendada(ts: string | null): string {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  const opts = { timeZone: "UTC" } as const;
+  const data = d.toLocaleDateString("pt-BR", {
+    ...opts,
+    day: "2-digit",
+    month: "2-digit",
+  });
+  const hora = d.toLocaleTimeString("pt-BR", {
+    ...opts,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return `${data} ${hora}`;
 }
 
@@ -239,8 +293,7 @@ export async function listQueue(opts?: {
     const agendamento = Array.isArray(r.appointments)
       ? r.appointments[0]
       : r.appointments;
-    const horaFonte =
-      (agendamento?.starts_at as string | null) ?? r.created_at;
+    const startsAt = (agendamento?.starts_at as string | null) ?? null;
 
     return {
       id: r.id as string,
@@ -248,12 +301,15 @@ export async function listQueue(opts?: {
       codigo: r.ticket_code ?? "—",
       atendimentoCodigo: (r.attendance_code as string | null) ?? null,
       paciente: r.patient_name ?? "",
-      hora: formatHora(horaFonte),
+      // Hora da fila: se agendado, o horário MARCADO (starts_at, wall-clock);
+      // senão, o instante de entrada (created_at) no fuso da clínica.
+      hora: startsAt
+        ? formatHoraAgendada(startsAt)
+        : formatHora(r.created_at as string | null),
       // Agendamento: horário marcado (starts_at). Entrada: chegada na fila
-      // (arrived_at) ou, na falta, o momento do check-in (created_at).
-      agendamentoEm: formatDataHora(
-        (agendamento?.starts_at as string | null) ?? null,
-      ),
+      // (arrived_at) ou, na falta, o momento do check-in (created_at) — instantes
+      // reais, exibidos no fuso da clínica (America/Sao_Paulo).
+      agendamentoEm: formatDataHoraAgendada(startsAt),
       entradaEm: formatDataHora(
         (r.arrived_at as string | null) ?? (r.created_at as string | null),
       ),
@@ -396,9 +452,9 @@ export async function listAgendadosHoje(opts?: {
           codigo: "—",
     atendimentoCodigo: null,
           paciente: patient?.full_name ?? "—",
-          hora: formatHora(r.starts_at as string | null),
+          hora: formatHoraAgendada(r.starts_at as string | null),
           // Agendado ainda não fez check-in → sem horário de entrada.
-          agendamentoEm: formatDataHora(r.starts_at as string | null),
+          agendamentoEm: formatDataHoraAgendada(r.starts_at as string | null),
           entradaEm: "—",
           // Agendamento por especialidade (sem profissional): usa appointments.specialty.
           especialidade:
