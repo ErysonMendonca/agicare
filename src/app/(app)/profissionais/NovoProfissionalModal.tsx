@@ -105,7 +105,7 @@ function CamposProfissional({
           defaultValue={defaults.full_name ?? ""}
           required
         />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Select
             id={`${prefixo}-person-type`}
             name="person_type"
@@ -119,7 +119,7 @@ function CamposProfissional({
             <option value="cpf">Pessoa Física (CPF)</option>
             <option value="cnpj">Pessoa Jurídica (CNPJ)</option>
           </Select>
-          <div className="sm:col-span-2">
+          <div>
             <Input
               id={`${prefixo}-documento`}
               name="document"
