@@ -59,6 +59,12 @@ export function AcoesPacienteModal({
   const podeTriar = acoes.includes("triar");
   // 'atender' do motor cobre tanto chamar→atender quanto a chamada final.
   const podeAtender = acoes.includes("atender");
+  // O "Atender" nos passos da recepção (aguardando/na_recepcao) abre os Dados de
+  // Atendimento. Nos demais status, ele INICIA o atendimento CLÍNICO (→
+  // em_atendimento), que é do médico — some para os demais papéis na fila.
+  const atenderClinico =
+    item.statusRaw !== "aguardando" && item.statusRaw !== "na_recepcao";
+  const mostrarAtender = podeAtender && (!atenderClinico || isMedico);
   const podeDesistir = !TERMINAIS.includes(item.statusRaw);
 
   function handleChamar() {
@@ -172,13 +178,15 @@ export function AcoesPacienteModal({
             className="bg-amber-500 text-white hover:bg-amber-600 disabled:hover:bg-amber-500"
           />
         )}
-        <ActionButton
-          onClick={handleAtender}
-          disabled={pending || !podeAtender}
-          icon={<UserCheck className="h-5 w-5" />}
-          label="Atender"
-          className="bg-[#10b981] text-white hover:bg-[#059669] disabled:hover:bg-[#10b981]"
-        />
+        {mostrarAtender && (
+          <ActionButton
+            onClick={handleAtender}
+            disabled={pending || !podeAtender}
+            icon={<UserCheck className="h-5 w-5" />}
+            label="Atender"
+            className="bg-[#10b981] text-white hover:bg-[#059669] disabled:hover:bg-[#10b981]"
+          />
+        )}
         <ActionButton
           onClick={handleVisualizar}
           disabled={pending}

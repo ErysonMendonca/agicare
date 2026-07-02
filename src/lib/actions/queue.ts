@@ -102,6 +102,15 @@ export async function atenderPaciente(id: string): Promise<ActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
+  // O atendimento clínico (→ em_atendimento) é do MÉDICO (admin como gestor).
+  // Recepção não inicia atendimento — reforço além do gate de UI.
+  if (!isDemoMode()) {
+    const role = await getRole();
+    if (role !== "medico" && role !== "admin") {
+      return { error: "Apenas o médico pode iniciar o atendimento." };
+    }
+  }
+
   // REIVINDICAÇÃO: se o paciente está só por especialidade (professional_id
   // vazio), o médico que atende passa a ser o profissional dele — some da fila
   // dos outros médicos da mesma especialidade. O `.is("professional_id", null)`
