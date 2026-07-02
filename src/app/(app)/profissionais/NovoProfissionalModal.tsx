@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button, type ButtonProps } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { TelefoneInput } from "@/components/ui/TelefoneInput";
+import { CepInput } from "@/components/ui/MaskedInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -118,7 +119,7 @@ function CamposProfissional({
       <div className="border-t border-line pt-4">
         <p className="mb-3 text-sm font-medium text-ink">Endereço</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Input
+          <CepInput
             id={`${prefixo}-cep`}
             name="cep"
             label="CEP"

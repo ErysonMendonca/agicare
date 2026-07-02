@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { TelefoneInput } from "@/components/ui/TelefoneInput";
+import { CpfInput, CnsInput, CepInput } from "@/components/ui/MaskedInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -296,7 +297,7 @@ export function CadastroPacienteModal() {
               <div>
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <Input
+                    <CpfInput
                       id="cp-cpf"
                       name="cpf"
                       label="CPF"
@@ -326,7 +327,7 @@ export function CadastroPacienteModal() {
               <div>
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <Input
+                    <CnsInput
                       id="cp-cns"
                       name="cns"
                       label="CNS (Cartão SUS)"
@@ -521,7 +522,7 @@ export function CadastroPacienteModal() {
             />
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Input
+              <CepInput
                 id="cp-cep"
                 name="cep"
                 label={buscandoCep ? "CEP (buscando...)" : "CEP"}

@@ -10,6 +10,8 @@ export type Identificacao = {
   atendimentoCodigo: string | null;
   idade: string;
   nascimento: string;
+  /** Nº de documento do paciente = CPF; "—" quando não cadastrado. */
+  cpf: string;
   genero: string;
   nomeMae: string;
   convenio: string;
@@ -220,6 +222,7 @@ const DEMO_RESUMO: Resumo = {
     atendimentoCodigo: "100001",
     idade: "40 anos",
     nascimento: "12/03/1985",
+    cpf: "123.456.789-09",
     genero: "Feminino",
     nomeMae: "Joana Silva Santos",
     convenio: "Unimed",
@@ -470,6 +473,7 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
       atendimentoCodigo,
       idade: calcIdade(p.birth_date as string | null),
       nascimento: fmtData(p.birth_date as string | null),
+      cpf: (p.cpf as string | null) || "—",
       genero: GENERO[genero] ?? (genero || "—"),
       nomeMae: (p.mother_name as string | null) ?? "—",
       // Convênio do cadastro; se vazio (ex.: paciente avulso), cai no convênio

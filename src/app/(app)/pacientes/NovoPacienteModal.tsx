@@ -6,6 +6,7 @@ import { UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { CpfInput } from "@/components/ui/MaskedInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { createPatient } from "@/lib/actions/patients";
@@ -57,7 +58,7 @@ export function NovoPacienteModal() {
         <form id="form-novo-paciente" action={formAction} className="space-y-4">
           <Input id="np-nome" name="full_name" label="Nome completo" placeholder="Ex.: João Pedro Oliveira" required />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input id="np-cpf" name="cpf" label="CPF" placeholder="000.000.000-00" />
+            <CpfInput id="np-cpf" name="cpf" label="CPF" placeholder="000.000.000-00" />
             <Input id="np-nascimento" name="birth_date" label="Data de nascimento" type="date" />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { TelefoneInput } from "@/components/ui/TelefoneInput";
+import { CpfInput, CnsInput, CepInput } from "@/components/ui/MaskedInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -285,7 +286,7 @@ function EditarPacienteForm({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Input
+              <CpfInput
                 id="ep-cpf"
                 name="cpf"
                 label="CPF"
@@ -307,7 +308,7 @@ function EditarPacienteForm({
               )}
             </div>
             <div>
-              <Input
+              <CnsInput
                 id="ep-cns"
                 name="cns"
                 label="CNS (Cartão SUS)"
@@ -490,7 +491,7 @@ function EditarPacienteForm({
           />
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Input
+            <CepInput
               id="ep-cep"
               name="cep"
               label={buscandoCep ? "CEP (buscando...)" : "CEP"}

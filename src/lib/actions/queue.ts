@@ -337,6 +337,15 @@ const atendimentoSchema = z.object({
   respParentesco: z.string().trim().max(60).nullish(),
   observacoes: z.string().trim().max(2000).nullish(),
 }).superRefine((d, ctx) => {
+  // Tipo de Atendimento obrigatório (autopreenchido pelo agendamento; no avulso
+  // a recepção precisa selecionar). Espelha a trava do modal — defesa no servidor.
+  if (!d.encaminhamento || !d.encaminhamento.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["encaminhamento"],
+      message: "Selecione o tipo de atendimento.",
+    });
+  }
   // Plano obrigatório, exceto em atendimento particular (sem convênio).
   if (!/particular/i.test(d.convenio) && !d.plano) {
     ctx.addIssue({

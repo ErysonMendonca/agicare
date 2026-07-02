@@ -113,13 +113,35 @@ export function DadosAtendimentoModal({
   // Não-perder-ao-fechar: dirty + diálogo de confirmação + rascunho local.
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
-  const draftKey = `draft:atendimento:${item.id}`;
+  // v2: invalida rascunhos pré-"Tipo de Atendimento" (que guardavam o antigo
+  // default de encaminhamento e sobrescreveriam o autofill do agendamento).
+  const draftKey = `draft:atendimento:v2:${item.id}`;
 
   // Listas de opções (parametrizadas ou fallback) — value = grava o selecionado.
   const oOrigem = resolveOptions(options, "origem");
   const oMedico = resolveOptions(options, "medico");
   const oEspec = resolveOptions(options, "especialidade");
   const oEncam = resolveOptions(options, "encaminhamento");
+  // ── Tipo de Atendimento (ex-"Encaminhamento") ──────────────────────────────
+  // Autopreenche com o que foi escolhido no AGENDAMENTO (service_type:
+  // Consulta/Retorno/Exame/Procedimento). O valor do agendamento MANDA: se não
+  // estiver na lista configurada da clínica, é injetado como opção e pré-selecionado.
+  // Sem agendamento (avulso), abre em "Selecione" e a seleção vira obrigatória.
+  const tipoAgendado = (item.tipoAtendimento ?? "").trim();
+  const tipoNoConfig =
+    !!tipoAgendado &&
+    oEncam.some(
+      (o) => norm(o.label) === norm(tipoAgendado) || norm(o.value) === norm(tipoAgendado),
+    );
+  const oTipo: AttendanceOption[] =
+    tipoAgendado && !tipoNoConfig
+      ? [{ id: `ag-tipo-${tipoAgendado}`, label: tipoAgendado, value: tipoAgendado }, ...oEncam]
+      : oEncam;
+  const tipoDefault = tipoAgendado
+    ? oTipo.find(
+        (o) => norm(o.label) === norm(tipoAgendado) || norm(o.value) === norm(tipoAgendado),
+      )?.value ?? tipoAgendado
+    : "";
   const oCarater = resolveOptions(options, "carater");
   const oProced = resolveOptions(options, "procedencia");
   const oCentro = resolveOptions(options, "centro_custo");
@@ -245,6 +267,10 @@ export function DadosAtendimentoModal({
 
   async function salvar(imprimir: boolean) {
     if (pending) return;
+    if (!readForm("encaminhamento")) {
+      toast.error("Selecione o tipo de atendimento.");
+      return;
+    }
     if (!isParticular && !plano) {
       toast.error("Selecione o plano do convênio.");
       return;
@@ -402,10 +428,15 @@ export function DadosAtendimentoModal({
               </Select>
               <Select
                 name="encaminhamento"
-                label="Encaminhamento de Atendimento"
-                defaultValue={oEncam[0]?.value}
+                label="Tipo de Atendimento *"
+                defaultValue={tipoDefault}
               >
-                {oEncam.map((o) => (
+                {!tipoAgendado && (
+                  <option value="" disabled>
+                    Selecione o tipo
+                  </option>
+                )}
+                {oTipo.map((o) => (
                   <option key={o.id} value={o.value}>
                     {o.label}
                   </option>
