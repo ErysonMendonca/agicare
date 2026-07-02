@@ -12,6 +12,8 @@ import {
   Pill,
   PackageCheck,
   Zap,
+  XCircle,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
@@ -19,10 +21,11 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { type Dispensacao, type ProdutoEstoque } from "@/lib/data/stock";
 import { type Paciente } from "@/lib/data/patients";
-import { iniciarSeparacao } from "@/lib/actions/stock";
+import { iniciarSeparacao, recusarDispensacao } from "@/lib/actions/stock";
 import { SeparacaoModal } from "./SeparacaoModal";
 import { NovaDispensacaoModal } from "./NovaDispensacaoModal";
 
@@ -43,6 +46,9 @@ export function DispensacaoTab({
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [busca, setBusca] = useState("");
   const [separando, setSeparando] = useState<Dispensacao | null>(null);
+  // Recusa: pedido-alvo + texto do motivo (obrigatório).
+  const [recusando, setRecusando] = useState<Dispensacao | null>(null);
+  const [motivo, setMotivo] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -71,6 +77,33 @@ export function DispensacaoTab({
         setSeparando({ ...pedido, statusRaw: "separacao" });
       } else {
         toast.error(res?.error ?? "Não foi possível iniciar a separação.");
+      }
+    });
+  }
+
+  function abrirRecusa(pedido: Dispensacao) {
+    setMotivo("");
+    setRecusando(pedido);
+  }
+
+  function confirmarRecusa() {
+    if (!recusando) return;
+    if (motivo.trim().length < 5) {
+      toast.error("Informe o motivo da recusa (mín. 5 caracteres).");
+      return;
+    }
+    startTransition(async () => {
+      const res = await recusarDispensacao(recusando.id, motivo.trim());
+      if (res?.ok) {
+        toast.success("Solicitação recusada.");
+        setRecusando(null);
+        setMotivo("");
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível recusar a solicitação.");
+        // Se falhou por corrida (já concluído/recusado por outro), sincroniza o
+        // card com o estado real do banco.
+        router.refresh();
       }
     });
   }
@@ -131,6 +164,7 @@ export function DispensacaoTab({
                 <option value="pendente">Pendente</option>
                 <option value="separacao">Em Separação</option>
                 <option value="concluido">Concluído</option>
+                <option value="cancelado">Recusado</option>
               </Select>
             </div>
             <div className="relative flex-1 sm:max-w-xs">
@@ -179,24 +213,48 @@ export function DispensacaoTab({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    {pedido.statusRaw === "separacao" ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSeparando(pedido)}
-                      >
-                        <PackageCheck className="h-4 w-4" /> Continuar Separação
-                      </Button>
-                    ) : pedido.statusRaw === "pendente" ? (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={pending}
-                        onClick={() => handleIniciar(pedido)}
-                      >
-                        <PackageCheck className="h-4 w-4" /> Iniciar Separação
-                      </Button>
-                    ) : (
+                    {pedido.statusRaw === "separacao" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSeparando(pedido)}
+                        >
+                          <PackageCheck className="h-4 w-4" /> Continuar Separação
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={pending}
+                          className="text-status-danger hover:bg-status-danger/10"
+                          onClick={() => abrirRecusa(pedido)}
+                        >
+                          <XCircle className="h-4 w-4" /> Recusar
+                        </Button>
+                      </>
+                    )}
+                    {pedido.statusRaw === "pendente" && (
+                      <>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={pending}
+                          onClick={() => handleIniciar(pedido)}
+                        >
+                          <PackageCheck className="h-4 w-4" /> Iniciar Separação
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={pending}
+                          className="text-status-danger hover:bg-status-danger/10"
+                          onClick={() => abrirRecusa(pedido)}
+                        >
+                          <XCircle className="h-4 w-4" /> Recusar
+                        </Button>
+                      </>
+                    )}
+                    {pedido.statusRaw === "concluido" && (
                       <Badge status="ok">Concluído</Badge>
                     )}
                   </div>
@@ -210,6 +268,16 @@ export function DispensacaoTab({
                         style={{ width: `${pedido.progresso}%` }}
                       />
                     </div>
+                  </div>
+                )}
+
+                {pedido.statusRaw === "cancelado" && pedido.motivoRecusa && (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    <Ban className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      <span className="font-medium">Recusado:</span>{" "}
+                      {pedido.motivoRecusa}
+                    </span>
                   </div>
                 )}
 
@@ -268,6 +336,53 @@ export function DispensacaoTab({
           onClose={() => setSeparando(null)}
         />
       )}
+
+      <Modal
+        open={!!recusando}
+        onClose={() => setRecusando(null)}
+        title="Recusar solicitação"
+        subtitle={
+          recusando
+            ? `${recusando.codigo} — ${recusando.origem.nome}. O pedido não será atendido e o estoque não é debitado.`
+            : undefined
+        }
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setRecusando(null)}
+              disabled={pending}
+            >
+              Voltar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmarRecusa}
+              disabled={pending || motivo.trim().length < 5}
+            >
+              <XCircle className="h-4 w-4" />
+              {pending ? "Recusando…" : "Confirmar recusa"}
+            </Button>
+          </>
+        }
+      >
+        <label htmlFor="motivo-recusa" className="block">
+          <span className="mb-1.5 block text-sm font-medium text-ink">
+            Motivo da recusa <span className="text-status-danger">*</span>
+          </span>
+          <textarea
+            id="motivo-recusa"
+            rows={3}
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            placeholder="Ex.: itens indisponíveis; solicitar via compra."
+            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
+        </label>
+        <p className="mt-1 text-xs text-muted">
+          Mínimo de 5 caracteres. Fica registrado no pedido.
+        </p>
+      </Modal>
     </div>
   );
 }
