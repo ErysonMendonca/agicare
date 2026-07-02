@@ -57,19 +57,22 @@ function norm(s: string): string {
 }
 
 /**
- * Casa o dado do AGENDAMENTO (ex.: especialidade "Cardiologia", médico "Dr. X")
- * com uma das opções configuráveis (ex.: "2 - CARDIOLOGIA"). Devolve o `value`
- * da opção correspondente; se não achar, o 1º item (comportamento atual).
- * Assim o modal já abre pré-preenchido, sem re-selecionar.
+ * O valor do AGENDAMENTO manda (especialidade/profissional/tipo). Se casar com uma
+ * opção configurada, usa o value dela; se NÃO estiver na lista, injeta o valor
+ * do agendamento como opção e pré-seleciona (assim especialidade/profissional
+ * sempre refletem o agendamento). Sem valor no agendamento → 1º item.
  */
-function matchOption(opts: AttendanceOption[], alvo: string | null | undefined): string {
-  const first = opts[0]?.value ?? "";
+function comAgendamento(
+  opts: AttendanceOption[],
+  alvo: string | null | undefined,
+): { options: AttendanceOption[]; value: string } {
   const t = norm(alvo ?? "");
-  if (!t || t === "—") return first;
-  // Só casa EXATO (após normalizar, "2 - CARDIOLOGIA" vira "cardiologia" e casa
-  // "Cardiologia"). Evita casar parcial errado (ex.: "Cardiologia Pediátrica").
+  const bruto = (alvo ?? "").trim();
+  if (!t || t === "—") return { options: opts, value: opts[0]?.value ?? "" };
   const hit = opts.find((o) => norm(o.label) === t || norm(o.value) === t);
-  return hit?.value ?? first;
+  if (hit) return { options: opts, value: hit.value };
+  const injetada: AttendanceOption = { id: `ag-${bruto}`, label: bruto, value: bruto };
+  return { options: [injetada, ...opts], value: bruto };
 }
 
 type DraftShape = {
@@ -98,9 +101,15 @@ export function DadosAtendimentoModal({
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const [convenio, setConvenio] = useState<string>(() => {
-    // "—" (placeholder de agendado sem convênio) NÃO é valor válido → cai no 1º.
-    const doItem = item.convenio && item.convenio !== "—" ? item.convenio : "";
-    return doItem || resolveOptions(options, "convenio")[0]?.value || "";
+    // Convênio vem do CADASTRO do paciente (patients.convenio); se ausente, cai
+    // no convênio do atendimento e, por fim, no 1º da lista. "—" é placeholder.
+    const limpo = (v: string | null | undefined) =>
+      v && v !== "—" ? v : "";
+    const doCadastro = limpo(item.convenioCadastro);
+    const doItem = limpo(item.convenio);
+    return (
+      doCadastro || doItem || resolveOptions(options, "convenio")[0]?.value || ""
+    );
   });
   const [plano, setPlano] = useState("");
   // "Particular" não tem convênio → não exige plano nem dados de carteirinha.
@@ -148,6 +157,10 @@ export function DadosAtendimentoModal({
   const oConv = resolveOptions(options, "convenio");
   const oPlano = resolveOptions(options, "plano");
   const oParent = resolveOptions(options, "parentesco");
+
+  // Especialidade e Profissional vêm do AGENDAMENTO (injeta se fora da lista).
+  const espec = comAgendamento(oEspec, item.especialidade);
+  const prof = comAgendamento(oMedico, item.medico);
 
   /** Snapshot completo do formulário (campos + estados controlados). */
   const snapshot = useCallback((): DraftShape => {
@@ -402,25 +415,26 @@ export function DadosAtendimentoModal({
               </div>
             </div>
 
-            {/* Linha 2: profissional / especialidade / encaminhamento / etc. */}
+            {/* Linha 2: especialidade / profissional / tipo / etc. (especialidade
+                e profissional vêm do agendamento). */}
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Select
-                name="medico"
-                label="Profissional"
-                defaultValue={matchOption(oMedico, item.medico)}
+                name="especialidade"
+                label="Especialidade"
+                defaultValue={espec.value}
               >
-                {oMedico.map((o) => (
+                {espec.options.map((o) => (
                   <option key={o.id} value={o.value}>
                     {o.label}
                   </option>
                 ))}
               </Select>
               <Select
-                name="especialidade"
-                label="Especialidade"
-                defaultValue={matchOption(oEspec, item.especialidade)}
+                name="medico"
+                label="Profissional"
+                defaultValue={prof.value}
               >
-                {oEspec.map((o) => (
+                {prof.options.map((o) => (
                   <option key={o.id} value={o.value}>
                     {o.label}
                   </option>
@@ -558,32 +572,34 @@ export function DadosAtendimentoModal({
           {/* Responsável */}
           <fieldset className="mt-5 rounded-xl border border-line p-4">
             <legend className="px-1 text-sm font-semibold text-muted">Responsável</legend>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-ink">Nome</span>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Nome do responsável"
-                    disabled={oMesmo}
-                    value={respNome}
-                    onChange={(e) => {
-                      setRespNome(e.target.value);
-                      setDirty(true);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={toggleOMesmo}
-                    className={`h-10 flex-none rounded-lg px-3 text-sm font-semibold transition-colors ${
-                      oMesmo
-                        ? "bg-brand-500 text-white"
-                        : "border border-line text-ink hover:bg-muted-surface"
-                    }`}
-                  >
-                    O MESMO
-                  </button>
-                </div>
-              </label>
+            {/* Nome ocupa a linha inteira (input largo p/ digitar o nome completo). */}
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-ink">Nome</span>
+              <div className="flex gap-2">
+                <Input
+                  className="flex-1"
+                  placeholder="Nome do responsável"
+                  disabled={oMesmo}
+                  value={respNome}
+                  onChange={(e) => {
+                    setRespNome(e.target.value);
+                    setDirty(true);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={toggleOMesmo}
+                  className={`h-10 flex-none rounded-lg px-3 text-sm font-semibold transition-colors ${
+                    oMesmo
+                      ? "bg-brand-500 text-white"
+                      : "border border-line text-ink hover:bg-muted-surface"
+                  }`}
+                >
+                  O MESMO
+                </button>
+              </div>
+            </label>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Input name="resp_documento" label="Documento" placeholder="CPF ou RG" />
               <Select name="resp_parentesco" label="Grau Parentesco" defaultValue="">
                 <option value="" disabled>
