@@ -212,14 +212,12 @@ export async function fecharAtendimento(input: FecharInput): Promise<ActionState
   //    procedimentos registrados (o valor NÃO vem do client).
   const { total } = await listProcedimentosAtendimento(parsed.data.queueEntryId);
 
-  // 3) Evento faturável + pagamento (integra com o Faturamento).
-  const year = new Date().getFullYear();
-  const code = `EVT-${year}-${Date.now().toString().slice(-6)}`;
+  // 3) Evento faturável + pagamento (integra com o Faturamento). O `code` é
+  //    gerado por sequence global no BEFORE INSERT (trigger 0074) — não enviar.
   const { data: evt, error: evtErr } = await supabase
     .from("billable_events")
     .insert({
       clinic_id: clinicId,
-      code,
       patient_id: patientId,
       service: "Atendimento",
       amount: total,
