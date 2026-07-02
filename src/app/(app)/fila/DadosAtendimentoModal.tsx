@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Save, Printer, AlertTriangle } from "lucide-react";
+import { FichaAtendimento, type DadosAtendimentoDoc } from "./FichaAtendimento";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -262,6 +264,39 @@ export function DadosAtendimentoModal({
     return /urg/i.test(value) ? "urgencia" : "eletivo";
   }
 
+  /** Monta o documento do detalhe do atendimento a partir dos valores atuais. */
+  function montarDoc(): DadosAtendimentoDoc {
+    return {
+      especialidade: readForm("especialidade"),
+      profissional: readForm("medico"),
+      tipo: readForm("encaminhamento"),
+      carater: readForm("carater"),
+      procedencia: readForm("procedencia"),
+      centroCusto: readForm("centro_custo"),
+      origem: readForm("origem"),
+      dataEntrada: readForm("data_entrada"),
+      gestante: gestante ? "Sim" : "Não",
+      convenio,
+      plano: isParticular ? "Não se aplica (Particular)" : plano,
+      carteira: isParticular ? "" : readForm("carteira"),
+      validade: isParticular ? "" : readForm("validade"),
+      responsavel: oMesmo ? item.paciente : respNome,
+      respDocumento: oMesmo ? "" : readForm("resp_documento"),
+      respParentesco: oMesmo ? "" : readForm("resp_parentesco"),
+      observacoes: readForm("observacoes"),
+    };
+  }
+
+  // Documento de impressão renderizado (oculto na tela). `flushSync` garante que
+  // ele esteja no DOM antes de `window.print()`.
+  const [docImpressao, setDocImpressao] = useState<DadosAtendimentoDoc | null>(
+    null,
+  );
+  function imprimirDocumento() {
+    flushSync(() => setDocImpressao(montarDoc()));
+    window.print();
+  }
+
   /** Fecha pedindo confirmação se houver alterações não salvas. */
   const handleClose = useCallback(() => {
     if (dirty) {
@@ -326,7 +361,7 @@ export function DadosAtendimentoModal({
     toast.success(
       imprimir ? "Atendimento salvo. Gerando impressão…" : "Atendimento salvo.",
     );
-    if (imprimir) window.print();
+    if (imprimir) imprimirDocumento();
     // Reflete na fila o avanço do status (recepção concluída → aguardando atendimento).
     router.refresh();
     onClose();
@@ -349,6 +384,14 @@ export function DadosAtendimentoModal({
             >
               <ChevronLeft className="h-4 w-4" />
               Voltar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={imprimirDocumento}
+              disabled={pending}
+            >
+              <Printer className="h-4 w-4" />
+              Reimprimir
             </Button>
             <Button variant="primary" onClick={() => salvar(false)} disabled={pending}>
               <Save className="h-4 w-4" />
@@ -630,6 +673,10 @@ export function DadosAtendimentoModal({
             />
           </label>
         </form>
+
+        {/* Documento do detalhe do atendimento — oculto na tela, visível só na
+            impressão (Reimprimir / Salvar e Imprimir). */}
+        {docImpressao && <FichaAtendimento item={item} dados={docImpressao} />}
       </Modal>
 
       {/* Confirmação ao fechar com alterações não salvas (não-perder). */}
