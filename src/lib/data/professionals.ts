@@ -1,6 +1,21 @@
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 
+/** Credenciamento de convênio (TISS 3.0) para o formulário (0070). */
+export type CredencialEdit = {
+  convenio: string;
+  vigencia: string;
+  convenio_code: string;
+  lab_code: string;
+  tiss_login: string;
+  tiss_password: string;
+  recebe_eletivo: boolean;
+  recebe_urgencia: boolean;
+  recebe_internacao: boolean;
+  xml_tag: string;
+  cpf_or_convenio_code: string;
+};
+
 /** Valores brutos (sem fallback "—") para pré-preencher o modal de edição. */
 export type ProfissionalEdit = {
   profileId: string;
@@ -19,6 +34,26 @@ export type ProfissionalEdit = {
   state: string;
   /** Observações (4º bloco do cadastro — escopo 11.2). */
   notes: string;
+  // Dados pessoais / tipo de profissional / conselho detalhado (0070) — opcionais
+  // p/ compat com o MOCK; a leitura real sempre popula.
+  person_type?: string;
+  document?: string;
+  social_name?: string;
+  birth_date?: string;
+  sex?: string;
+  gender?: string;
+  mother_name?: string;
+  race?: string;
+  birthplace?: string;
+  nationality?: string;
+  cns?: string;
+  cnes?: string;
+  council_number?: string;
+  council_name?: string;
+  council_uf?: string;
+  council_expiry?: string;
+  /** Credenciamentos de convênio (só admin lê — RLS 0070). */
+  credentials?: CredencialEdit[];
 };
 
 export type Profissional = {
@@ -264,19 +299,61 @@ export async function listProfessionals(): Promise<Profissional[]> {
   const { data, error } = await supabase
     .from("professionals")
     .select(
-      "id, profile_id, specialty, council_reg, active, cep, address, address_number, complement, neighborhood, city, state, notes, profiles(full_name, phone, role)",
+      "id, profile_id, specialty, council_reg, active, cep, address, address_number, complement, neighborhood, city, state, notes, " +
+        "person_type, document, social_name, birth_date, sex, gender, mother_name, race, birthplace, nationality, cns, cnes, " +
+        "council_number, council_name, council_uf, council_expiry, " +
+        "professional_insurance_credentials(convenio, vigencia, convenio_code, lab_code, tiss_login, tiss_password, recebe_eletivo, recebe_urgencia, recebe_internacao, xml_tag, cpf_or_convenio_code), " +
+        "profiles(full_name, phone, role)",
     )
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];
 
+  // O select concatenado + embed degrada a inferência do supabase-js; tipamos a
+  // linha explicitamente (o runtime já está correto).
+  type S = string | null;
+  type ProfRow = {
+    id: string;
+    profile_id: S;
+    specialty: S;
+    council_reg: S;
+    active: boolean | null;
+    cep: S;
+    address: S;
+    address_number: S;
+    complement: S;
+    neighborhood: S;
+    city: S;
+    state: S;
+    notes: S;
+    person_type: S;
+    document: S;
+    social_name: S;
+    birth_date: S;
+    sex: S;
+    gender: S;
+    mother_name: S;
+    race: S;
+    birthplace: S;
+    nationality: S;
+    cns: S;
+    cnes: S;
+    council_number: S;
+    council_name: S;
+    council_uf: S;
+    council_expiry: S;
+    professional_insurance_credentials: Array<Record<string, unknown>> | null;
+    profiles: unknown;
+  };
+  const rows = data as unknown as ProfRow[];
+
   // Indicadores de agenda (consultas do dia + próxima) por profissional.
   const indicadores = await fetchAgendaIndicadores(
     supabase,
-    data.map((r) => r.id as string),
+    rows.map((r) => r.id),
   );
 
-  return data.map((r) => {
+  return rows.map((r) => {
     // O join pode vir como objeto ou array dependendo da inferência do PostgREST.
     const perfil = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
     const role = perfil?.role ?? "";
@@ -309,6 +386,38 @@ export async function listProfessionals(): Promise<Profissional[]> {
         city: r.city ?? "",
         state: r.state ?? "",
         notes: r.notes ?? "",
+        person_type: (r.person_type as string | null) ?? "",
+        document: (r.document as string | null) ?? "",
+        social_name: (r.social_name as string | null) ?? "",
+        birth_date: (r.birth_date as string | null) ?? "",
+        sex: (r.sex as string | null) ?? "",
+        gender: (r.gender as string | null) ?? "",
+        mother_name: (r.mother_name as string | null) ?? "",
+        race: (r.race as string | null) ?? "",
+        birthplace: (r.birthplace as string | null) ?? "",
+        nationality: (r.nationality as string | null) ?? "",
+        cns: (r.cns as string | null) ?? "",
+        cnes: (r.cnes as string | null) ?? "",
+        council_number: (r.council_number as string | null) ?? "",
+        council_name: (r.council_name as string | null) ?? "",
+        council_uf: (r.council_uf as string | null) ?? "",
+        council_expiry: (r.council_expiry as string | null) ?? "",
+        credentials: (Array.isArray(r.professional_insurance_credentials)
+          ? r.professional_insurance_credentials
+          : []
+        ).map((c) => ({
+          convenio: (c.convenio as string | null) ?? "",
+          vigencia: (c.vigencia as string | null) ?? "",
+          convenio_code: (c.convenio_code as string | null) ?? "",
+          lab_code: (c.lab_code as string | null) ?? "",
+          tiss_login: (c.tiss_login as string | null) ?? "",
+          tiss_password: (c.tiss_password as string | null) ?? "",
+          recebe_eletivo: !!c.recebe_eletivo,
+          recebe_urgencia: !!c.recebe_urgencia,
+          recebe_internacao: !!c.recebe_internacao,
+          xml_tag: (c.xml_tag as string | null) ?? "",
+          cpf_or_convenio_code: (c.cpf_or_convenio_code as string | null) ?? "",
+        })),
       },
     };
   });

@@ -11,8 +11,9 @@ import {
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
-/** Texto opcional ("" é aceito e tratado como ausente na persistência). */
-const opt = z.string().trim().optional().or(z.literal(""));
+/** Texto opcional ("" é aceito e tratado como ausente na persistência). Limite
+ *  de tamanho defensivo (evita blobs/DoS via campo). */
+const opt = z.string().trim().max(2000).optional().or(z.literal(""));
 
 /**
  * Papéis aceitos para um profissional cadastrado por esta tela.
@@ -21,11 +22,61 @@ const opt = z.string().trim().optional().or(z.literal(""));
  */
 const roleSchema = z.enum(["medico", "recepcao"]);
 
+/** Credenciamento de convênio (TISS 3.0) — vários por profissional (0070). */
+const credentialSchema = z.object({
+  convenio: opt,
+  vigencia: opt,
+  convenio_code: opt,
+  lab_code: opt,
+  tiss_login: opt,
+  tiss_password: opt,
+  recebe_eletivo: z.boolean().optional().default(false),
+  recebe_urgencia: z.boolean().optional().default(false),
+  recebe_internacao: z.boolean().optional().default(false),
+  xml_tag: opt,
+  cpf_or_convenio_code: opt,
+});
+export type CredencialConvenio = z.infer<typeof credentialSchema>;
+
+/** Campo oculto `credentials`: JSON com a lista de credenciamentos. */
+const credentialsField = z
+  .string()
+  .optional()
+  .transform((s) => {
+    if (!s) return [];
+    try {
+      const arr = JSON.parse(s);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  })
+  .pipe(z.array(credentialSchema).max(50, "Limite de convênios excedido."));
+
 /** Campos comuns a criar e editar (sem e-mail, que só existe na criação). */
 const baseSchema = z.object({
   full_name: z.string().trim().min(2, "Informe o nome completo."),
+  // Dados pessoais (0070)
+  person_type: z.enum(["cpf", "cnpj"]).optional().or(z.literal("")),
+  document: opt, // nº do CPF/CNPJ
+  social_name: opt,
+  birth_date: opt,
+  sex: opt,
+  gender: opt,
+  mother_name: opt,
+  race: opt,
+  birthplace: opt,
+  nationality: opt,
+  // Tipo de profissional
   specialty: opt,
-  council_reg: opt, // registro do conselho (rótulo "Conselho" na UI)
+  cns: opt,
+  cnes: opt,
+  // Conselho detalhado (0070)
+  council_number: opt,
+  council_name: opt,
+  council_uf: opt,
+  council_expiry: opt,
+  council_reg: opt, // legado (derivado dos campos acima p/ a listagem)
   phone: opt,
   role: roleSchema.default("medico"),
   // Endereço (colunas adicionadas em 0012_professionals_address.sql)
@@ -38,6 +89,8 @@ const baseSchema = z.object({
   state: opt,
   // Observações (4º bloco do cadastro — escopo 11.2; coluna em 0034).
   notes: opt,
+  // Credenciamento de convênio (0070) — lista via campo oculto JSON.
+  credentials: credentialsField,
 });
 
 const createSchema = baseSchema.extend({
@@ -61,6 +114,95 @@ function addressPayload(d: z.infer<typeof baseSchema>) {
     city: d.city || null,
     state: d.state || null,
   };
+}
+
+/** Deriva o council_reg legado (usado na listagem/coluna "CRM") dos campos
+ *  detalhados do conselho. Ex.: "CRM/SP 123456". Fallback ao council_reg cru. */
+function derivarCouncilReg(d: z.infer<typeof baseSchema>): string | null {
+  const orgUf = [d.council_name, d.council_uf].filter(Boolean).join("/");
+  const composto = [orgUf, d.council_number].filter(Boolean).join(" ").trim();
+  return composto || d.council_reg || null;
+}
+
+/** Campos do cadastro completo (dados pessoais + tipo + conselho) → colunas 0070. */
+function professionalPayload(d: z.infer<typeof baseSchema>) {
+  return {
+    person_type: d.person_type || null,
+    document: d.document || null,
+    social_name: d.social_name || null,
+    birth_date: d.birth_date || null,
+    sex: d.sex || null,
+    gender: d.gender || null,
+    mother_name: d.mother_name || null,
+    race: d.race || null,
+    birthplace: d.birthplace || null,
+    nationality: d.nationality || null,
+    cns: d.cns || null,
+    cnes: d.cnes || null,
+    council_number: d.council_number || null,
+    council_name: d.council_name || null,
+    council_uf: d.council_uf || null,
+    council_expiry: d.council_expiry || null,
+    council_reg: derivarCouncilReg(d),
+  };
+}
+
+/** Uma credencial tem conteúdo? (evita gravar linhas totalmente vazias.) */
+function credencialPreenchida(c: CredencialConvenio): boolean {
+  return !!(
+    c.convenio ||
+    c.vigencia ||
+    c.convenio_code ||
+    c.lab_code ||
+    c.tiss_login ||
+    c.tiss_password ||
+    c.xml_tag ||
+    c.cpf_or_convenio_code ||
+    c.recebe_eletivo ||
+    c.recebe_urgencia ||
+    c.recebe_internacao
+  );
+}
+
+/**
+ * Substitui (replace) os credenciamentos de convênio de um profissional:
+ * apaga os existentes e insere a lista enviada (só as linhas preenchidas).
+ * Usa o cliente service-role (svc) — a tabela é RLS admin-only. Escopa clinic_id.
+ */
+async function replaceCredentials(
+  svc: SupabaseClient,
+  clinicId: string,
+  professionalId: string,
+  creds: CredencialConvenio[],
+): Promise<string | null> {
+  const { error: delErr } = await svc
+    .from("professional_insurance_credentials")
+    .delete()
+    .eq("professional_id", professionalId)
+    .eq("clinic_id", clinicId);
+  if (delErr) return delErr.message;
+
+  const linhas = creds.filter(credencialPreenchida).map((c) => ({
+    clinic_id: clinicId,
+    professional_id: professionalId,
+    convenio: c.convenio || null,
+    vigencia: c.vigencia || null,
+    convenio_code: c.convenio_code || null,
+    lab_code: c.lab_code || null,
+    tiss_login: c.tiss_login || null,
+    tiss_password: c.tiss_password || null,
+    recebe_eletivo: !!c.recebe_eletivo,
+    recebe_urgencia: !!c.recebe_urgencia,
+    recebe_internacao: !!c.recebe_internacao,
+    xml_tag: c.xml_tag || null,
+    cpf_or_convenio_code: c.cpf_or_convenio_code || null,
+  }));
+  if (linhas.length === 0) return null;
+
+  const { error: insErr } = await svc
+    .from("professional_insurance_credentials")
+    .insert(linhas);
+  return insErr?.message ?? null;
 }
 
 /**
@@ -147,18 +289,53 @@ export async function createProfessional(
           .eq("clinic_id", clinicId)
           .maybeSingle();
 
+        let professionalId = existingProf?.id as string | undefined;
         if (!existingProf) {
-          const { error: profError } = await svc.from("professionals").insert({
-            profile_id: existingUserId,
-            clinic_id: clinicId,
-            specialty: d.specialty || null,
-            council_reg: d.council_reg || null,
-            active: ativo,
-            notes: d.notes || null,
-            ...addressPayload(d),
-          });
-          if (profError) {
+          const { data: novo, error: profError } = await svc
+            .from("professionals")
+            .insert({
+              profile_id: existingUserId,
+              clinic_id: clinicId,
+              specialty: d.specialty || null,
+              active: ativo,
+              notes: d.notes || null,
+              ...professionalPayload(d),
+              ...addressPayload(d),
+            })
+            .select("id")
+            .single();
+          if (profError || !novo) {
             return { error: "Não foi possível concluir o cadastro do profissional." };
+          }
+          professionalId = novo.id as string;
+        } else {
+          // Já vinculado a esta clínica → atualiza os dados do cadastro completo.
+          const { error: upErr } = await svc
+            .from("professionals")
+            .update({
+              specialty: d.specialty || null,
+              active: ativo,
+              notes: d.notes || null,
+              ...professionalPayload(d),
+              ...addressPayload(d),
+            })
+            .eq("id", existingProf.id)
+            .eq("clinic_id", clinicId);
+          if (upErr) {
+            return { error: "Não foi possível atualizar o profissional." };
+          }
+        }
+
+        if (professionalId) {
+          const credErr = await replaceCredentials(
+            svc,
+            clinicId,
+            professionalId,
+            d.credentials,
+          );
+          if (credErr) {
+            revalidatePath("/profissionais");
+            return { error: "Não foi possível salvar o credenciamento de convênio." };
           }
         }
 
@@ -210,20 +387,37 @@ export async function createProfessional(
       }
 
       // 2c) Linha clínica DESTA clínica.
-      const { error: profError } = await svc.from("professionals").insert({
-        profile_id: userId,
-        clinic_id: clinicId,
-        specialty: d.specialty || null,
-        council_reg: d.council_reg || null,
-        active: ativo,
-        notes: d.notes || null,
-        ...addressPayload(d),
-      });
+      const { data: novoProf, error: profError } = await svc
+        .from("professionals")
+        .insert({
+          profile_id: userId,
+          clinic_id: clinicId,
+          specialty: d.specialty || null,
+          active: ativo,
+          notes: d.notes || null,
+          ...professionalPayload(d),
+          ...addressPayload(d),
+        })
+        .select("id")
+        .single();
 
-      if (profError) {
+      if (profError || !novoProf) {
         // Rollback: evita órfão em auth.users/profiles/clinic_members.
         await svc.auth.admin.deleteUser(userId);
         return { error: "Não foi possível concluir o cadastro do profissional." };
+      }
+
+      // 2d) Credenciamento de convênio (0070). Falha aqui NÃO faz rollback da
+      //     conta (profissional já criado) — só reporta para reenvio.
+      const credErr = await replaceCredentials(
+        svc,
+        clinicId,
+        novoProf.id as string,
+        d.credentials,
+      );
+      if (credErr) {
+        revalidatePath("/profissionais");
+        return { error: "Profissional criado, mas falhou o credenciamento de convênio." };
       }
 
       revalidatePath("/profissionais");
@@ -277,9 +471,9 @@ export async function updateProfessional(
         .from("professionals")
         .update({
           specialty: d.specialty || null,
-          council_reg: d.council_reg || null,
           active: d.active ? d.active === "true" : true,
           notes: d.notes || null,
+          ...professionalPayload(d),
           ...addressPayload(d),
         })
         .eq("id", id)
@@ -297,6 +491,12 @@ export async function updateProfessional(
 
       if (profileError) {
         return { error: "Não foi possível atualizar os dados do profissional." };
+      }
+
+      // Substitui o credenciamento de convênio (0070).
+      const credErr = await replaceCredentials(svc, clinicId, id, d.credentials);
+      if (credErr) {
+        return { error: "Não foi possível salvar o credenciamento de convênio." };
       }
 
       revalidatePath("/profissionais");
