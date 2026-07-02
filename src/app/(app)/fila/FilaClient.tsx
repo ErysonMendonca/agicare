@@ -38,10 +38,17 @@ import { chaveEspecialidade } from "@/lib/clinico/anamnese-config";
 import { AcoesPacienteModal } from "./AcoesPacienteModal";
 import { TriagemModal } from "./TriagemModal";
 import { DadosAtendimentoModal } from "./DadosAtendimentoModal";
+import { FechamentoModal } from "./FechamentoModal";
 import { DesistenciaModal } from "./DesistenciaModal";
 import { CheckInModal } from "./CheckInModal";
 
-type ModalKind = "acoes" | "triagem" | "atendimento" | "desistencia" | null;
+type ModalKind =
+  | "acoes"
+  | "triagem"
+  | "atendimento"
+  | "desistencia"
+  | "fechamento"
+  | null;
 
 /** Critérios de ordenação da fila. */
 type Ordenacao = "agendamento" | "az" | "za";
@@ -82,7 +89,9 @@ function fluxoDoStatus(
     case "chamado":
       return { etapa: "Chamado", proximo: "Atendimento" };
     case "em_atendimento":
-      return { etapa: "Em atendimento", proximo: "Conclusão" };
+      return { etapa: "Em atendimento", proximo: "Pagamento" };
+    case "aguardando_pagamento":
+      return { etapa: "Aguardando pagamento", proximo: "Fechamento" };
     case "finalizado":
       return { etapa: "Finalizado", proximo: null };
     case "desistencia":
@@ -101,6 +110,7 @@ const STATUS_OPCOES = [
   { value: "triagem", label: "Em Triagem" },
   { value: "chamado", label: "Chamado" },
   { value: "em_atendimento", label: "Em Atendimento" },
+  { value: "aguardando_pagamento", label: "Aguardando Pagamento" },
   { value: "finalizado", label: "Finalizado" },
   { value: "desistencia", label: "Desistência" },
 ];
@@ -561,6 +571,7 @@ export function FilaClient({
             onTriar={() => setModal("triagem")}
             onAtender={() => setModal("atendimento")}
             onDesistir={() => setModal("desistencia")}
+            onFechar={() => setModal("fechamento")}
             isMedico={isMedico}
             totemEnabled={totemEnabled}
           />
@@ -583,6 +594,11 @@ export function FilaClient({
             open={modal === "desistencia"}
             onClose={fechar}
             onStatusChange={onStatusChange}
+          />
+          <FechamentoModal
+            item={selected}
+            open={modal === "fechamento"}
+            onClose={fechar}
           />
         </>
       )}
