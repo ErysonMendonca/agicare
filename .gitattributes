@@ -1,0 +1,25 @@
+# Normalização de fim de linha: o repositório guarda SEMPRE em LF.
+# Evita o churn de CRLF↔LF ao editar no Windows/WSL (git compara normalizando,
+# então arquivos com CRLF no working tree não aparecem mais como modificados).
+* text=auto eol=lf
+
+# Scripts que precisam de LF mesmo em checkout Windows
+*.sh text eol=lf
+
+# Arquivos binários: nunca normalizar
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+*.webp binary
+*.avif binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.pdf binary
+*.mp4 binary
+*.webm binary
