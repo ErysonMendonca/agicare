@@ -599,19 +599,23 @@ export function DadosAtendimentoModal({
                 </button>
               </div>
             </label>
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input name="resp_documento" label="Documento" placeholder="CPF ou RG" />
-              <Select name="resp_parentesco" label="Grau Parentesco" defaultValue="">
-                <option value="" disabled>
-                  Informe o(a) parentesco
-                </option>
-                {oParent.map((o) => (
-                  <option key={o.id} value={o.value}>
-                    {o.label}
+            {/* Documento e Grau de Parentesco só quando o responsável NÃO é o
+                próprio paciente. Com "O MESMO", esses campos não fazem sentido. */}
+            {!oMesmo && (
+              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Input name="resp_documento" label="Documento" placeholder="CPF ou RG" />
+                <Select name="resp_parentesco" label="Grau Parentesco" defaultValue="">
+                  <option value="" disabled>
+                    Informe o(a) parentesco
                   </option>
-                ))}
-              </Select>
-            </div>
+                  {oParent.map((o) => (
+                    <option key={o.id} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
           </fieldset>
 
           {/* Observação */}
