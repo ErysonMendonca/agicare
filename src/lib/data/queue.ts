@@ -21,6 +21,9 @@ export type FilaItem = {
   especialidade: string;
   medico: string;
   convenio: string;
+  /** Convênio do CADASTRO do paciente (patients.convenio) — preenche o modal de
+   * Dados de Atendimento. null quando o paciente não tem convênio no cadastro. */
+  convenioCadastro?: string | null;
   /**
    * Tipo de Atendimento vindo do agendamento (appointments.reason:
    * Consulta/Retorno/Exame/Procedimento). null quando avulso/sem agendamento.
@@ -258,7 +261,7 @@ export async function listQueue(opts?: {
   let query = supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, reason), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, reason), patients(convenio), professionals(profiles(full_name))",
     )
     .order("created_at", { ascending: false });
 
@@ -318,6 +321,10 @@ export async function listQueue(opts?: {
     // Retorno/Exame/Procedimento) — autopreenche o modal de Dados de Atendimento.
     const tipoAtendimento =
       (agendamento?.reason as string | null) ?? null;
+    // Convênio do cadastro do paciente (join patients).
+    const pacienteRow = Array.isArray(r.patients) ? r.patients[0] : r.patients;
+    const convenioCadastro =
+      (pacienteRow?.convenio as string | null) ?? null;
 
     return {
       id: r.id as string,
@@ -340,6 +347,7 @@ export async function listQueue(opts?: {
       especialidade: r.specialty ?? "—",
       medico: profile?.full_name ?? "—",
       convenio: r.insurance ?? "—",
+      convenioCadastro,
       tipoAtendimento,
       status: mapStatus(statusRaw),
       statusRaw,
@@ -441,7 +449,7 @@ export async function listAgendadosHoje(opts?: {
     const { data, error } = await supabase
       .from("appointments")
       .select(
-        "id, starts_at, reason, patient_id, status, specialty, patients(full_name, registration_complete), professionals(specialty, profiles(full_name))",
+        "id, starts_at, reason, patient_id, status, specialty, patients(full_name, registration_complete, convenio), professionals(specialty, profiles(full_name))",
       )
       .gte("starts_at", startISO)
       .lt("starts_at", endISO)
@@ -462,6 +470,7 @@ export async function listAgendadosHoje(opts?: {
         const patient = one<{
           full_name: string | null;
           registration_complete: boolean | null;
+          convenio: string | null;
         }>(r.patients);
         const professional = one<{
           specialty: string | null;
@@ -486,6 +495,7 @@ export async function listAgendadosHoje(opts?: {
             professional?.specialty ?? (r.specialty as string | null) ?? "—",
           medico: profProfile?.full_name ?? "—",
           convenio: "—",
+          convenioCadastro: patient?.convenio ?? null,
           tipoAtendimento: (r.reason as string | null) ?? null,
           status: mapStatus("agendado"),
           statusRaw: "agendado",
