@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { getActiveClinicId } from "@/lib/tenant";
 
 /** Procedimento do catálogo (para o médico escolher). */
 export type ProcedimentoCatalogo = { id: string; nome: string; preco: number };
@@ -84,12 +85,15 @@ export async function listProcedimentosAtendimento(
     const total = itens.reduce((s, i) => s + i.valor, 0);
     return { itens, total, totalLabel: fmt(total) };
   }
+  const clinicId = await getActiveClinicId();
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("procedure_executions")
     .select("id, amount, procedures(name)")
-    .eq("queue_entry_id", queueEntryId)
-    .order("created_at", { ascending: true });
+    .eq("queue_entry_id", queueEntryId);
+  // Defesa em profundidade: além da RLS, escopa pela clínica ativa.
+  if (clinicId) query = query.eq("clinic_id", clinicId);
+  const { data, error } = await query.order("created_at", { ascending: true });
   if (error || !data) return { itens: [], total: 0, totalLabel: fmt(0) };
 
   const one = <T,>(v: unknown): T | null =>
