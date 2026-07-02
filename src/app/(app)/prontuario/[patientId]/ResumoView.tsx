@@ -75,6 +75,7 @@ export function ResumoView({ resumo }: { resumo: Resumo }) {
         <Card className="p-5">
           <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <Campo rotulo="Data de Nascimento" valor={id.nascimento} />
+            <Campo rotulo="Nº de Documento (CPF)" valor={id.cpf} />
             <Campo rotulo="Nome da Mãe" valor={id.nomeMae} />
             <Campo rotulo="Convênio" valor={id.convenio} />
             <Campo rotulo="Gênero" valor={id.genero} />

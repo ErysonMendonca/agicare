@@ -25,6 +25,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { TelefoneInput } from "@/components/ui/TelefoneInput";
+import { CpfInput } from "@/components/ui/MaskedInput";
 import { Select } from "@/components/ui/Select";
 import { type Paciente } from "@/lib/data/patients";
 import { type Profissional } from "@/lib/data/professionals";
@@ -383,7 +384,7 @@ export function NovoAgendamentoModal({
                 onChange={(e) => setAvulsoTel(e.target.value)}
               />
               <div>
-                <Input
+                <CpfInput
                   label="CPF"
                   placeholder="000.000.000-00"
                   value={avulsoCpf}

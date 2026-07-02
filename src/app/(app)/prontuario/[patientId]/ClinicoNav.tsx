@@ -9,7 +9,6 @@ import {
   CheckSquare,
   ClipboardList,
   FileText,
-  FlaskConical,
   Bone,
   HeartPulse,
 } from "lucide-react";
@@ -22,13 +21,12 @@ export function ClinicoNav({ patientId }: { patientId: string }) {
 
   const tabs = [
     { href: base, label: "Resumo", icon: Activity, exact: true },
+    { href: `${base}/anamnese`, label: "Anamnese", icon: ClipboardList },
     { href: `${base}/evolucao`, label: "Evolução", icon: Stethoscope },
+    { href: `${base}/protetico`, label: "Protético", icon: Bone },
     { href: `${base}/prescricao`, label: "Prescrição", icon: Pill },
     { href: `${base}/checagem`, label: "Checagem", icon: CheckSquare },
     { href: `${base}/enfermagem`, label: "Enfermagem", icon: HeartPulse },
-    { href: `${base}/anamnese`, label: "Anamnese", icon: ClipboardList },
-    { href: `${base}/exames`, label: "Exames", icon: FlaskConical },
-    { href: `${base}/protetico`, label: "Protético", icon: Bone },
     { href: `${base}/documentos`, label: "Documentos", icon: FileText },
   ];
 
