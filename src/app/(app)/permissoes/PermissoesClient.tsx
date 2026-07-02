@@ -17,17 +17,21 @@ import {
   type PermissionRow,
   type Scope,
 } from "@/lib/permissions.shared";
-import type { Role } from "@/lib/auth";
+import { UserCog, ShieldCheck as ShieldTab } from "lucide-react";
+import { UsuariosSection } from "./UsuariosSection";
+import type { Usuario, Cargo } from "@/lib/data/usuarios.shared";
+
+/** Papéis geridos aqui (paciente NÃO entra como usuário — removido). */
+type ManagedRole = "admin" | "medico" | "recepcao";
 
 // Papéis na ordem das abas + rótulo/descrição PT-BR.
-const ROLES: { role: Role; label: string; desc: string }[] = [
+const ROLES: { role: ManagedRole; label: string; desc: string }[] = [
   { role: "admin", label: "Administrador", desc: "Acesso total à plataforma" },
   { role: "medico", label: "Médico", desc: "Atendimento e prontuário" },
   { role: "recepcao", label: "Recepção", desc: "Fila, agenda e cadastro" },
-  { role: "paciente", label: "Paciente", desc: "Não usa o painel interno" },
 ];
 
-type Matrix = Record<Role, Record<ModuleSlug, ModulePermission>>;
+type Matrix = Record<ManagedRole, Record<ModuleSlug, ModulePermission>>;
 
 /** Monta a matriz editável a partir das linhas vindas do servidor. */
 function buildMatrix(rows: PermissionRow[]): Matrix {
@@ -40,8 +44,10 @@ function buildMatrix(rows: PermissionRow[]): Matrix {
   }, {} as Matrix);
 
   for (const r of rows) {
-    if (base[r.role] && base[r.role][r.module]) {
-      base[r.role][r.module] = { canView: r.canView, scope: r.scope };
+    // Linhas de papéis não geridos aqui (ex.: paciente) são ignoradas.
+    const role = r.role as ManagedRole;
+    if (base[role] && base[role][r.module]) {
+      base[role][r.module] = { canView: r.canView, scope: r.scope };
     }
   }
   return base;
@@ -61,11 +67,16 @@ function flatten(matrix: Matrix): PermissionRow[] {
 
 export function PermissoesClient({
   initialRows,
+  usuarios,
+  cargos,
 }: {
   initialRows: PermissionRow[];
+  usuarios: Usuario[];
+  cargos: Cargo[];
 }) {
   const [matrix, setMatrix] = useState<Matrix>(() => buildMatrix(initialRows));
-  const [activeRole, setActiveRole] = useState<Role>("admin");
+  const [activeRole, setActiveRole] = useState<ManagedRole>("admin");
+  const [view, setView] = useState<"perfis" | "usuarios">("perfis");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -114,9 +125,41 @@ export function PermissoesClient({
     <>
       <PageHeader
         title="Perfis de Acesso"
-        subtitle="Defina o que cada papel vê no sistema e o escopo dos dados (só os próprios registros ou toda a plataforma)."
+        subtitle="Defina o que cada papel vê no sistema, o escopo dos dados, e gerencie os usuários (cargos e senhas)."
       />
 
+      {/* Abas de nível superior: Perfis × Usuários */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setView("perfis")}
+          className={
+            view === "perfis"
+              ? "inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-white"
+              : "inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-muted hover:text-ink"
+          }
+        >
+          <ShieldTab className="h-4 w-4" /> Perfis de Acesso
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("usuarios")}
+          className={
+            view === "usuarios"
+              ? "inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-white"
+              : "inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-muted hover:text-ink"
+          }
+        >
+          <UserCog className="h-4 w-4" /> Usuários
+        </button>
+      </div>
+
+      {view === "usuarios" && (
+        <UsuariosSection usuarios={usuarios} cargos={cargos} />
+      )}
+
+      {view === "perfis" && (
+        <>
       {/* Abas por papel */}
       <div
         className="mb-6 flex flex-wrap gap-2"
@@ -239,6 +282,8 @@ export function PermissoesClient({
           {pending ? "Salvando..." : "Salvar alterações"}
         </Button>
       </div>
+        </>
+      )}
     </>
   );
 }
