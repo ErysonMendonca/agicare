@@ -22,7 +22,7 @@ export type FilaItem = {
   medico: string;
   convenio: string;
   /**
-   * Tipo de Atendimento vindo do agendamento (appointments.service_type:
+   * Tipo de Atendimento vindo do agendamento (appointments.reason:
    * Consulta/Retorno/Exame/Procedimento). null quando avulso/sem agendamento.
    * Autopreenche o campo "Tipo de Atendimento" no modal de Dados de Atendimento.
    */
@@ -258,7 +258,7 @@ export async function listQueue(opts?: {
   let query = supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, service_type), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, reason), professionals(profiles(full_name))",
     )
     .order("created_at", { ascending: false });
 
@@ -314,10 +314,10 @@ export async function listQueue(opts?: {
       ? r.appointments[0]
       : r.appointments;
     const startsAt = (agendamento?.starts_at as string | null) ?? null;
-    // Tipo de Atendimento escolhido no agendamento (service_type: Consulta/
+    // Tipo de Atendimento escolhido no agendamento (reason: Consulta/
     // Retorno/Exame/Procedimento) — autopreenche o modal de Dados de Atendimento.
     const tipoAtendimento =
-      (agendamento?.service_type as string | null) ?? null;
+      (agendamento?.reason as string | null) ?? null;
 
     return {
       id: r.id as string,
@@ -441,7 +441,7 @@ export async function listAgendadosHoje(opts?: {
     const { data, error } = await supabase
       .from("appointments")
       .select(
-        "id, starts_at, service_type, patient_id, status, specialty, patients(full_name, registration_complete), professionals(specialty, profiles(full_name))",
+        "id, starts_at, reason, patient_id, status, specialty, patients(full_name, registration_complete), professionals(specialty, profiles(full_name))",
       )
       .gte("starts_at", startISO)
       .lt("starts_at", endISO)
@@ -486,7 +486,7 @@ export async function listAgendadosHoje(opts?: {
             professional?.specialty ?? (r.specialty as string | null) ?? "—",
           medico: profProfile?.full_name ?? "—",
           convenio: "—",
-          tipoAtendimento: (r.service_type as string | null) ?? null,
+          tipoAtendimento: (r.reason as string | null) ?? null,
           status: mapStatus("agendado"),
           statusRaw: "agendado",
           priorityRaw: "normal",
