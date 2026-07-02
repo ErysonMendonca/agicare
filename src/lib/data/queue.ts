@@ -2,6 +2,15 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getViewScope, getMyProfessionalId } from "@/lib/permissions";
 import { type Status } from "@/components/ui/Badge";
+import { requireClinic } from "@/lib/tenant";
+import { getAttendanceFlow } from "@/lib/data/attendance-flow";
+import {
+  DEFAULT_STAGES,
+  hasTriagem,
+  nextStatus,
+  stageForStatus,
+  type FlowStage,
+} from "@/lib/data/attendance-flow.shared";
 
 export type Tag = { label: string; status: "danger" | "warn" };
 
@@ -9,6 +18,8 @@ export type FilaItem = {
   id: string;
   patientId: string | null;
   codigo: string;
+  /** Numeração de atendimento (ficha): 6 dígitos, única por clínica. */
+  atendimentoCodigo: string | null;
   paciente: string;
   hora: string;
   especialidade: string;
@@ -104,6 +115,7 @@ const MOCK: FilaItem[] = [
     id: "mock-1",
     patientId: "mock-p1",
     codigo: "A001",
+    atendimentoCodigo: "100001",
     paciente: "Maria Silva Santos",
     hora: "08:00",
     especialidade: "Cardiologia",
@@ -117,6 +129,7 @@ const MOCK: FilaItem[] = [
     id: "mock-2",
     patientId: "mock-p2",
     codigo: "A002",
+    atendimentoCodigo: "100002",
     paciente: "João Pedro Oliveira",
     hora: "08:15",
     especialidade: "Cardiologia",
@@ -131,6 +144,7 @@ const MOCK: FilaItem[] = [
     id: "mock-3",
     patientId: "mock-p3",
     codigo: "P001",
+    atendimentoCodigo: "100003",
     paciente: "Ana Paula Costa",
     hora: "08:20",
     especialidade: "Cardiologia",
@@ -145,6 +159,7 @@ const MOCK: FilaItem[] = [
     id: "mock-4",
     patientId: "mock-p4",
     codigo: "A003",
+    atendimentoCodigo: "100004",
     paciente: "Roberto Carlos Lima",
     hora: "08:30",
     especialidade: "Cardiologia",
@@ -177,7 +192,7 @@ export async function listQueue(opts?: {
   let query = supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, patient_name, priority, specialty, insurance, status, created_at, appointment_id, appointments(starts_at), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, appointment_id, appointments(starts_at), professionals(profiles(full_name))",
     )
     .order("created_at", { ascending: false });
 
@@ -226,6 +241,7 @@ export async function listQueue(opts?: {
       id: r.id as string,
       patientId: (r.patient_id as string | null) ?? null,
       codigo: r.ticket_code ?? "—",
+      atendimentoCodigo: (r.attendance_code as string | null) ?? null,
       paciente: r.patient_name ?? "",
       hora: formatHora(horaFonte),
       especialidade: r.specialty ?? "—",
@@ -247,6 +263,7 @@ const MOCK_AGENDADOS: FilaItem[] = [
     id: "mock-ag-1",
     patientId: "mock-ag-p1",
     codigo: "—",
+    atendimentoCodigo: null,
     paciente: "Beatriz Nogueira Reis",
     hora: "09:00",
     especialidade: "Cardiologia",
@@ -264,6 +281,7 @@ const MOCK_AGENDADOS: FilaItem[] = [
     id: "mock-ag-2",
     patientId: "mock-ag-p2",
     codigo: "—",
+    atendimentoCodigo: null,
     paciente: "Marcos Vinícius Teixeira",
     hora: "09:30",
     especialidade: "Cardiologia",
@@ -279,6 +297,7 @@ const MOCK_AGENDADOS: FilaItem[] = [
     id: "mock-ag-3",
     patientId: "mock-ag-p3",
     codigo: "—",
+    atendimentoCodigo: null,
     paciente: "Helena Castro Dias",
     hora: "10:15",
     especialidade: "Clínica Geral",
@@ -300,6 +319,9 @@ const MOCK_AGENDADOS: FilaItem[] = [
  */
 export async function listAgendadosHoje(opts?: {
   specialty?: string | null;
+  /** Dia (yyyy-mm-dd) a listar. Ausente = hoje. Permite ver os agendados de
+   * qualquer dia selecionado na Fila (não só hoje), incl. avulsos futuros. */
+  date?: string | null;
 }): Promise<FilaItem[]> {
   if (isDemoMode()) {
     return opts?.specialty
@@ -309,7 +331,9 @@ export async function listAgendadosHoje(opts?: {
 
   try {
     const supabase = await createClient();
-    const { startISO, endISO } = todayRangeISO();
+    const { startISO, endISO } = opts?.date
+      ? dayRangeISO(opts.date)
+      : todayRangeISO();
 
     // Pacientes que JÁ fizeram check-in hoje (têm queue_entries no dia) → excluir.
     const { data: checkedIn } = await supabase
@@ -362,6 +386,7 @@ export async function listAgendadosHoje(opts?: {
           id: r.id as string,
           patientId: (r.patient_id as string | null) ?? null,
           codigo: "—",
+    atendimentoCodigo: null,
           paciente: patient?.full_name ?? "—",
           hora: formatHora(r.starts_at as string | null),
           // Agendamento por especialidade (sem profissional): usa appointments.specialty.
