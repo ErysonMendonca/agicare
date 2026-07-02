@@ -280,7 +280,9 @@ export function DadosAtendimentoModal({
       plano: isParticular ? "Não se aplica (Particular)" : plano,
       carteira: isParticular ? "" : readForm("carteira"),
       validade: isParticular ? "" : readForm("validade"),
-      responsavel: oMesmo ? item.paciente : respNome,
+      // "O MESMO": responsável é o próprio paciente → omite a seção Responsável
+      // no documento (não repete o nome do paciente).
+      responsavel: oMesmo ? "" : respNome,
       respDocumento: oMesmo ? "" : readForm("resp_documento"),
       respParentesco: oMesmo ? "" : readForm("resp_parentesco"),
       observacoes: readForm("observacoes"),
@@ -295,6 +297,8 @@ export function DadosAtendimentoModal({
   function imprimirDocumento() {
     flushSync(() => setDocImpressao(montarDoc()));
     window.print();
+    // Limpa o documento após imprimir (evita Ctrl+P depois com dado desatualizado).
+    setDocImpressao(null);
   }
 
   /** Fecha pedindo confirmação se houver alterações não salvas. */
