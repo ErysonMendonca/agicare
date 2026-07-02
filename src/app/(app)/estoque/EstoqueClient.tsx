@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   FileBarChart,
   ShoppingCart,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -20,12 +21,14 @@ import {
   type InventarioAberto,
 } from "@/lib/data/stock";
 import { type Paciente } from "@/lib/data/patients";
+import { type SolicitacaoProduto } from "@/lib/data/product-requests.shared";
 import { CadastroTab } from "./CadastroTab";
 import { DispensacaoTab } from "./DispensacaoTab";
 import { EntradaTab } from "./EntradaTab";
 import { InventarioTab } from "./InventarioTab";
 import { ComprasTab } from "./ComprasTab";
 import { RelatoriosTab } from "./RelatoriosTab";
+import { SolicitacoesEstoqueTab } from "./SolicitacoesEstoqueTab";
 
 type TabKey =
   | "cadastro"
@@ -33,6 +36,7 @@ type TabKey =
   | "entrada"
   | "inventario"
   | "compras"
+  | "solicitacoes"
   | "relatorios";
 
 const ABAS: Array<{ key: TabKey; label: string; icon: LucideIcon }> = [
@@ -41,6 +45,7 @@ const ABAS: Array<{ key: TabKey; label: string; icon: LucideIcon }> = [
   { key: "entrada", label: "Entrada", icon: ArrowDownToLine },
   { key: "inventario", label: "Inventário", icon: ClipboardCheck },
   { key: "compras", label: "Compras", icon: ShoppingCart },
+  { key: "solicitacoes", label: "Solicitações", icon: ClipboardList },
   { key: "relatorios", label: "Relatórios", icon: FileBarChart },
 ];
 
@@ -53,6 +58,7 @@ export function EstoqueClient({
   itensInventario,
   inventarios,
   pacientes,
+  solicitacoes,
   gestor,
   podePrescricao,
 }: {
@@ -64,6 +70,7 @@ export function EstoqueClient({
   itensInventario: ItemInventario[];
   inventarios: InventarioAberto[];
   pacientes: Paciente[];
+  solicitacoes: SolicitacaoProduto[];
   gestor: boolean;
   podePrescricao: boolean;
 }) {
@@ -120,6 +127,9 @@ export function EstoqueClient({
         <InventarioTab itens={itensInventario} inventarios={inventarios} />
       )}
       {aba === "compras" && <ComprasTab compras={compras} gestor={gestor} />}
+      {aba === "solicitacoes" && (
+        <SolicitacoesEstoqueTab solicitacoes={solicitacoes} />
+      )}
       {aba === "relatorios" && (
         <RelatoriosTab produtos={produtos} gestor={gestor} />
       )}

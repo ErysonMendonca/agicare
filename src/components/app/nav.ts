@@ -8,6 +8,7 @@ import {
   FlaskConical,
   UserCog,
   Boxes,
+  ClipboardList,
   Receipt,
   BarChart3,
   Settings,
@@ -51,6 +52,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Procedimentos", href: "/procedimentos", icon: Stethoscope, gestorOnly: true, module: "procedimentos" },
       { label: "Laboratório", href: "/laboratorio", icon: FlaskConical, module: "laboratorio" },
       { label: "Estoque", href: "/estoque", icon: Boxes, badge: 3, module: "estoque" },
+      { label: "Solicitações", href: "/solicitacoes", icon: ClipboardList, module: "solicitacoes" },
     ],
   },
   {
