@@ -6,6 +6,7 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
 import { getSettings } from "@/lib/data/settings";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
+import { consume, retryLabel } from "@/lib/rate-limit";
 
 /**
  * Conta do PRÓPRIO usuário logado (self-service). Hoje: troca de senha.
@@ -45,6 +46,15 @@ export async function changePassword(
   const current = await getCurrentUser();
   if (!current?.email) {
     return { error: "Sessão expirada. Faça login novamente." };
+  }
+
+  // Rate-limit da troca de senha (reautentica com a senha atual = alvo de
+  // força-bruta): no máx. 5 tentativas por usuário em 15 min.
+  const rl = consume(`change-pass:${current.userId}`, 5, 15 * 60 * 1000);
+  if (!rl.ok) {
+    return {
+      error: `Muitas tentativas. Tente novamente em ${retryLabel(rl.retryAfterSec)}.`,
+    };
   }
 
   // Política vigente da clínica (fallback: baseline 'alta').

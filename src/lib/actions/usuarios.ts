@@ -9,6 +9,7 @@ import {
 } from "@/lib/supabase/tenant-service";
 import { getSettings } from "@/lib/data/settings";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
+import { consume, retryLabel } from "@/lib/rate-limit";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -162,6 +163,14 @@ export async function definirSenha(input: {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
   const { userId, newPassword } = parsed.data;
+
+  // Rate-limit por alvo (userId já validado como uuid): 10 def. por 15 min.
+  const rl = consume(`set-pass:${userId}`, 10, 15 * 60 * 1000);
+  if (!rl.ok) {
+    return {
+      error: `Muitas tentativas para este usuário. Tente novamente em ${retryLabel(rl.retryAfterSec)}.`,
+    };
+  }
 
   try {
     return await withTenantService(async ({ svc, clinicId }) => {

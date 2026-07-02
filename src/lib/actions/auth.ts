@@ -9,6 +9,16 @@ import {
   type MyClinic,
 } from "@/lib/tenant";
 import { setActiveClinic } from "@/lib/actions/clinic";
+import {
+  isRateLimited,
+  registerHit,
+  clientIp,
+  retryLabel,
+} from "@/lib/rate-limit";
+
+// Login: no máx. 3 tentativas FALHAS por IP+e-mail em 30 min.
+const LOGIN_LIMIT = 3;
+const LOGIN_WINDOW_MS = 30 * 60 * 1000;
 
 /**
  * Estado do login. A tela reage a:
@@ -47,9 +57,22 @@ export async function signIn(
 
   if (!email || !password) return { error: "Informe usuário e senha." };
 
+  // Rate-limit anti força-bruta: bloqueia após LOGIN_LIMIT falhas na janela.
+  const rlKey = `login:${await clientIp()}:${email.toLowerCase()}`;
+  const limited = isRateLimited(rlKey, LOGIN_LIMIT);
+  if (!limited.ok) {
+    return {
+      error: `Muitas tentativas de login. Tente novamente em ${retryLabel(limited.retryAfterSec)}.`,
+    };
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: "Credenciais inválidas." };
+  if (error) {
+    // Conta só as FALHAS (login bem-sucedido não gasta o limite).
+    registerHit(rlKey, LOGIN_WINDOW_MS);
+    return { error: "Credenciais inválidas." };
+  }
 
   // Mono-clínica (multitenant não provisionado no banco): não há claim de
   // clínica a gravar — entra direto. Evita o setActiveClinic com o
