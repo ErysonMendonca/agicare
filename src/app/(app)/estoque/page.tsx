@@ -18,6 +18,7 @@ import {
   listInventarios,
 } from "@/lib/data/stock";
 import { listPatients } from "@/lib/data/patients";
+import { listSolicitacoes } from "@/lib/data/product-requests";
 import { requireView } from "@/lib/permissions";
 import { EstoqueClient } from "./EstoqueClient";
 
@@ -32,6 +33,7 @@ export default async function EstoquePage() {
     itensInventario,
     inventarios,
     pacientes,
+    solicitacoes,
     gestor,
     role,
   ] = await Promise.all([
@@ -43,6 +45,7 @@ export default async function EstoquePage() {
     listItensInventario(),
     listInventarios(),
     listPatients(),
+    listSolicitacoes(),
     isGestor(),
     getRole(),
   ]);
@@ -112,6 +115,7 @@ export default async function EstoquePage() {
         itensInventario={itensInventario}
         inventarios={inventarios}
         pacientes={pacientes}
+        solicitacoes={solicitacoes}
         gestor={gestor}
         podePrescricao={podePrescricao}
       />

@@ -22,6 +22,7 @@ export type ModuleSlug =
   | "procedimentos"
   | "laboratorio"
   | "estoque"
+  | "solicitacoes"
   | "profissionais"
   | "faturamento"
   | "relatorios"
@@ -48,6 +49,7 @@ export const MODULES: ModuleSlug[] = [
   "procedimentos",
   "laboratorio",
   "estoque",
+  "solicitacoes",
   "profissionais",
   "faturamento",
   "relatorios",
@@ -65,6 +67,7 @@ export const MODULE_LABELS: Record<ModuleSlug, string> = {
   procedimentos: "Procedimentos",
   laboratorio: "Laboratório",
   estoque: "Estoque",
+  solicitacoes: "Solicitações",
   profissionais: "Profissionais",
   faturamento: "Faturamento",
   relatorios: "Relatórios",
