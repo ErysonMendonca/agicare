@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
 import { User, MapPin, HeartCrack, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -15,6 +16,7 @@ import {
 import { isValidCPF } from "@/lib/cpf";
 import { isValidCNS } from "@/lib/cns";
 import type { PacienteEditavel } from "@/lib/data/patients";
+import { CAMPOS_OBRIGATORIOS } from "./CadastroPacienteModal";
 
 const ABAS = [
   { id: "pessoais", label: "Dados Pessoais", icon: User },
@@ -47,10 +49,13 @@ export function EditarPacienteModal({
   patientId,
   onClose,
   onSaved,
+  closeOnSave = true,
 }: {
   patientId: string | null;
   onClose: () => void;
   onSaved?: () => void;
+  /** Quando false, em sucesso NÃO fecha o modal (ex.: wizard de check-in avulso). */
+  closeOnSave?: boolean;
 }) {
   const [paciente, setPaciente] = useState<PacienteEditavel | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -58,6 +63,8 @@ export function EditarPacienteModal({
 
   const [state, formAction, pending] = useActionState(updatePaciente, undefined);
   const processadoRef = useRef<ActionState>(undefined);
+  // CPF inválido é içado do form interno para travar o botão "Salvar" do footer.
+  const [cpfInvalido, setCpfInvalido] = useState(false);
 
   // Carrega os dados crus ao MONTAR (o pai monta com `key` por paciente, então
   // cada abertura é um mount novo — sem reset síncrono de estado dentro do
@@ -90,10 +97,10 @@ export function EditarPacienteModal({
     }
     if (state.ok) {
       toast.success("Cadastro atualizado com sucesso!");
-      onClose();
+      if (closeOnSave) onClose();
       onSaved?.();
     }
-  }, [state, onClose, onSaved]);
+  }, [state, onClose, onSaved, closeOnSave]);
 
   return (
     <Modal
@@ -108,7 +115,11 @@ export function EditarPacienteModal({
             <Button variant="ghost" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" form="form-edit-paciente" disabled={pending}>
+            <Button
+              type="submit"
+              form="form-edit-paciente"
+              disabled={pending || cpfInvalido}
+            >
               {pending ? "Salvando..." : "Salvar alterações"}
             </Button>
           </>
@@ -139,6 +150,7 @@ export function EditarPacienteModal({
           paciente={paciente}
           formAction={formAction}
           erro={state?.error}
+          onCpfValidityChange={setCpfInvalido}
         />
       )}
     </Modal>
@@ -154,10 +166,12 @@ function EditarPacienteForm({
   paciente,
   formAction,
   erro,
+  onCpfValidityChange,
 }: {
   paciente: PacienteEditavel;
   formAction: (formData: FormData) => void;
   erro?: string;
+  onCpfValidityChange: (invalido: boolean) => void;
 }) {
   const [aba, setAba] = useState<AbaId>("pessoais");
 
@@ -185,6 +199,25 @@ function EditarPacienteForm({
   const [buscandoCep, setBuscandoCep] = useState(false);
 
   const [obito, setObito] = useState(!!paciente.death_date);
+
+  // Mesmas obrigatoriedades do cadastro convencional (schema do servidor). Valida
+  // no submit e leva à aba do primeiro campo faltante — `required` nativo não
+  // funciona em campo de aba escondida (não focável → submit trava calado).
+  function validarObrigatorios(e: FormEvent<HTMLFormElement>) {
+    const fd = new FormData(e.currentTarget);
+    for (const c of CAMPOS_OBRIGATORIOS) {
+      const valor = String(fd.get(c.name) ?? "").trim();
+      const invalido = c.minDigits
+        ? valor.replace(/\D/g, "").length < c.minDigits
+        : valor === "";
+      if (invalido) {
+        e.preventDefault();
+        setAba(c.aba);
+        toast.error(c.msg);
+        return;
+      }
+    }
+  }
 
   async function buscarCep(valor: string) {
     const limpo = valor.replace(/\D/g, "");
@@ -234,7 +267,12 @@ function EditarPacienteForm({
         })}
       </div>
 
-      <form id="form-edit-paciente" action={formAction} className="space-y-4">
+      <form
+        id="form-edit-paciente"
+        action={formAction}
+        onSubmit={validarObrigatorios}
+        className="space-y-4"
+      >
         <input type="hidden" name="id" value={paciente.id} />
         {/* Token de optimistic lock (0044): o updated_at carregado na abertura.
             O servidor casa o UPDATE por ele e detecta edição concorrente. */}
@@ -245,10 +283,9 @@ function EditarPacienteForm({
           <Input
             id="ep-nome"
             name="full_name"
-            label="Nome completo"
+            label="Nome completo *"
             placeholder="Ex.: João Pedro Oliveira"
             defaultValue={paciente.full_name}
-            required
           />
 
           <label className="flex items-center gap-2.5 text-sm text-ink">
@@ -275,10 +312,16 @@ function EditarPacienteForm({
               <Input
                 id="ep-cpf"
                 name="cpf"
-                label="CPF"
+                label="CPF *"
                 placeholder="000.000.000-00"
                 value={cpf}
-                onChange={(e) => setCpf(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCpf(v);
+                  onCpfValidityChange(
+                    v.replace(/\D/g, "").length === 11 && !isValidCPF(v),
+                  );
+                }}
                 aria-invalid={cpfInvalido}
               />
               {cpfInvalido && (
@@ -309,14 +352,14 @@ function EditarPacienteForm({
             <Input
               id="ep-nasc"
               name="birth_date"
-              label="Data de nascimento"
+              label="Data de nascimento *"
               type="date"
               defaultValue={paciente.birth_date}
             />
             <Select
               id="ep-genero"
               name="gender"
-              label="Gênero"
+              label="Gênero *"
               defaultValue={paciente.gender}
             >
               <option value="">Selecione</option>
@@ -453,10 +496,10 @@ function EditarPacienteForm({
 
         {/* Aba 2 — Contato e Endereço */}
         <div className={aba === "contato" ? "space-y-4" : "hidden"}>
-          <Input
+          <TelefoneInput
             id="ep-tel"
             name="phone"
-            label="Telefone / Celular"
+            label="Telefone / Celular *"
             placeholder="(11) 90000-0000"
             defaultValue={paciente.phone}
           />

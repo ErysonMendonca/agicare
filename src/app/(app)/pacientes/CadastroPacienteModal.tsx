@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useActionState, useEffect, useRef } from "react";
+import { useState, useActionState, useEffect, useRef, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   UserPlus,
@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -34,6 +35,31 @@ const ABAS = [
 ] as const;
 
 type AbaId = (typeof ABAS)[number]["id"];
+
+/**
+ * Campos obrigatórios do cadastro (paridade com o schema do servidor
+ * `pacienteCampos`). Usado no guard de submit para validar antes de enviar e
+ * levar o usuário à aba do primeiro campo faltante. Mantém a mesma exigência
+ * no cadastro convencional e no fechamento do avulso (check-in).
+ */
+export const CAMPOS_OBRIGATORIOS: {
+  name: string;
+  aba: AbaId;
+  msg: string;
+  /** Mínimo de dígitos (só-números) — espelha o `min` do schema do servidor. */
+  minDigits?: number;
+}[] = [
+  { name: "full_name", aba: "pessoais", msg: "Informe o nome completo." },
+  { name: "cpf", aba: "pessoais", msg: "Informe o CPF." },
+  { name: "birth_date", aba: "pessoais", msg: "Informe a data de nascimento." },
+  { name: "gender", aba: "pessoais", msg: "Informe o gênero." },
+  {
+    name: "phone",
+    aba: "contato",
+    msg: "Informe um telefone válido.",
+    minDigits: 8,
+  },
+];
 
 type ViaCep = {
   logradouro?: string;
@@ -56,6 +82,26 @@ export function CadastroPacienteModal() {
     undefined,
   );
   const router = useRouter();
+
+  // Campos obrigatórios (mesma regra do schema do servidor). O `required` nativo
+  // não serve aqui: os campos vivem em abas escondidas (display:none) e o browser
+  // não consegue focar um campo oculto → o submit trava calado. Validamos no
+  // submit, levando o usuário à aba do primeiro campo faltante.
+  function validarObrigatorios(e: FormEvent<HTMLFormElement>) {
+    const fd = new FormData(e.currentTarget);
+    for (const c of CAMPOS_OBRIGATORIOS) {
+      const valor = String(fd.get(c.name) ?? "").trim();
+      const invalido = c.minDigits
+        ? valor.replace(/\D/g, "").length < c.minDigits
+        : valor === "";
+      if (invalido) {
+        e.preventDefault();
+        setAba(c.aba);
+        toast.error(c.msg);
+        return;
+      }
+    }
+  }
 
   // Nome social (toggle).
   const [usaSocial, setUsaSocial] = useState(false);
@@ -231,7 +277,11 @@ export function CadastroPacienteModal() {
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" form="form-cad-paciente" disabled={pending}>
+            <Button
+              type="submit"
+              form="form-cad-paciente"
+              disabled={pending || cpfInvalido}
+            >
               {pending ? "Salvando..." : "Salvar Cadastro"}
             </Button>
           </>
@@ -258,15 +308,19 @@ export function CadastroPacienteModal() {
           })}
         </div>
 
-        <form id="form-cad-paciente" action={formAction} className="space-y-4">
+        <form
+          id="form-cad-paciente"
+          action={formAction}
+          onSubmit={validarObrigatorios}
+          className="space-y-4"
+        >
           {/* Aba 1 — Dados Pessoais */}
           <div className={aba === "pessoais" ? "space-y-4" : "hidden"}>
             <Input
               id="cp-nome"
               name="full_name"
-              label="Nome completo"
+              label="Nome completo *"
               placeholder="Ex.: João Pedro Oliveira"
-              required
             />
 
             <label className="flex items-center gap-2.5 text-sm text-ink">
@@ -294,7 +348,7 @@ export function CadastroPacienteModal() {
                     <Input
                       id="cp-cpf"
                       name="cpf"
-                      label="CPF"
+                      label="CPF *"
                       placeholder="000.000.000-00"
                       value={cpf}
                       onChange={(e) => setCpf(e.target.value)}
@@ -354,10 +408,10 @@ export function CadastroPacienteModal() {
               <Input
                 id="cp-nasc"
                 name="birth_date"
-                label="Data de nascimento"
+                label="Data de nascimento *"
                 type="date"
               />
-              <Select id="cp-genero" name="gender" label="Gênero" defaultValue="">
+              <Select id="cp-genero" name="gender" label="Gênero *" defaultValue="">
                 <option value="" disabled>
                   Selecione
                 </option>
@@ -493,13 +547,13 @@ export function CadastroPacienteModal() {
           {/* Aba 2 — Contato e Endereço */}
           <div className={aba === "contato" ? "space-y-4" : "hidden"}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Input
+              <TelefoneInput
                 id="cp-tel"
                 name="phone"
-                label="Telefone"
+                label="Telefone *"
                 placeholder="(11) 3456-7890"
               />
-              <Input
+              <TelefoneInput
                 id="cp-cel"
                 name="cell"
                 label="Celular"
