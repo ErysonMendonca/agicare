@@ -70,7 +70,10 @@ export function AcoesPacienteModal({
   const mostrarAtender = podeAtender && (!atenderClinico || isMedico);
   // Recepção fecha o atendimento quando está aguardando pagamento.
   const podeFechar = item.statusRaw === "aguardando_pagamento";
-  const podeDesistir = !TERMINAIS.includes(item.statusRaw);
+  // Após o atendimento do médico (aguardando pagamento) não cabe desistência.
+  const podeDesistir =
+    !TERMINAIS.includes(item.statusRaw) &&
+    item.statusRaw !== "aguardando_pagamento";
 
   function handleChamar() {
     // Toca o beep imediatamente (o clique conta como gesto do usuário).

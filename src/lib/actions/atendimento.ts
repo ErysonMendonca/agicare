@@ -107,6 +107,23 @@ export async function removerProcedimento(id: string): Promise<ActionState> {
   if (negado) return { error: negado };
   const clinicId = await requireClinic();
   const supabase = await createClient();
+
+  // Só permite remover enquanto o atendimento está EM ANDAMENTO (após finalizar
+  // não se altera o que foi cobrado).
+  const { data: exec } = await supabase
+    .from("procedure_executions")
+    .select("id, queue_entries(status)")
+    .eq("id", id)
+    .eq("clinic_id", clinicId)
+    .maybeSingle();
+  if (!exec) return { error: "Procedimento não encontrado." };
+  const qe = Array.isArray(exec.queue_entries)
+    ? exec.queue_entries[0]
+    : exec.queue_entries;
+  if ((qe?.status as string | null) !== "em_atendimento") {
+    return { error: "Só é possível remover procedimentos durante o atendimento." };
+  }
+
   const { error } = await supabase
     .from("procedure_executions")
     .delete()
@@ -148,7 +165,7 @@ const METODOS = ["dinheiro", "pix", "cartao", "boleto", "convenio"] as const;
 const fecharSchema = z.object({
   queueEntryId: uuid,
   method: z.enum(METODOS),
-  amount: z.number().nonnegative("Valor inválido."),
+  // amount NÃO vem do client: é recomputado no servidor a partir dos procedimentos.
 });
 export type FecharInput = z.input<typeof fecharSchema>;
 
@@ -166,19 +183,36 @@ export async function fecharAtendimento(input: FecharInput): Promise<ActionState
   const supabase = await createClient();
   const me = await getCurrentUser();
 
-  // Confere a entrada (deve estar aguardando pagamento) e pega o paciente.
-  const { data: entry } = await supabase
+  // 1) CLAIM ATÔMICO: só quem flipar aguardando_pagamento→finalizado prossegue
+  //    (compare-and-set antes de faturar → sem faturamento/pagamento em dobro em
+  //    corrida/duplo clique). A 2ª chamada bate 0 linhas e aborta aqui.
+  const { data: claimed, error: claimErr } = await supabase
     .from("queue_entries")
-    .select("id, patient_id, status")
+    .update({ status: "finalizado" })
     .eq("id", parsed.data.queueEntryId)
     .eq("clinic_id", clinicId)
-    .maybeSingle();
-  if (!entry) return { error: "Atendimento não encontrado." };
-  if (entry.status !== "aguardando_pagamento") {
+    .eq("status", "aguardando_pagamento")
+    .select("patient_id");
+  if (claimErr) return { error: "Não foi possível fechar o atendimento." };
+  if (!claimed || claimed.length === 0) {
     return { error: "O atendimento não está aguardando pagamento." };
   }
+  const patientId = (claimed[0]?.patient_id as string | null) ?? null;
 
-  // Evento faturável + pagamento (integra com o Faturamento). event_id liga os dois.
+  // Reverte o status se o faturamento falhar (não deixa finalizado sem cobrança).
+  const reverter = async () => {
+    await supabase
+      .from("queue_entries")
+      .update({ status: "aguardando_pagamento" })
+      .eq("id", parsed.data.queueEntryId)
+      .eq("clinic_id", clinicId);
+  };
+
+  // 2) VALOR AUTORITATIVO: recomputa o total no servidor a partir dos
+  //    procedimentos registrados (o valor NÃO vem do client).
+  const { total } = await listProcedimentosAtendimento(parsed.data.queueEntryId);
+
+  // 3) Evento faturável + pagamento (integra com o Faturamento).
   const year = new Date().getFullYear();
   const code = `EVT-${year}-${Date.now().toString().slice(-6)}`;
   const { data: evt, error: evtErr } = await supabase
@@ -186,38 +220,36 @@ export async function fecharAtendimento(input: FecharInput): Promise<ActionState
     .insert({
       clinic_id: clinicId,
       code,
-      patient_id: (entry.patient_id as string | null) ?? null,
+      patient_id: patientId,
       service: "Atendimento",
-      amount: parsed.data.amount,
+      amount: total,
       status: "faturado",
     })
     .select("id")
     .single();
-  if (evtErr || !evt) return { error: "Não foi possível registrar o faturamento." };
+  if (evtErr || !evt) {
+    await reverter();
+    return { error: "Não foi possível registrar o faturamento." };
+  }
 
-  if (parsed.data.amount > 0) {
+  if (total > 0) {
     const { error: payErr } = await supabase.from("payments").insert({
       clinic_id: clinicId,
       event_id: evt.id,
       method: parsed.data.method,
-      amount: parsed.data.amount,
+      amount: total,
       status: "confirmado",
       provider: "manual",
       created_by: me?.userId ?? null,
       confirmed_at: new Date().toISOString(),
     });
-    if (payErr) return { error: "Não foi possível registrar o pagamento." };
+    if (payErr) {
+      await supabase.from("billable_events").delete().eq("id", evt.id);
+      await reverter();
+      return { error: "Não foi possível registrar o pagamento." };
+    }
   }
 
-  // Finaliza a entrada da fila.
-  const { error: updErr } = await supabase
-    .from("queue_entries")
-    .update({ status: "finalizado" })
-    .eq("id", parsed.data.queueEntryId)
-    .eq("clinic_id", clinicId)
-    .eq("status", "aguardando_pagamento");
-  if (updErr) return { error: "Não foi possível finalizar o atendimento." };
-
-  revalidar((entry.patient_id as string | null) ?? undefined);
+  revalidar(patientId ?? undefined);
   return { ok: true };
 }

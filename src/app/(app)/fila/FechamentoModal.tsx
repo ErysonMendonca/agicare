@@ -6,7 +6,6 @@ import { Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { carregarFechamento, fecharAtendimento } from "@/lib/actions/atendimento";
 import { type FilaItem } from "@/lib/data/queue";
@@ -42,7 +41,6 @@ export function FechamentoModal({
   const [itens, setItens] = useState<ProcedimentoExecutado[]>([]);
   const [total, setTotal] = useState(0);
   const [method, setMethod] = useState("dinheiro");
-  const [valor, setValor] = useState("");
 
   // Carrega os procedimentos/total ao abrir (async IIFE evita setState síncrono
   // no corpo do efeito; `ativo` descarta resposta após fechar/trocar).
@@ -60,7 +58,6 @@ export function FechamentoModal({
         }
         setItens(res.itens);
         setTotal(res.total);
-        setValor(String(res.total));
       } finally {
         if (ativo) setCarregando(false);
       }
@@ -72,16 +69,11 @@ export function FechamentoModal({
 
   function receber() {
     if (!item) return;
-    const amount = Number(valor.replace(",", "."));
-    if (!Number.isFinite(amount) || amount < 0) {
-      toast.error("Informe um valor válido.");
-      return;
-    }
     startTransition(async () => {
+      // O valor é recomputado no servidor (total dos procedimentos); aqui só a forma.
       const res = await fecharAtendimento({
         queueEntryId: item.id,
         method: method as "dinheiro" | "pix" | "cartao" | "boleto" | "convenio",
-        amount,
       });
       if (res?.ok) {
         toast.success("Pagamento recebido. Atendimento finalizado.");
@@ -157,14 +149,14 @@ export function FechamentoModal({
               </option>
             ))}
           </Select>
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            label="Valor recebido (R$)"
-            value={valor}
-            onChange={(e) => setValor(e.target.value)}
-          />
+          <div>
+            <span className="mb-1.5 block text-sm font-medium text-ink">
+              Valor a receber
+            </span>
+            <span className="inline-flex h-10 w-full items-center rounded-lg border border-line bg-muted-surface px-3 text-sm font-semibold text-ink">
+              {brl(total)}
+            </span>
+          </div>
         </div>
       </div>
     </Modal>
