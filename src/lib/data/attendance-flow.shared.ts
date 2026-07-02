@@ -39,6 +39,7 @@ export type QueueStatus =
   | "triagem"
   | "chamado"
   | "em_atendimento"
+  | "aguardando_pagamento"
   | "finalizado"
   | "desistencia";
 

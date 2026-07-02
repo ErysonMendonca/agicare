@@ -61,6 +61,8 @@ function mapStatus(status: string): { label: string; tone: Status } {
       return { label: "Em Triagem", tone: "active" };
     case "em_atendimento":
       return { label: "Em Atendimento", tone: "active" };
+    case "aguardando_pagamento":
+      return { label: "Aguardando Pagamento", tone: "warn" };
     case "finalizado":
       return { label: "Finalizado", tone: "ok" };
     case "desistencia":

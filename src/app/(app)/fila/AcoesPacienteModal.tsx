@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Monitor, UserCheck, Eye, UserX, Stethoscope, Printer } from "lucide-react";
+import { Monitor, UserCheck, Eye, UserX, Stethoscope, Printer, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { type FilaItem } from "@/lib/data/queue";
@@ -33,6 +33,7 @@ export function AcoesPacienteModal({
   onTriar,
   onAtender,
   onDesistir,
+  onFechar,
   isMedico = false,
   totemEnabled = true,
 }: {
@@ -44,6 +45,8 @@ export function AcoesPacienteModal({
   onTriar: () => void;
   onAtender: () => void;
   onDesistir: () => void;
+  /** Fechamento (recepção): recebe pagamento e finaliza. */
+  onFechar: () => void;
   /** Médico: ao Atender vai direto ao prontuário do paciente (não abre o modal admin). */
   isMedico?: boolean;
   /** Totem ligado: mostra "Chamar" e "Reimprimir Ficha" (senha). Desligado: oculta. */
@@ -65,7 +68,12 @@ export function AcoesPacienteModal({
   const atenderClinico =
     item.statusRaw !== "aguardando" && item.statusRaw !== "na_recepcao";
   const mostrarAtender = podeAtender && (!atenderClinico || isMedico);
-  const podeDesistir = !TERMINAIS.includes(item.statusRaw);
+  // Recepção fecha o atendimento quando está aguardando pagamento.
+  const podeFechar = item.statusRaw === "aguardando_pagamento";
+  // Após o atendimento do médico (aguardando pagamento) não cabe desistência.
+  const podeDesistir =
+    !TERMINAIS.includes(item.statusRaw) &&
+    item.statusRaw !== "aguardando_pagamento";
 
   function handleChamar() {
     // Toca o beep imediatamente (o clique conta como gesto do usuário).
@@ -185,6 +193,18 @@ export function AcoesPacienteModal({
             icon={<UserCheck className="h-5 w-5" />}
             label="Atender"
             className="bg-[#10b981] text-white hover:bg-[#059669] disabled:hover:bg-[#10b981]"
+          />
+        )}
+        {podeFechar && (
+          <ActionButton
+            onClick={() => {
+              onClose();
+              onFechar();
+            }}
+            disabled={pending}
+            icon={<Wallet className="h-5 w-5" />}
+            label="Fechamento"
+            className="bg-brand-500 text-white hover:bg-brand-600 disabled:hover:bg-brand-500"
           />
         )}
         <ActionButton
