@@ -16,6 +16,7 @@ import {
 } from "@/lib/actions/pacientes";
 import { isValidCPF } from "@/lib/cpf";
 import { isValidCNS } from "@/lib/cns";
+import { validarObrigatorios } from "./CadastroPacienteModal";
 import type { PacienteEditavel } from "@/lib/data/patients";
 
 const ABAS = [
@@ -248,7 +249,12 @@ function EditarPacienteForm({
         })}
       </div>
 
-      <form id="form-edit-paciente" action={formAction} className="space-y-4">
+      <form
+        id="form-edit-paciente"
+        action={formAction}
+        onSubmit={(e) => validarObrigatorios(e, setAba)}
+        className="space-y-4"
+      >
         <input type="hidden" name="id" value={paciente.id} />
         {/* Token de optimistic lock (0044): o updated_at carregado na abertura.
             O servidor casa o UPDATE por ele e detecta edição concorrente. */}
@@ -259,10 +265,9 @@ function EditarPacienteForm({
           <Input
             id="ep-nome"
             name="full_name"
-            label="Nome completo"
+            label="Nome completo *"
             placeholder="Ex.: João Pedro Oliveira"
             defaultValue={paciente.full_name}
-            required
           />
 
           <label className="flex items-center gap-2.5 text-sm text-ink">
@@ -289,7 +294,7 @@ function EditarPacienteForm({
               <CpfInput
                 id="ep-cpf"
                 name="cpf"
-                label="CPF"
+                label="CPF *"
                 placeholder="000.000.000-00"
                 value={cpf}
                 onChange={(e) => {
@@ -329,14 +334,14 @@ function EditarPacienteForm({
             <Input
               id="ep-nasc"
               name="birth_date"
-              label="Data de nascimento"
+              label="Data de nascimento *"
               type="date"
               defaultValue={paciente.birth_date}
             />
             <Select
               id="ep-genero"
               name="gender"
-              label="Gênero"
+              label="Gênero *"
               defaultValue={paciente.gender}
             >
               <option value="">Selecione</option>
@@ -476,7 +481,7 @@ function EditarPacienteForm({
           <TelefoneInput
             id="ep-tel"
             name="phone"
-            label="Telefone / Celular"
+            label="Telefone / Celular *"
             placeholder="(11) 90000-0000"
             defaultValue={paciente.phone}
           />

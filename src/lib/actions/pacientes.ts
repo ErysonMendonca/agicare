@@ -23,10 +23,10 @@ const pacienteCampos = {
   // Dados pessoais
   full_name: z.string().trim().min(2, "Informe o nome completo."),
   social_name: texto,
-  cpf: texto,
+  cpf: z.string().trim().min(1, "Informe o CPF."),
   cns: texto,
-  birth_date: texto,
-  gender: texto,
+  birth_date: z.string().trim().min(1, "Informe a data de nascimento."),
+  gender: z.string().trim().min(1, "Informe o gênero."),
   mother_name: texto,
   naturality: texto,
   nationality: texto,
@@ -74,6 +74,13 @@ function comRegras<S extends z.ZodType<PacienteInput>>(schema: S) {
         d.convenio.toLowerCase() === "particular" ||
         !!d.plan,
       { message: "Convênio (não-SUS) exige o plano.", path: ["plan"] },
+    )
+    .refine(
+      (d) => {
+        const digitos = (v?: string) => (v ?? "").replace(/\D/g, "").length;
+        return digitos(d.phone) >= 8 || digitos(d.cell) >= 8;
+      },
+      { message: "Informe um telefone ou celular válido.", path: ["phone"] },
     );
 }
 
