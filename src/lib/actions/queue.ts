@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser, getRole } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
+import { getAttendanceFlow } from "@/lib/data/attendance-flow";
+import { statusAfterStage } from "@/lib/data/attendance-flow.shared";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -103,6 +105,17 @@ export async function atenderPaciente(id: string): Promise<ActionState> {
   return res;
 }
 
+/**
+ * Recepção inicia o atendimento administrativo: aguardando → na_recepcao.
+ * Concluir a recepção (Salvar no modal Dados de Atendimento) avança para
+ * 'aguardando_atendimento' (ou 'triagem') — ver `salvarAtendimento`.
+ */
+export async function atenderRecepcao(id: string): Promise<ActionState> {
+  const parsed = idSchema.safeParse(id);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  return updateQueueStatus(parsed.data, { status: "na_recepcao" });
+}
+
 const desistirSchema = z.object({
   id: idSchema,
   motivo: z.string().trim().min(1, "Informe o motivo da desistência."),
@@ -125,6 +138,8 @@ export type CheckInTotemResult = {
   ok?: boolean;
   error?: string;
   ticketCode?: string;
+  /** Numeração de atendimento (ficha): 6 dígitos, única por clínica. */
+  attendanceCode?: string;
 };
 
 /**
@@ -134,6 +149,15 @@ export type CheckInTotemResult = {
 function genTicketCode(priority: string, seq: number): string {
   const prefix = priority === "preferencial" ? "P" : "A";
   return `${prefix}${String(seq).padStart(3, "0")}`;
+}
+
+/**
+ * Sorteia a numeração de atendimento (ficha): 6 dígitos (100000–999999),
+ * ALEATÓRIA. A unicidade por clínica é garantida pelo índice único; em caso de
+ * colisão (23505), o insert é refeito com novo código (ver checkInTotem).
+ */
+function genAttendanceCode(): string {
+  return String(100000 + Math.floor(Math.random() * 900000));
 }
 
 /** Início (00:00) e fim (24:00) do dia atual em ISO. */
@@ -160,9 +184,13 @@ export async function checkInTotem(
   const data = parsed.data;
 
   if (isDemoMode()) {
-    // Sem banco no modo demo: senha sequencial fictícia (3 dígitos).
+    // Sem banco no modo demo: senha sequencial fictícia (3 dígitos) + ficha.
     const seq = Math.floor(Math.random() * 900) + 100;
-    return { ok: true, ticketCode: genTicketCode(data.priority, seq) };
+    return {
+      ok: true,
+      ticketCode: genTicketCode(data.priority, seq),
+      attendanceCode: genAttendanceCode(),
+    };
   }
 
   const clinicId = await requireClinic();
@@ -180,27 +208,66 @@ export async function checkInTotem(
 
   const ticketCode = genTicketCode(data.priority, (count ?? 0) + 1);
 
-  const { error } = await supabase.from("queue_entries").insert({
+  // Quando há paciente vinculado, o cadastro é a FONTE DA VERDADE de nome e
+  // convênio — o cliente pode ter dados antigos (ex.: avulso que acabou de
+  // completar o cadastro no próprio check-in). Lê do banco e sobrepõe.
+  let patientName = data.patientName;
+  let insurance = data.insurance ?? null;
+  if (data.patientId) {
+    const { data: pac } = await supabase
+      .from("patients")
+      .select("full_name, convenio")
+      .eq("id", data.patientId)
+      .maybeSingle();
+    if (pac) {
+      if (pac.full_name) patientName = pac.full_name as string;
+      insurance = ((pac.convenio as string | null) ?? "").trim() || insurance;
+    }
+  }
+
+  // Payload base do insert; o attendance_code é sorteado por tentativa (retry
+  // em caso de colisão no índice único (clinic_id, attendance_code)).
+  const baseRow = {
     clinic_id: clinicId,
     ticket_code: ticketCode,
     patient_id: data.patientId ?? null,
-    patient_name: data.patientName,
+    patient_name: patientName,
     priority: data.priority,
     professional_id: data.professionalId ?? null,
     specialty: data.specialty ?? null,
-    insurance: data.insurance ?? null,
+    insurance: insurance,
     status: "aguardando",
     arrived_at: new Date().toISOString(),
     appointment_id: data.appointmentId ?? null,
-  });
+  };
 
-  if (error) return { error: "Não foi possível registrar o check-in." };
+  // Insere com retry: se o código de atendimento colidir (Postgres 23505),
+  // sorteia outro e tenta de novo (até 5 vezes).
+  let attendanceCode = "";
+  let inserted = false;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    attendanceCode = genAttendanceCode();
+    const { error } = await supabase
+      .from("queue_entries")
+      .insert({ ...baseRow, attendance_code: attendanceCode });
+
+    if (!error) {
+      inserted = true;
+      break;
+    }
+    // Só faz retry em violação de unicidade; outros erros abortam.
+    if (error.code !== "23505") {
+      return { error: "Não foi possível registrar o check-in." };
+    }
+  }
+
+  if (!inserted) return { error: "Não foi possível registrar o check-in." };
 
   // Carimba a chegada real no agendamento vinculado (BI de tempo de espera).
   if (data.appointmentId) await stampAppointmentCheckIn(data.appointmentId);
 
   revalidateFila();
-  return { ok: true, ticketCode };
+  return { ok: true, ticketCode, attendanceCode };
 }
 
 // ── Dados de Atendimento (persistência da Fila — escopo 4.2) ─────────
@@ -220,9 +287,10 @@ const atendimentoSchema = z.object({
   dataEntrada: z.string().trim().max(10).nullish(),
   privadoLiberdade: z.boolean().default(false),
   gestante: z.boolean().default(false),
-  // Convênio obrigatório (mesma regra do form: plano é exigido).
+  // Convênio obrigatório. Plano só é exigido quando há convênio — atendimento
+  // "Particular" dispensa o plano (validado no superRefine abaixo).
   convenio: z.string().trim().min(1, "Convênio obrigatório.").max(120),
-  plano: z.string().trim().min(1, "Selecione o plano do convênio.").max(120),
+  plano: z.string().trim().max(120).default(""),
   carteira: z.string().trim().max(60).nullish(),
   validade: z.string().trim().max(10).nullish(),
   validador: z.string().trim().max(120).nullish(),
@@ -231,6 +299,15 @@ const atendimentoSchema = z.object({
   respDocumento: z.string().trim().max(60).nullish(),
   respParentesco: z.string().trim().max(60).nullish(),
   observacoes: z.string().trim().max(2000).nullish(),
+}).superRefine((d, ctx) => {
+  // Plano obrigatório, exceto em atendimento particular (sem convênio).
+  if (!/particular/i.test(d.convenio) && !d.plano) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["plano"],
+      message: "Selecione o plano do convênio.",
+    });
+  }
 });
 
 export type AtendimentoInput = z.input<typeof atendimentoSchema>;
@@ -297,6 +374,20 @@ export async function salvarAtendimento(
   });
 
   if (error) return { error: "Não foi possível salvar o atendimento." };
+
+  // Concluir a recepção: se a entrada está 'na_recepcao', avança para o próximo
+  // status do fluxo ('aguardando_atendimento' ou 'triagem', se configurada).
+  // Guard por status garante que só avança quem estava em atendimento da recepção.
+  const queueEntryId = emptyToNull(d.queueEntryId);
+  if (queueEntryId) {
+    const stages = await getAttendanceFlow();
+    const next = statusAfterStage("recepcao", stages);
+    await supabase
+      .from("queue_entries")
+      .update({ status: next })
+      .eq("id", queueEntryId)
+      .eq("status", "na_recepcao");
+  }
 
   revalidateFila();
   return { ok: true };

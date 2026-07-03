@@ -24,9 +24,11 @@ import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { type Paciente } from "@/lib/data/patients";
 import { type Profissional } from "@/lib/data/professionals";
+import { type AttendanceOption } from "@/lib/data/attendance-options.shared";
 import {
   createAppointment,
   listSlots,
@@ -35,6 +37,7 @@ import {
   type Slot,
 } from "@/lib/actions/appointments";
 import { criarPacienteAvulso } from "@/lib/actions/pacientes";
+import { isValidCPF } from "@/lib/cpf";
 
 const TIPOS = ["Consulta", "Retorno", "Exame", "Procedimento"];
 /** Durações (min) ofertadas; a duração da escala é injetada dinamicamente. */
@@ -57,11 +60,14 @@ export function NovoAgendamentoModal({
   onClose,
   pacientes,
   profissionais,
+  especialidades: catalogoEspecialidades,
 }: {
   open: boolean;
   onClose: () => void;
   pacientes: Paciente[];
   profissionais: Profissional[];
+  /** Catálogo de especialidades (attendance_options), fonte única do sistema. */
+  especialidades: AttendanceOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -74,7 +80,13 @@ export function NovoAgendamentoModal({
   const [especialidade, setEspecialidade] = useState("");
   const [profissionalId, setProfissionalId] = useState("");
   const [tipo, setTipo] = useState(TIPOS[0]);
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  // Data de hoje (YYYY-MM-DD) em horário LOCAL — usada como mínimo do date
+  // picker e para filtrar horários que já passaram quando o agendamento é para
+  // hoje. NÃO usar toISOString() (data UTC): perto da meia-noite em fuso
+  // negativo (BR -03) cairia no dia seguinte e bloquearia o dia local corrente.
+  const agora = new Date();
+  const hoje = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+  const [data, setData] = useState(hoje);
   const [hora, setHora] = useState("");
   const [duracao, setDuracao] = useState(30);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -85,6 +97,10 @@ export function NovoAgendamentoModal({
   const [avulsoNome, setAvulsoNome] = useState("");
   const [avulsoTel, setAvulsoTel] = useState("");
   const [avulsoCpf, setAvulsoCpf] = useState("");
+  // Validação do dígito verificador do CPF no client (só sinaliza com 11 dígitos
+  // digitados, para não acusar enquanto o usuário ainda digita).
+  const avulsoCpfInvalido =
+    avulsoCpf.replace(/\D/g, "").length === 11 && !isValidCPF(avulsoCpf);
 
   // QR Code REAL do comprovante (gerado do protocolo, sem rede). Vazio até
   // haver protocolo válido (passo 4).
@@ -93,17 +109,23 @@ export function NovoAgendamentoModal({
     [protocolo],
   );
 
-  const especialidades = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          profissionais
-            .map((p) => p.especialidade)
-            .filter((e) => e && e !== "—"),
-        ),
-      ),
-    [profissionais],
-  );
+  // Opções vêm do catálogo; unimos as especialidades já presentes nos
+  // profissionais (legado/fora do catálogo) para não sumir do filtro.
+  const especialidades = useMemo(() => {
+    const opts = catalogoEspecialidades.map((e) => ({
+      value: e.value,
+      label: e.label,
+    }));
+    const seen = new Set(opts.map((o) => o.value));
+    for (const p of profissionais) {
+      const v = p.especialidade;
+      if (v && v !== "—" && !seen.has(v)) {
+        seen.add(v);
+        opts.push({ value: v, label: v });
+      }
+    }
+    return opts;
+  }, [catalogoEspecialidades, profissionais]);
 
   const profFiltrados = useMemo(
     () =>
@@ -146,7 +168,7 @@ export function NovoAgendamentoModal({
     setEspecialidade("");
     setProfissionalId("");
     setTipo(TIPOS[0]);
-    setData(new Date().toISOString().slice(0, 10));
+    setData(hoje);
     setHora("");
     setDuracao(30);
     setSlots([]);
@@ -166,6 +188,8 @@ export function NovoAgendamentoModal({
     if (modoAvulso) {
       if (!avulsoNome.trim() || !avulsoTel.trim() || !avulsoCpf.trim())
         return toast.error("Preencha nome, telefone e CPF do paciente avulso.");
+      if (!isValidCPF(avulsoCpf))
+        return toast.error("CPF inválido (dígito verificador).");
     } else if (!pacienteId) {
       return toast.error("Selecione o paciente.");
     }
@@ -203,6 +227,13 @@ export function NovoAgendamentoModal({
         }
         patientId = novo.patientId;
         setPacienteId(novo.patientId);
+        // Anti-duplicidade: avisa quando o CPF já existia e o cadastro foi
+        // reaproveitado (pode já estar completo) — não é um avulso novo.
+        if (novo.reused) {
+          toast.warning(
+            "Já existe paciente com este CPF — usando o cadastro existente.",
+          );
+        }
       }
 
       const res = await createAppointment({
@@ -259,6 +290,13 @@ export function NovoAgendamentoModal({
   const dataFmt = data
     ? new Date(`${data}T00:00:00`).toLocaleDateString("pt-BR")
     : "—";
+
+  // Quando o agendamento é para hoje, oculta horários que já passaram (não faz
+  // sentido marcar para um horário anterior ao atual). Datas futuras: todos.
+  const slotsVisiveis =
+    data === hoje
+      ? slots.filter((s) => new Date(`${data}T${s.hora}:00`) > new Date())
+      : slots;
 
   return (
     <Modal
@@ -318,18 +356,26 @@ export function NovoAgendamentoModal({
                 onChange={(e) => setAvulsoNome(e.target.value)}
                 className="sm:col-span-2"
               />
-              <Input
+              <TelefoneInput
                 label="Telefone"
                 placeholder="(00) 00000-0000"
                 value={avulsoTel}
                 onChange={(e) => setAvulsoTel(e.target.value)}
               />
-              <Input
-                label="CPF"
-                placeholder="000.000.000-00"
-                value={avulsoCpf}
-                onChange={(e) => setAvulsoCpf(e.target.value)}
-              />
+              <div>
+                <Input
+                  label="CPF"
+                  placeholder="000.000.000-00"
+                  value={avulsoCpf}
+                  onChange={(e) => setAvulsoCpf(e.target.value)}
+                  aria-invalid={avulsoCpfInvalido}
+                />
+                {avulsoCpfInvalido && (
+                  <p className="mt-1 text-xs text-red-600">
+                    CPF inválido (dígito verificador).
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
             <div>
@@ -386,7 +432,9 @@ export function NovoAgendamentoModal({
             >
               <option value="">Todas as especialidades</option>
               {especialidades.map((e) => (
-                <option key={e}>{e}</option>
+                <option key={e.value} value={e.value}>
+                  {e.label}
+                </option>
               ))}
             </Select>
             <Select
@@ -413,6 +461,7 @@ export function NovoAgendamentoModal({
             <Input
               label="Data do Atendimento"
               type="date"
+              min={hoje}
               value={data}
               onChange={(e) => setData(e.target.value)}
             />
@@ -458,7 +507,7 @@ export function NovoAgendamentoModal({
             <p className="py-10 text-center text-sm text-muted">
               Carregando horários...
             </p>
-          ) : slots.length === 0 ? (
+          ) : slotsVisiveis.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line px-6 py-10 text-center">
               <Clock className="h-8 w-8 text-muted" />
               <p className="mt-3 text-sm text-muted">
@@ -467,7 +516,7 @@ export function NovoAgendamentoModal({
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {slots.map((s) => {
+              {slotsVisiveis.map((s) => {
                 const sel = hora === s.hora;
                 return (
                   <button

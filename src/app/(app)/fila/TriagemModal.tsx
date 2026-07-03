@@ -104,7 +104,9 @@ export function TriagemModal({
       open={open}
       onClose={onClose}
       title="Triagem do paciente"
-      subtitle={`${item.paciente} · Senha ${item.codigo}`}
+      subtitle={`${item.paciente} · Senha ${item.codigo}${
+        item.atendimentoCodigo ? ` · Atendimento ${item.atendimentoCodigo}` : ""
+      }`}
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={pending}>

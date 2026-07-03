@@ -6,6 +6,7 @@ import { Plus, SquarePen } from "lucide-react";
 import { toast } from "sonner";
 import { Button, type ButtonProps } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -14,6 +15,7 @@ import {
   type ActionState,
 } from "@/lib/actions/professionals";
 import type { ProfissionalEdit } from "@/lib/data/professionals";
+import type { AttendanceOption } from "@/lib/data/attendance-options.shared";
 
 /** Valores padrão dos campos do formulário (vazios = novo cadastro). */
 type FormDefaults = Partial<ProfissionalEdit>;
@@ -26,18 +28,6 @@ function papelDefault(role?: string): string {
 }
 
 /**
- * Máscara de telefone BR (progressiva): "(11) 90000-0000" (celular, 11 dígitos)
- * ou "(11) 3456-7890" (fixo, 10 dígitos). Mantém só dígitos (máx. 11).
- */
-function mascararTelefone(valor: string): string {
-  const d = valor.replace(/\D/g, "").slice(0, 11);
-  if (d.length <= 2) return d ? `(${d}` : "";
-  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
-}
-
-/**
  * Campos compartilhados entre criar e editar. `mostrarEmail` só na criação
  * (o e-mail vive em auth.users e não é editável por aqui). `mostrarStatus`
  * só na edição (toggle ativo/inativo).
@@ -47,14 +37,22 @@ function CamposProfissional({
   defaults,
   mostrarEmail,
   mostrarStatus,
+  especialidades,
 }: {
   prefixo: string;
   defaults: FormDefaults;
   mostrarEmail: boolean;
   mostrarStatus: boolean;
+  especialidades: AttendanceOption[];
 }) {
   // Telefone controlado para aplicar máscara enquanto digita.
   const [telefone, setTelefone] = useState(defaults.phone ?? "");
+  // Especialidade atual pode ser um valor legado (texto livre) fora do catálogo;
+  // nesse caso incluímos como opção extra para não perder o dado na edição.
+  const especialidadeAtual = defaults.specialty ?? "";
+  const legado =
+    especialidadeAtual !== "" &&
+    !especialidades.some((e) => e.value === especialidadeAtual);
   return (
     <div className="space-y-4">
       <Input
@@ -67,13 +65,22 @@ function CamposProfissional({
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Input
+        <Select
           id={`${prefixo}-especialidade`}
           name="specialty"
           label="Especialidade"
-          placeholder="Ex.: Cardiologia"
-          defaultValue={defaults.specialty ?? ""}
-        />
+          defaultValue={especialidadeAtual}
+        >
+          <option value="">Selecione...</option>
+          {especialidades.map((e) => (
+            <option key={e.id} value={e.value}>
+              {e.label}
+            </option>
+          ))}
+          {legado && (
+            <option value={especialidadeAtual}>{especialidadeAtual}</option>
+          )}
+        </Select>
         <Input
           id={`${prefixo}-conselho`}
           name="council_reg"
@@ -93,14 +100,13 @@ function CamposProfissional({
           <option value="medico">Médico</option>
           <option value="recepcao">Recepção</option>
         </Select>
-        <Input
+        <TelefoneInput
           id={`${prefixo}-telefone`}
           name="phone"
           label="Telefone"
           placeholder="(11) 90000-0000"
-          inputMode="tel"
           value={telefone}
-          onChange={(e) => setTelefone(mascararTelefone(e.target.value))}
+          onChange={(e) => setTelefone(e.target.value)}
         />
       </div>
 
@@ -219,11 +225,13 @@ export function NovoProfissionalModal({
   variant,
   size = "md",
   triggerIcon = <Plus className="h-4 w-4" />,
+  especialidades,
 }: {
   triggerLabel?: string;
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
   triggerIcon?: ReactNode;
+  especialidades: AttendanceOption[];
 }) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
@@ -271,6 +279,7 @@ export function NovoProfissionalModal({
             defaults={{ active: true }}
             mostrarEmail
             mostrarStatus
+            especialidades={especialidades}
           />
           {state?.error && (
             <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -290,9 +299,11 @@ export function NovoProfissionalModal({
 export function EditarProfissionalModal({
   id,
   edit,
+  especialidades,
 }: {
   id: string;
   edit: ProfissionalEdit;
+  especialidades: AttendanceOption[];
 }) {
   const [open, setOpen] = useState(false);
   const updateWithId = updateProfessional.bind(null, id);
@@ -343,6 +354,7 @@ export function EditarProfissionalModal({
             defaults={edit}
             mostrarEmail={false}
             mostrarStatus
+            especialidades={especialidades}
           />
           {state?.error && (
             <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">

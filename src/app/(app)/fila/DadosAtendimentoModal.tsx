@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, Save, Printer, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
@@ -47,8 +48,8 @@ function resolveOptions(
 
 type DraftShape = {
   fields: Record<string, string>;
+  convenio: string;
   plano: string;
-  privado: boolean;
   gestante: boolean;
   oMesmo: boolean;
   respNome: string;
@@ -69,10 +70,15 @@ export function DadosAtendimentoModal({
   options?: AttendanceOptionsByCategory;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  const [convenio, setConvenio] = useState<string>(
+    () => item.convenio || resolveOptions(options, "convenio")[0]?.value || "",
+  );
   const [plano, setPlano] = useState("");
+  // "Particular" não tem convênio → não exige plano nem dados de carteirinha.
+  const isParticular = /particular/i.test(convenio);
   const [oMesmo, setOMesmo] = useState(false);
   const [respNome, setRespNome] = useState("");
-  const [privado, setPrivado] = useState(false);
   const [gestante, setGestante] = useState(false);
   const [pending, setPending] = useState(false);
 
@@ -102,8 +108,8 @@ export function DadosAtendimentoModal({
         if (typeof v === "string") fields[k] = v;
       }
     }
-    return { fields, plano, privado, gestante, oMesmo, respNome };
-  }, [plano, privado, gestante, oMesmo, respNome]);
+    return { fields, convenio, plano, gestante, oMesmo, respNome };
+  }, [convenio, plano, gestante, oMesmo, respNome]);
 
   const persist = useCallback(() => {
     try {
@@ -137,8 +143,8 @@ export function DadosAtendimentoModal({
       // Aplica o rascunho após o paint inicial (fora do corpo do efeito, p/
       // evitar setState síncrono — restaura controlados + campos do DOM).
       requestAnimationFrame(() => {
+        if (typeof d.convenio === "string") setConvenio(d.convenio);
         if (typeof d.plano === "string") setPlano(d.plano);
-        if (typeof d.privado === "boolean") setPrivado(d.privado);
         if (typeof d.gestante === "boolean") setGestante(d.gestante);
         if (typeof d.oMesmo === "boolean") setOMesmo(d.oMesmo);
         if (typeof d.respNome === "string") setRespNome(d.respNome);
@@ -165,7 +171,7 @@ export function DadosAtendimentoModal({
   useEffect(() => {
     if (!open || !dirty) return;
     persist();
-  }, [open, dirty, plano, privado, gestante, oMesmo, respNome, persist]);
+  }, [open, dirty, convenio, plano, gestante, oMesmo, respNome, persist]);
 
   function markDirty() {
     setDirty(true);
@@ -211,7 +217,7 @@ export function DadosAtendimentoModal({
 
   async function salvar(imprimir: boolean) {
     if (pending) return;
-    if (!plano) {
+    if (!isParticular && !plano) {
       toast.error("Selecione o plano do convênio.");
       return;
     }
@@ -229,10 +235,9 @@ export function DadosAtendimentoModal({
       centroCusto: readForm("centro_custo"),
       origem: readForm("origem"),
       dataEntrada: readForm("data_entrada"),
-      privadoLiberdade: privado,
       gestante,
-      convenio: readForm("convenio"),
-      plano,
+      convenio,
+      plano: isParticular ? "" : plano,
       carteira: readForm("carteira"),
       validade: readForm("validade"),
       validador: readForm("validador"),
@@ -255,6 +260,8 @@ export function DadosAtendimentoModal({
       imprimir ? "Atendimento salvo. Gerando impressão…" : "Atendimento salvo.",
     );
     if (imprimir) window.print();
+    // Reflete na fila o avanço do status (recepção concluída → aguardando atendimento).
+    router.refresh();
     onClose();
   }
 
@@ -264,7 +271,7 @@ export function DadosAtendimentoModal({
         open={open}
         onClose={handleClose}
         title={`Dados de Atendimento - ${item.paciente}`}
-        className="max-w-2xl"
+        className="max-w-5xl"
         footer={
           <>
             <Button
@@ -292,115 +299,125 @@ export function DadosAtendimentoModal({
           onSubmit={(e) => e.preventDefault()}
           onInput={markDirty}
         >
-          {/* Cabeçalho do atendimento */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div>
-              <span className="mb-1.5 block text-sm font-medium text-ink">Registro</span>
-              <span className="inline-flex h-10 items-center rounded-lg bg-brand-50 px-3 text-sm font-semibold text-brand-600">
-                AUTO
-              </span>
-            </div>
-            <Input
-              type="date"
-              name="data_entrada"
-              label="Data e Hora da Entrada"
-              defaultValue={new Date().toISOString().slice(0, 10)}
-            />
-            <Select
-              name="origem"
-              label="Origem Atendimento"
-              defaultValue={oOrigem[0]?.value}
-            >
-              {oOrigem.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <div className="flex flex-col justify-center gap-2">
-              <Toggle
-                label="Privado de Liberdade?"
-                checked={privado}
-                onChange={(v) => {
-                  setPrivado(v);
-                  setDirty(true);
-                }}
-              />
-              <Toggle
-                label="Gestante?"
-                checked={gestante}
-                onChange={(v) => {
-                  setGestante(v);
-                  setDirty(true);
-                }}
-              />
-            </div>
-          </div>
+          {/* Dados do Atendimento */}
+          <fieldset className="rounded-xl border border-line p-4">
+            <legend className="px-1 text-sm font-semibold text-muted">
+              Dados do Atendimento
+            </legend>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Select name="medico" label="Médico" defaultValue={oMedico[0]?.value}>
-              {oMedico.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="especialidade"
-              label="Especialidade"
-              defaultValue={oEspec[0]?.value}
-            >
-              {oEspec.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="encaminhamento"
-              label="Encaminhamento de Atendimento"
-              defaultValue={oEncam[0]?.value}
-            >
-              {oEncam.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="carater"
-              label="Caráter de Atendimento"
-              defaultValue={oCarater[0]?.value}
-            >
-              {oCarater.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="procedencia"
-              label="Local Procedência"
-              defaultValue={oProced[0]?.value}
-            >
-              {oProced.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              name="centro_custo"
-              label="Centro de Custo"
-              defaultValue={oCentro[0]?.value}
-            >
-              {oCentro.map((o) => (
-                <option key={o.id} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </div>
+            {/* Linha 1: identificação + entrada + gestante */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <span className="mb-1.5 block text-sm font-medium text-ink">
+                  Registro
+                </span>
+                <span className="inline-flex h-10 w-full items-center rounded-lg bg-brand-50 px-3 text-sm font-semibold text-brand-600">
+                  AUTO
+                </span>
+              </div>
+              <Input
+                type="date"
+                name="data_entrada"
+                label="Data e Hora da Entrada"
+                defaultValue={new Date().toISOString().slice(0, 10)}
+              />
+              <Select
+                name="origem"
+                label="Origem Atendimento"
+                defaultValue={oOrigem[0]?.value}
+              >
+                {oOrigem.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <div>
+                <span className="mb-1.5 block text-sm font-medium text-ink">
+                  Gestante?
+                </span>
+                <Toggle
+                  className="h-10 w-full rounded-lg border border-line bg-white px-3"
+                  label={gestante ? "Sim" : "Não"}
+                  checked={gestante}
+                  onChange={(v) => {
+                    setGestante(v);
+                    setDirty(true);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Linha 2: profissional / especialidade / encaminhamento / etc. */}
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Select
+                name="medico"
+                label="Profissional"
+                defaultValue={oMedico[0]?.value}
+              >
+                {oMedico.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="especialidade"
+                label="Especialidade"
+                defaultValue={oEspec[0]?.value}
+              >
+                {oEspec.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="encaminhamento"
+                label="Encaminhamento de Atendimento"
+                defaultValue={oEncam[0]?.value}
+              >
+                {oEncam.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="carater"
+                label="Caráter de Atendimento"
+                defaultValue={oCarater[0]?.value}
+              >
+                {oCarater.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="procedencia"
+                label="Local Procedência"
+                defaultValue={oProced[0]?.value}
+              >
+                {oProced.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                name="centro_custo"
+                label="Centro de Custo"
+                defaultValue={oCentro[0]?.value}
+              >
+                {oCentro.map((o) => (
+                  <option key={o.id} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </fieldset>
 
           {/* Dados do Convênio */}
           <fieldset className="mt-5 rounded-xl border border-line p-4">
@@ -411,7 +428,13 @@ export function DadosAtendimentoModal({
               <Select
                 name="convenio"
                 label="Convênio *"
-                defaultValue={item.convenio || oConv[0]?.value}
+                value={convenio}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setConvenio(v);
+                  if (/particular/i.test(v)) setPlano("");
+                  setDirty(true);
+                }}
               >
                 {oConv.map((o) => (
                   <option key={o.id} value={o.value}>
@@ -420,31 +443,54 @@ export function DadosAtendimentoModal({
                 ))}
               </Select>
               <Select
-                label="Plano *"
-                value={plano}
+                label={isParticular ? "Plano" : "Plano *"}
+                value={isParticular ? "" : plano}
+                disabled={isParticular}
                 onChange={(e) => {
                   setPlano(e.target.value);
                   setDirty(true);
                 }}
               >
-                <option value="" disabled>
-                  Selecione o plano
-                </option>
-                {oPlano.map((o) => (
-                  <option key={o.id} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
+                {isParticular ? (
+                  <option value="">Não se aplica (Particular)</option>
+                ) : (
+                  <>
+                    <option value="" disabled>
+                      Selecione o plano
+                    </option>
+                    {oPlano.map((o) => (
+                      <option key={o.id} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </>
+                )}
               </Select>
-              <Input name="carteira" label="Número da Carteirinha" placeholder="Número da carteirinha" />
-              <Input type="date" name="validade" label="Validade da Carteirinha" />
+              <Input
+                name="carteira"
+                label="Número da Carteirinha"
+                placeholder="Número da carteirinha"
+                disabled={isParticular}
+              />
+              <Input
+                type="date"
+                name="validade"
+                label="Validade da Carteirinha"
+                disabled={isParticular}
+              />
               <label className="block sm:col-span-2">
                 <span className="mb-1.5 block text-sm font-medium text-ink">
                   Validador de Convênio
                 </span>
-                <Input name="validador" placeholder="Código do validador" />
+                <Input
+                  name="validador"
+                  placeholder="Código do validador"
+                  disabled={isParticular}
+                />
                 <span className="mt-1 block text-xs text-muted">
-                  Digite o código do validador fornecido pelo convênio
+                  {isParticular
+                    ? "Atendimento particular — sem dados de convênio."
+                    : "Digite o código do validador fornecido pelo convênio"}
                 </span>
               </label>
             </div>
@@ -543,13 +589,15 @@ function Toggle({
   label,
   checked,
   onChange,
+  className = "",
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  className?: string;
 }) {
   return (
-    <label className="flex items-center justify-between gap-2">
+    <label className={`flex items-center justify-between gap-2 ${className}`}>
       <span className="text-sm text-ink">{label}</span>
       <button
         type="button"

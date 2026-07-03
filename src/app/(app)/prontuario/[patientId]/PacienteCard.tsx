@@ -14,7 +14,9 @@ export function PacienteCard({ id }: { id: Identificacao }) {
           <div>
             <h2 className="font-semibold text-ink">{id.nome}</h2>
             <p className="text-sm text-muted">
-              Registro {id.registro} · {id.idade} · {id.genero} · {id.convenio}
+              Registro {id.registro}
+              {id.atendimentoCodigo ? ` · Atendimento #${id.atendimentoCodigo}` : ""} ·{" "}
+              {id.idade} · {id.genero} · {id.convenio}
             </p>
           </div>
         </div>

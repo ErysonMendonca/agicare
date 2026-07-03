@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { type Escala } from "@/lib/data/schedules";
+import { type AttendanceOption } from "@/lib/data/attendance-options.shared";
 
 const DIAS_LABEL: Record<number, string> = {
   0: "Dom",
@@ -59,12 +60,15 @@ export function EscalaListaModal({
   open,
   onClose,
   escalas,
+  especialidades: catalogoEspecialidades,
   onNova,
   onEditar,
 }: {
   open: boolean;
   onClose: () => void;
   escalas: Escala[];
+  /** Catálogo de especialidades (attendance_options), fonte única do sistema. */
+  especialidades: AttendanceOption[];
   onNova: () => void;
   onEditar: (escala: Escala) => void;
 }) {
@@ -72,13 +76,21 @@ export function EscalaListaModal({
   const [data, setData] = useState("");
   const [busca, setBusca] = useState("");
 
-  const especialidades = useMemo(
-    () =>
-      Array.from(
-        new Set(escalas.map((e) => e.specialty).filter(Boolean)),
-      ).sort(),
-    [escalas],
-  );
+  // Opções do catálogo + as já presentes nas escalas (legado), sem duplicar.
+  const especialidades = useMemo(() => {
+    const opts = catalogoEspecialidades.map((e) => ({
+      value: e.value,
+      label: e.label,
+    }));
+    const seen = new Set(opts.map((o) => o.value));
+    for (const e of escalas) {
+      if (e.specialty && !seen.has(e.specialty)) {
+        seen.add(e.specialty);
+        opts.push({ value: e.specialty, label: e.specialty });
+      }
+    }
+    return opts.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [catalogoEspecialidades, escalas]);
 
   const termo = busca.trim().toLowerCase();
   const diaSemana = weekdayOf(data);
@@ -134,7 +146,9 @@ export function EscalaListaModal({
           >
             <option value="">Todas as especialidades</option>
             {especialidades.map((e) => (
-              <option key={e}>{e}</option>
+              <option key={e.value} value={e.value}>
+                {e.label}
+              </option>
             ))}
           </Select>
           <Input

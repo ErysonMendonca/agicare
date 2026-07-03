@@ -18,6 +18,7 @@ import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { FilaClient } from "@/app/(app)/fila/FilaClient";
 import { listQueue } from "@/lib/data/queue";
 import { getMySpecialty, listAtendimentosPorData } from "@/lib/data/prontuario";
+import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { getCurrentUser } from "@/lib/auth";
 import { requireView } from "@/lib/permissions";
 
@@ -89,13 +90,13 @@ export default async function ProntuarioPage({
     (i) => i.statusRaw === "finalizado",
   ).length;
 
-  // Opções de especialidade sem duplicar a base do profissional.
+  // Opções de especialidade vindas do catálogo (attendance_options), unindo a
+  // base do profissional logado para garantir que ela sempre apareça no filtro.
+  const catalogoEsp = (await listAttendanceOptions()).especialidade ?? [];
   const espOptions = Array.from(
     new Set([
       ...(especialidadeBase ? [especialidadeBase] : []),
-      "Clínica Geral",
-      "Cardiologia",
-      "Ortopedia",
+      ...catalogoEsp.map((e) => e.value),
     ]),
   );
 

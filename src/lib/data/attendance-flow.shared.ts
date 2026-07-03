@@ -13,10 +13,15 @@
  * ao atendimento).
  *
  * Cada etapa é representada na fila por um ou mais STATUS de `queue_entries`:
- *   recepcao    → ['aguardando']
+ *   recepcao    → ['aguardando', 'na_recepcao']
  *   triagem     → ['triagem']
- *   atendimento → ['chamado', 'em_atendimento']
+ *   atendimento → ['aguardando_atendimento', 'chamado', 'em_atendimento']
  * e o pipeline termina em 'finalizado'.
+ *
+ * Na recepção: 'aguardando' = na fila (recepção ainda não atendeu);
+ * 'na_recepcao' = recepção atendendo (modal Dados de Atendimento). Concluir a
+ * recepção (Salvar) avança para 'aguardando_atendimento' (ou 'triagem', se
+ * houver), que é a espera pelo PROFISSIONAL.
  *
  * Concluir uma etapa AVANÇA o status para o próximo do pipeline; após a última
  * etapa o status vira 'finalizado'. As ações disponíveis para uma entrada saem
@@ -29,6 +34,8 @@ export type FlowStage = "recepcao" | "triagem" | "atendimento";
 export type QueueStatus =
   | "agendado"
   | "aguardando"
+  | "na_recepcao"
+  | "aguardando_atendimento"
   | "triagem"
   | "chamado"
   | "em_atendimento"
@@ -53,9 +60,9 @@ export const REQUIRED_STAGES: readonly FlowStage[] = ["recepcao", "atendimento"]
 
 /** Status que representam cada etapa, na ordem interna. */
 const STAGE_STATUSES: Record<FlowStage, QueueStatus[]> = {
-  recepcao: ["aguardando"],
+  recepcao: ["aguardando", "na_recepcao"],
   triagem: ["triagem"],
-  atendimento: ["chamado", "em_atendimento"],
+  atendimento: ["aguardando_atendimento", "chamado", "em_atendimento"],
 };
 
 /** Status terminais: a entrada saiu do fluxo, sem ação possível. */
@@ -131,10 +138,16 @@ export function statusAfterStage(
 
 /**
  * Ações disponíveis para uma entrada dado seu status atual e o fluxo configurado.
- * Mapeia o "próximo status pendente" para o verbo de ação:
- *   → 'triagem'        ⇒ ['triar']
+ *
+ * Dois status "em andamento" têm ação própria (a conclusão deles vem de um modal,
+ * não do avanço genérico do pipeline):
+ *   'na_recepcao' ⇒ ['atender']  (reabre Dados de Atendimento; conclui ao Salvar)
+ *   'triagem'     ⇒ ['triar']    (abre/conclui a triagem)
+ *
+ * Para os demais, mapeia o "próximo status pendente" para o verbo:
+ *   → 'na_recepcao'    ⇒ ['atender']  (recepção inicia o atendimento)
  *   → 'chamado'        ⇒ ['chamar']
- *   → 'em_atendimento' ⇒ ['atender']
+ *   → 'em_atendimento' ⇒ ['atender']  (profissional inicia o atendimento)
  *   → 'finalizado'     ⇒ ['finalizar']
  * Entradas terminais (finalizado/desistencia) ou ainda agendadas → [].
  */
@@ -145,8 +158,14 @@ export function actionsForEntry(
   if (statusRaw === "agendado" || TERMINAL.has(statusRaw as QueueStatus)) {
     return [];
   }
+  // Status em andamento: a ação reabre o respectivo modal (avança ao concluir).
+  if (statusRaw === "na_recepcao") return ["atender"];
+  if (statusRaw === "triagem") return ["triar"];
+
   const next = nextStatus(statusRaw, stages);
   switch (next) {
+    case "na_recepcao":
+      return ["atender"];
     case "triagem":
       return ["triar"];
     case "chamado":

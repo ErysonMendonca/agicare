@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Clock,
   Stethoscope,
@@ -10,8 +11,12 @@ import {
   Search,
   Filter,
   CalendarClock,
+  CalendarDays,
+  ArrowDownUp,
   Ticket,
   Users,
+  Hash,
+  ArrowRight,
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
@@ -33,10 +38,61 @@ import { CheckInModal } from "./CheckInModal";
 
 type ModalKind = "acoes" | "triagem" | "atendimento" | "desistencia" | null;
 
+/** Critérios de ordenação da fila. */
+type Ordenacao = "agendamento" | "az" | "za";
+
+const ORDENACAO_OPCOES: { value: Ordenacao; label: string }[] = [
+  { value: "agendamento", label: "Horário de agendamento" },
+  { value: "az", label: "Nome (A–Z)" },
+  { value: "za", label: "Nome (Z–A)" },
+];
+
+/**
+ * Comparador conforme o critério escolhido. "agendamento" ordena pelo horário
+ * (HH:MM, crescente); itens sem horário ("—") vão para o fim.
+ */
+function compararFila(a: FilaItem, b: FilaItem, ord: Ordenacao): number {
+  if (ord === "az") return a.paciente.localeCompare(b.paciente, "pt-BR");
+  if (ord === "za") return b.paciente.localeCompare(a.paciente, "pt-BR");
+  const ha = a.hora === "—" ? "99:99" : a.hora;
+  const hb = b.hora === "—" ? "99:99" : b.hora;
+  return ha.localeCompare(hb);
+}
+
+/**
+ * Etapa atual + próximo passo derivados do status do item (sem ir ao backend).
+ * Visão curta para a recepção: recepção → triagem → atendimento → conclusão.
+ */
+function fluxoDoStatus(
+  statusRaw: string,
+): { etapa: string; proximo: string | null } | null {
+  switch (statusRaw) {
+    case "na_recepcao":
+      return { etapa: "Na recepção", proximo: "Triagem" };
+    case "triagem":
+      return { etapa: "Na triagem", proximo: "Atendimento" };
+    case "aguardando":
+    case "aguardando_atendimento":
+      return { etapa: "Aguardando", proximo: "Atendimento" };
+    case "chamado":
+      return { etapa: "Chamado", proximo: "Atendimento" };
+    case "em_atendimento":
+      return { etapa: "Em atendimento", proximo: "Conclusão" };
+    case "finalizado":
+      return { etapa: "Finalizado", proximo: null };
+    case "desistencia":
+      return { etapa: "Desistência", proximo: null };
+    default:
+      return null;
+  }
+}
+
 /** Opções do filtro de status (valor = statusRaw do banco). */
 const STATUS_OPCOES = [
   { value: "todos", label: "Todos os Status" },
   { value: "aguardando", label: "Aguardando" },
+  { value: "na_recepcao", label: "Na recepção" },
+  { value: "aguardando_atendimento", label: "Aguardando atendimento" },
   { value: "triagem", label: "Em Triagem" },
   { value: "chamado", label: "Chamado" },
   { value: "em_atendimento", label: "Em Atendimento" },
@@ -50,6 +106,10 @@ export function FilaClient({
   stages = DEFAULT_STAGES,
   attendanceOptions,
   kpis,
+  dataSelecionada,
+  isHoje = true,
+  todoPeriodo = false,
+  isMedico = false,
 }: {
   fila: FilaItem[];
   agendados?: FilaItem[];
@@ -61,7 +121,18 @@ export function FilaClient({
     emAtendimento: number;
     total: number;
   };
+  /** Dia exibido (yyyy-mm-dd). A fila já vem filtrada por este dia no servidor. */
+  dataSelecionada?: string;
+  /** true quando o dia exibido é hoje (mostra agendados aguardando chegada). */
+  isHoje?: boolean;
+  /** true quando o filtro de data está desligado (fila do período inteiro). */
+  todoPeriodo?: boolean;
+  /** true quando o usuário é médico → "Atender" leva ao prontuário do paciente. */
+  isMedico?: boolean;
 }) {
+  const router = useRouter();
+  const [navegando, startNavegacao] = useTransition();
+
   const [selected, setSelected] = useState<FilaItem | null>(null);
   const [modal, setModal] = useState<ModalKind>(null);
 
@@ -69,9 +140,10 @@ export function FilaClient({
   const [checkInAlvo, setCheckInAlvo] = useState<FilaItem | null>(null);
   const [checkInOpen, setCheckInOpen] = useState(false);
 
-  // Busca + filtro
+  // Busca + filtro + ordenação
   const [query, setQuery] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("todos");
+  const [ordenacao, setOrdenacao] = useState<Ordenacao>("agendamento");
 
   // Clicar numa KPI filtra a fila pelo status; clicar na ativa (ou na Total)
   // volta para "todos". Compartilha o MESMO estado do Select de status.
@@ -81,25 +153,39 @@ export function FilaClient({
   const termo = query.trim().toLowerCase();
 
   const filaFiltrada = useMemo(() => {
-    return fila.filter((item) => {
-      const casaTexto =
-        termo === "" ||
-        item.paciente.toLowerCase().includes(termo) ||
-        item.codigo.toLowerCase().includes(termo);
-      const casaStatus =
-        statusFiltro === "todos" || item.statusRaw === statusFiltro;
-      return casaTexto && casaStatus;
-    });
-  }, [fila, termo, statusFiltro]);
+    return fila
+      .filter((item) => {
+        const casaTexto =
+          termo === "" ||
+          item.paciente.toLowerCase().includes(termo) ||
+          item.codigo.toLowerCase().includes(termo);
+        const casaStatus =
+          statusFiltro === "todos" || item.statusRaw === statusFiltro;
+        return casaTexto && casaStatus;
+      })
+      .sort((a, b) => compararFila(a, b, ordenacao));
+  }, [fila, termo, statusFiltro, ordenacao]);
 
   // Agendados só aparecem quando o filtro está em "todos" (não têm status de fila);
   // a busca textual continua valendo.
   const agendadosFiltrados = useMemo(() => {
     if (statusFiltro !== "todos") return [];
-    return agendados.filter(
-      (item) => termo === "" || item.paciente.toLowerCase().includes(termo),
-    );
-  }, [agendados, termo, statusFiltro]);
+    return agendados
+      .filter(
+        (item) => termo === "" || item.paciente.toLowerCase().includes(termo),
+      )
+      .sort((a, b) => compararFila(a, b, ordenacao));
+  }, [agendados, termo, statusFiltro, ordenacao]);
+
+  // Troca o dia exibido navegando pela URL (?data=…). A page re-consulta a fila
+  // no servidor já filtrada pelo dia → não carrega pacientes de dias passados.
+  // Data vazia ou igual a hoje limpa o param (URL limpa, default = hoje).
+  function mudarData(novaData: string) {
+    const params = new URLSearchParams();
+    if (novaData) params.set("data", novaData);
+    const qs = params.toString();
+    startNavegacao(() => router.push(qs ? `/fila?${qs}` : "/fila"));
+  }
 
   function abrir(item: FilaItem) {
     setSelected(item);
@@ -252,6 +338,42 @@ export function FilaClient({
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
+          {/* Filtro por data: a fila mostra só o dia selecionado (default = hoje). */}
+          <div className="relative sm:w-48">
+            <CalendarDays className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Input
+              type="date"
+              aria-label="Filtrar a fila por data"
+              className="pl-9"
+              value={dataSelecionada ?? ""}
+              disabled={navegando || todoPeriodo}
+              onChange={(e) => mudarData(e.target.value)}
+            />
+          </div>
+          {/* Todo o período: desliga o filtro de data e lista a fila inteira. */}
+          <button
+            type="button"
+            onClick={() => mudarData(todoPeriodo ? "" : "todos")}
+            disabled={navegando}
+            aria-pressed={todoPeriodo}
+            className={`h-10 flex-none rounded-lg border px-3 text-sm font-medium transition-colors disabled:opacity-60 ${
+              todoPeriodo
+                ? "border-brand-500 bg-brand-50 text-brand-600"
+                : "border-line text-muted hover:bg-muted-surface hover:text-ink"
+            }`}
+          >
+            Todo o período
+          </button>
+          {!isHoje && !todoPeriodo && (
+            <button
+              type="button"
+              onClick={() => mudarData("")}
+              disabled={navegando}
+              className="h-10 flex-none rounded-lg border border-line px-3 text-sm font-medium text-muted transition-colors hover:bg-muted-surface hover:text-ink disabled:opacity-60"
+            >
+              Hoje
+            </button>
+          )}
           <div className="relative sm:w-56">
             <Filter className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
             <Select
@@ -261,6 +383,22 @@ export function FilaClient({
               onChange={(e) => setStatusFiltro(e.target.value)}
             >
               {STATUS_OPCOES.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {/* Ordenação: por horário de agendamento ou ordem alfabética. */}
+          <div className="relative sm:w-56">
+            <ArrowDownUp className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Select
+              aria-label="Ordenar a fila"
+              className="pl-9"
+              value={ordenacao}
+              onChange={(e) => setOrdenacao(e.target.value as Ordenacao)}
+            >
+              {ORDENACAO_OPCOES.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
@@ -304,6 +442,12 @@ export function FilaClient({
                       <h3 className="font-semibold text-ink">
                         {item.paciente}
                       </h3>
+                      {item.atendimentoCodigo && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-muted-surface px-2 py-0.5 text-xs font-medium text-muted">
+                          <Hash className="h-3 w-3" />
+                          {item.atendimentoCodigo}
+                        </span>
+                      )}
                       {item.tags?.map((tag) => (
                         <Badge key={tag.label} status={tag.status}>
                           {tag.label}
@@ -324,6 +468,23 @@ export function FilaClient({
                         <CreditCard className="h-4 w-4" /> {item.convenio}
                       </span>
                     </div>
+                    {(() => {
+                      const fluxo = fluxoDoStatus(item.statusRaw);
+                      if (!fluxo) return null;
+                      return (
+                        <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-600">
+                          {fluxo.etapa}
+                          {fluxo.proximo && (
+                            <>
+                              <ArrowRight className="h-3 w-3" />
+                              <span className="text-muted">
+                                próximo: {fluxo.proximo}
+                              </span>
+                            </>
+                          )}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   <Badge status={item.status.tone} className="flex-none">
@@ -352,6 +513,7 @@ export function FilaClient({
             onTriar={() => setModal("triagem")}
             onAtender={() => setModal("atendimento")}
             onDesistir={() => setModal("desistencia")}
+            isMedico={isMedico}
           />
           <TriagemModal
             item={selected}

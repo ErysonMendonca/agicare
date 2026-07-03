@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+
+// Pilha global de modais abertos. Permite empilhar modais (ex.: cadastro do
+// avulso por cima do check-in): só o do TOPO responde ao ESC, e o scroll do
+// fundo só é reabilitado quando o ÚLTIMO modal fecha.
+const modalStack: string[] = [];
 
 /** Modal reutilizável (dialog) com entrada/saída animadas (spring). */
 export function Modal({
@@ -23,16 +28,26 @@ export function Modal({
   footer?: ReactNode;
   className?: string;
 }) {
+  const id = useId();
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    modalStack.push(id);
+    // Só o modal do topo da pilha reage ao ESC (não fecha os de baixo junto).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && modalStack[modalStack.length - 1] === id) {
+        onClose();
+      }
+    };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      const i = modalStack.lastIndexOf(id);
+      if (i !== -1) modalStack.splice(i, 1);
+      // Reabilita o scroll só quando não há mais nenhum modal aberto.
+      if (modalStack.length === 0) document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [open, onClose, id]);
 
   return (
     <AnimatePresence>

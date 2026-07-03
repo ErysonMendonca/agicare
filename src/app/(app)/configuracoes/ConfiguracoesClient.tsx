@@ -31,6 +31,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { Select } from "@/components/ui/Select";
 import { EmBreve } from "@/components/ui/EmBreve";
 import { salvarConfiguracoes, executarBackup } from "@/lib/actions/settings";
@@ -44,6 +45,7 @@ import type { AnamneseTemplate } from "@/lib/data/anamnese-templates.shared";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 import { AnamneseBuilder } from "./AnamneseBuilder";
 import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
+import { EspecialidadesConfig } from "./EspecialidadesConfig";
 
 const BASE_TABS = [
   "Geral",
@@ -56,8 +58,12 @@ const BASE_TABS = [
 ] as const;
 
 const ATENDIMENTO_TAB = "Dados de Atendimento";
+const ESPECIALIDADES_TAB = "Especialidades";
 
-type Tab = (typeof BASE_TABS)[number] | typeof ATENDIMENTO_TAB;
+type Tab =
+  | (typeof BASE_TABS)[number]
+  | typeof ATENDIMENTO_TAB
+  | typeof ESPECIALIDADES_TAB;
 
 export function ConfiguracoesClient({
   settings,
@@ -72,8 +78,10 @@ export function ConfiguracoesClient({
   attendanceOptions: AttendanceOptionsByCategory;
   isGestor: boolean;
 }) {
-  // "Dados de Atendimento" é uma aba extra só para gestor.
-  const tabs: Tab[] = isGestor ? [...BASE_TABS, ATENDIMENTO_TAB] : [...BASE_TABS];
+  // "Dados de Atendimento" e "Especialidades" são abas extras só para gestor.
+  const tabs: Tab[] = isGestor
+    ? [...BASE_TABS, ATENDIMENTO_TAB, ESPECIALIDADES_TAB]
+    : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
     salvarConfiguracoes,
@@ -209,7 +217,7 @@ export function ConfiguracoesClient({
                   />
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Input id="cnpj" name="cnpj" label="CNPJ" defaultValue={settings.cnpj} />
-                    <Input id="telefone" name="phone" label="Telefone" defaultValue={settings.phone} />
+                    <TelefoneInput id="telefone" name="phone" label="Telefone" defaultValue={settings.phone} />
                   </div>
                   <Input id="email" name="email" label="E-mail" type="email" defaultValue={settings.email} />
                   <Input id="endereco" name="address" label="Endereço" defaultValue={settings.address} />
@@ -523,6 +531,12 @@ export function ConfiguracoesClient({
           fora do form de configurações. */}
       {isGestor && tabAtiva === ATENDIMENTO_TAB && (
         <AtendimentoOpcoes options={attendanceOptions} />
+      )}
+
+      {/* Catálogo de especialidades dos profissionais — editor próprio
+          (gestor-only), fora do form de configurações. */}
+      {isGestor && tabAtiva === ESPECIALIDADES_TAB && (
+        <EspecialidadesConfig options={attendanceOptions} />
       )}
     </>
   );
