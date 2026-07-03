@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   Stethoscope,
+  Syringe,
   Pill,
   CheckSquare,
   ClipboardList,
@@ -23,6 +24,7 @@ export function ClinicoNav({ patientId }: { patientId: string }) {
     { href: base, label: "Resumo", icon: Activity, exact: true },
     { href: `${base}/anamnese`, label: "Anamnese", icon: ClipboardList },
     { href: `${base}/evolucao`, label: "Evolução", icon: Stethoscope },
+    { href: `${base}/procedimento`, label: "Procedimento", icon: Syringe },
     { href: `${base}/protetico`, label: "Protético", icon: Bone },
     { href: `${base}/prescricao`, label: "Prescrição", icon: Pill },
     { href: `${base}/checagem`, label: "Checagem", icon: CheckSquare },
