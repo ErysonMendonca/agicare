@@ -103,6 +103,7 @@ const altaSchema = z.object({
   motivo: z.string().trim().min(1, "Selecione o motivo."),
   detalhe: z.string().trim().optional(),
   observacao: z.string().trim().optional(),
+  exibirCid: z.boolean(),
 });
 
 export type AltaInput = z.infer<typeof altaSchema>;
@@ -139,6 +140,7 @@ export async function darAlta(input: AltaInput): Promise<ActionState> {
     cid10,
     observation: d.observacao || null,
     discharge_at: d.dataAlta,
+    show_cid: d.exibirCid,
   });
   if (error) {
     console.error("darAlta insert falhou:", error);

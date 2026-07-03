@@ -53,6 +53,7 @@ const ALTA_INICIAL = {
   motivoId: "",
   detalhe: "",
   observacao: "",
+  exibirCid: true,
 };
 
 export function DocumentosClient({
@@ -180,6 +181,7 @@ export function DocumentosClient({
         motivo: alta.motivo,
         detalhe: alta.detalhe || undefined,
         observacao: alta.observacao || undefined,
+        exibirCid: alta.exibirCid,
       });
       if (res?.ok) {
         toast.success("Alta registrada.");
@@ -235,7 +237,7 @@ export function DocumentosClient({
         <Stagger className="flex flex-col gap-3">
           {documentos.map((d) => {
             const isAtestado = d.tipo === "atestado";
-            const mostraCid = isAtestado && d.exibirCid && !!d.cid10;
+            const mostraCid = d.exibirCid && !!d.cid10;
             return (
               <FadeInUp key={d.id}>
                 <Card className="p-4">
@@ -278,7 +280,7 @@ export function DocumentosClient({
                                 <span className="font-medium">Detalhe:</span> {d.detalhe}
                               </>
                             ) : null}
-                            {d.cid10 ? ` · CID-10: ${d.cid10}` : ""}
+                            {mostraCid ? ` · CID-10: ${d.cid10}` : ""}
                           </p>
                           {d.observacao ? (
                             <p className="mt-1 text-muted">{d.observacao}</p>
@@ -436,6 +438,17 @@ export function DocumentosClient({
                 placeholder="Busque por código — ex.: J11"
               />
             </div>
+            <label className="flex items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={alta.exibirCid}
+                onChange={(e) =>
+                  setAlta((a) => ({ ...a, exibirCid: e.target.checked }))
+                }
+                className="h-5 w-5 rounded border-line text-brand-500 focus:ring-brand-100"
+              />
+              <span className="text-sm text-ink">Exibir CID na impressão</span>
+            </label>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Select
                 id="alta-motivo"
