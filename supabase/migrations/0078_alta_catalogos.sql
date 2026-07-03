@@ -92,7 +92,8 @@ cross join (values
   ('Alta por transferência',  4),
   ('Alta por evasão',         5)
 ) as m(value, sort_order)
-on conflict (clinic_id, category, value) do nothing;
+-- Alinha ao índice parcial uq_attendance_options_flat (categorias != detalhe_alta).
+on conflict (clinic_id, category, value) where category <> 'detalhe_alta' do nothing;
 
 -- (b) detalhes de alta — parent_id resolvido por clínica+motivo (subquery)
 insert into public.attendance_options (clinic_id, category, label, value, sort_order, parent_id)
@@ -119,7 +120,8 @@ cross join (values
   ('Alta por evasão',        'Abandono sem comunicação',        0),
   ('Alta por evasão',        'Saída sem autorização médica',    1)
 ) as d(motivo, value, sort_order)
-on conflict (clinic_id, category, value) do nothing;
+-- Alinha ao índice parcial uq_attendance_options_detalhe (único por motivo pai).
+on conflict (clinic_id, parent_id, value) where category = 'detalhe_alta' do nothing;
 
 -- ════════════════════════════════════════════════════════════════
 -- ROLLBACK (manual):
