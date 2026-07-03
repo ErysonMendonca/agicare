@@ -98,14 +98,16 @@ export async function emitirAtestado(input: AtestadoInput): Promise<ActionState>
 
 const altaSchema = z.object({
   patientId: z.string().min(1, "Paciente inválido."),
-  motivo: z.string().trim().min(1, "Informe o motivo da alta."),
-  diagnostico: z.string().trim().min(1, "Informe o diagnóstico principal."),
-  orientacoes: z.string().trim().min(1, "Informe as orientações pós-alta."),
+  dataAlta: z.string().trim().min(1, "Informe a data e hora da alta."),
+  cid10: z.string().trim().optional(),
+  motivo: z.string().trim().min(1, "Selecione o motivo."),
+  detalhe: z.string().trim().optional(),
+  observacao: z.string().trim().optional(),
 });
 
 export type AltaInput = z.infer<typeof altaSchema>;
 
-/** Registra uma alta (motivo, diagnóstico principal e orientações pós-alta). */
+/** Registra uma alta (data/hora, motivo, detalhe, CID opcional e observação). */
 export async function darAlta(input: AltaInput): Promise<ActionState> {
   const parsed = altaSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
@@ -125,14 +127,18 @@ export async function darAlta(input: AltaInput): Promise<ActionState> {
 
   const clinicId = await requireClinic();
   const d = parsed.data;
+  // Normaliza o CID (autocomplete livre): sem espaços e sempre maiúsculo.
+  const cid10 = d.cid10 ? d.cid10.trim().toUpperCase() : null;
   const { error } = await supabase.from("certificates").insert({
     clinic_id: clinicId,
     patient_id: d.patientId,
     professional_id: professionalId,
     kind: "alta",
     reason: d.motivo,
-    diagnosis: d.diagnostico,
-    post_discharge: d.orientacoes,
+    discharge_detail: d.detalhe || null,
+    cid10,
+    observation: d.observacao || null,
+    discharge_at: d.dataAlta,
   });
   if (error) {
     console.error("darAlta insert falhou:", error);

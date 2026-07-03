@@ -31,7 +31,19 @@ const CATEGORY_LABELS: Record<AttendanceOptionCategory, string> = {
   convenio: "Convênio",
   plano: "Plano",
   parentesco: "Grau de Parentesco",
+  // Catálogos de alta têm telas dedicadas (não editar aqui) — excluídos abaixo.
+  motivo_alta: "Motivos de Alta",
+  detalhe_alta: "Detalhes de Alta",
 };
+
+/**
+ * Categorias editáveis neste editor genérico. Os catálogos de ALTA
+ * (motivo_alta/detalhe_alta) têm telas próprias com suporte a vínculo pai→filho
+ * (parent_id), então são omitidos aqui para não gerar detalhe órfão sem motivo.
+ */
+const EDITABLE_CATEGORIES = ATTENDANCE_OPTION_CATEGORIES.filter(
+  (c) => c !== "motivo_alta" && c !== "detalhe_alta",
+);
 
 export function AtendimentoOpcoes({
   options,
@@ -143,7 +155,7 @@ export function AtendimentoOpcoes({
             setEditId(null);
           }}
         >
-          {ATTENDANCE_OPTION_CATEGORIES.map((c) => (
+          {EDITABLE_CATEGORIES.map((c) => (
             <option key={c} value={c}>
               {CATEGORY_LABELS[c]}
             </option>

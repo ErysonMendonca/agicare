@@ -17,6 +17,8 @@ export const ATTENDANCE_OPTION_CATEGORIES = [
   "convenio",
   "plano",
   "parentesco",
+  "motivo_alta",
+  "detalhe_alta",
 ] as const;
 
 export type AttendanceOptionCategory =

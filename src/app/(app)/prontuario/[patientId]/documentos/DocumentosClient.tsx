@@ -7,11 +7,13 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { type Documento } from "@/lib/data/documentos";
 import { type CidCode } from "@/lib/data/cid";
+import { type MotivoAlta, type DetalheAlta } from "@/lib/data/alta";
 import { emitirAtestado, darAlta } from "@/lib/actions/documentos";
 import {
   imprimirAtestado,
@@ -25,11 +27,40 @@ function hoje(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Agora no formato aceito por <input type="datetime-local"> (hora local). */
+function agoraLocal(): string {
+  const d = new Date();
+  const off = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 16);
+}
+
+/** Formata "YYYY-MM-DDThh:mm" (ou ISO) para exibição pt-BR legível. */
+function fmtDataHoraLocal(v: string | null): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v;
+  return `${d.toLocaleDateString("pt-BR")} ${d.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
+const ALTA_INICIAL = {
+  dataAlta: "",
+  cid10: "",
+  motivo: "",
+  motivoId: "",
+  detalhe: "",
+  observacao: "",
+};
+
 export function DocumentosClient({
   patientId,
   documentos,
   temReceita,
   cidCodes,
+  motivosAlta,
+  detalhesAlta,
   clinica,
   paciente,
 }: {
@@ -37,6 +68,8 @@ export function DocumentosClient({
   documentos: Documento[];
   temReceita: boolean;
   cidCodes: CidCode[];
+  motivosAlta: MotivoAlta[];
+  detalhesAlta: DetalheAlta[];
   clinica: ClinicaImpressao;
   paciente: PacienteImpressao;
 }) {
@@ -54,8 +87,13 @@ export function DocumentosClient({
     exibirCid: true,
   });
 
-  // Alta
-  const [alta, setAlta] = useState({ motivo: "", diagnostico: "", orientacoes: "" });
+  // Alta. `motivoId` é auxiliar (só para filtrar o detalhe); gravamos os LABELs.
+  const [alta, setAlta] = useState(ALTA_INICIAL);
+
+  // Detalhes filtrados pelo motivo escolhido.
+  const detalhesDoMotivo = alta.motivoId
+    ? detalhesAlta.filter((d) => d.parentId === alta.motivoId)
+    : [];
 
   function resetAtestado() {
     setAtestado({
@@ -96,11 +134,55 @@ export function DocumentosClient({
     });
   }
 
+  function resetAlta() {
+    setAlta(ALTA_INICIAL);
+  }
+
+  /** Fecha o modal de alta zerando o formulário. */
+  function fecharAlta() {
+    resetAlta();
+    setModal(null);
+  }
+
+  /** Abre a alta já com a data/hora padrão = agora. */
+  function abrirAlta() {
+    setAlta({ ...ALTA_INICIAL, dataAlta: agoraLocal() });
+    setModal("alta");
+  }
+
+  /** Troca de motivo: guarda label + id e limpa o detalhe. */
+  function onMotivoChange(motivoId: string) {
+    const m = motivosAlta.find((x) => x.id === motivoId);
+    setAlta((a) => ({
+      ...a,
+      motivoId,
+      motivo: m?.label ?? "",
+      detalhe: "",
+    }));
+  }
+
   function salvarAlta() {
+    if (!alta.motivo) {
+      toast.error("Selecione o motivo da alta.");
+      return;
+    }
     startTransition(async () => {
-      const res = await darAlta({ patientId, ...alta });
+      // Converte o wall-clock do datetime-local para um instante ISO (com
+      // offset), para gravar em discharge_at (timestamptz) coerente com created_at.
+      const dataAltaISO = alta.dataAlta
+        ? new Date(alta.dataAlta).toISOString()
+        : "";
+      const res = await darAlta({
+        patientId,
+        dataAlta: dataAltaISO,
+        cid10: alta.cid10 || undefined,
+        motivo: alta.motivo,
+        detalhe: alta.detalhe || undefined,
+        observacao: alta.observacao || undefined,
+      });
       if (res?.ok) {
         toast.success("Alta registrada.");
+        resetAlta();
         setModal(null);
         router.refresh();
       } else {
@@ -111,6 +193,16 @@ export function DocumentosClient({
 
   return (
     <>
+      {/* Datalist compartilhado pelos modais de atestado e alta (o Modal só
+          renderiza filhos quando aberto, por isso fica no nível raiz). */}
+      <datalist id="cid-codes">
+        {cidCodes.map((c) => (
+          <option key={c.id} value={c.code}>
+            {c.code} — {c.description}
+          </option>
+        ))}
+      </datalist>
+
       <div className="mb-4 flex flex-wrap justify-end gap-2">
         <Button
           variant="outline"
@@ -120,7 +212,7 @@ export function DocumentosClient({
         >
           <Printer className="h-4 w-4" /> Imprimir Receita
         </Button>
-        <Button variant="outline" onClick={() => setModal("alta")}>
+        <Button variant="outline" onClick={abrirAlta}>
           <LogOut className="h-4 w-4" /> Registrar Alta
         </Button>
         <Button onClick={() => setModal("atestado")}>
@@ -170,13 +262,27 @@ export function DocumentosClient({
                           ) : null}
                         </p>
                       ) : (
-                        <p className="text-sm text-ink">
-                          <span className="font-medium">Motivo:</span> {d.motivo} ·{" "}
-                          <span className="font-medium">Dx:</span> {d.diagnostico}
-                          {d.orientacoes ? (
-                            <span className="mt-1 block text-muted">{d.orientacoes}</span>
+                        <div className="text-sm text-ink">
+                          {d.dataAlta ? (
+                            <p>
+                              <span className="font-medium">Data da alta:</span>{" "}
+                              {fmtDataHoraLocal(d.dataAlta)}
+                            </p>
                           ) : null}
-                        </p>
+                          <p>
+                            <span className="font-medium">Motivo:</span> {d.motivo}
+                            {d.detalhe ? (
+                              <>
+                                {" "}·{" "}
+                                <span className="font-medium">Detalhe:</span> {d.detalhe}
+                              </>
+                            ) : null}
+                            {d.cid10 ? ` · CID-10: ${d.cid10}` : ""}
+                          </p>
+                          {d.observacao ? (
+                            <p className="mt-1 text-muted">{d.observacao}</p>
+                          ) : null}
+                        </div>
                       )}
                       <p className="mt-1 text-xs text-muted">{d.profissional}</p>
                     </div>
@@ -252,13 +358,6 @@ export function DocumentosClient({
             onChange={(e) => setAtestado((a) => ({ ...a, cid10: e.target.value }))}
             placeholder="Busque por código ou descrição — ex.: J11"
           />
-          <datalist id="cid-codes">
-            {cidCodes.map((c) => (
-              <option key={c.id} value={c.code}>
-                {c.code} — {c.description}
-              </option>
-            ))}
-          </datalist>
           <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
             <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
             Pode ser omitido a pedido do paciente (LGPD).
@@ -292,12 +391,12 @@ export function DocumentosClient({
       {/* Modal Alta */}
       <Modal
         open={modal === "alta"}
-        onClose={() => setModal(null)}
+        onClose={fecharAlta}
         title="Registrar Alta"
-        subtitle="Motivo, diagnóstico principal e orientações pós-alta."
+        subtitle="Data/hora, motivo, detalhe, CID (opcional) e observação."
         footer={
           <>
-            <Button variant="outline" onClick={() => setModal(null)}>
+            <Button variant="outline" onClick={fecharAlta}>
               Cancelar
             </Button>
             <Button onClick={salvarAlta} disabled={pending}>
@@ -306,32 +405,89 @@ export function DocumentosClient({
           </>
         }
       >
-        <div className="space-y-4">
-          <Input
-            label="Motivo da alta"
-            value={alta.motivo}
-            onChange={(e) => setAlta((a) => ({ ...a, motivo: e.target.value }))}
-            placeholder="Ex.: Melhora clínica"
-          />
-          <Input
-            label="Diagnóstico principal"
-            value={alta.diagnostico}
-            onChange={(e) => setAlta((a) => ({ ...a, diagnostico: e.target.value }))}
-            placeholder="Diagnóstico de encerramento"
-          />
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-ink">
-              Orientações pós-alta
-            </span>
-            <textarea
-              rows={3}
-              value={alta.orientacoes}
-              onChange={(e) => setAlta((a) => ({ ...a, orientacoes: e.target.value }))}
-              placeholder="Cuidados, retorno, sinais de alerta..."
-              className="w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            />
-          </label>
-        </div>
+        {motivosAlta.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-line bg-muted-surface p-6 text-center text-sm text-muted">
+            Nenhum motivo de alta cadastrado. Cadastre em{" "}
+            <span className="font-medium text-ink">
+              Configurações → Motivos de Alta
+            </span>{" "}
+            para registrar altas.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                label="Data e hora da alta"
+                type="datetime-local"
+                value={alta.dataAlta}
+                onChange={(e) =>
+                  setAlta((a) => ({ ...a, dataAlta: e.target.value }))
+                }
+              />
+              <Input
+                id="alta-cid"
+                label="CID (opcional)"
+                list="cid-codes"
+                value={alta.cid10}
+                onChange={(e) =>
+                  setAlta((a) => ({ ...a, cid10: e.target.value }))
+                }
+                placeholder="Busque por código — ex.: J11"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Select
+                id="alta-motivo"
+                label="Motivo da alta"
+                value={alta.motivoId}
+                onChange={(e) => onMotivoChange(e.target.value)}
+              >
+                <option value="">Selecione…</option>
+                {motivosAlta.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                id="alta-detalhe"
+                label="Detalhe da alta"
+                value={alta.detalhe}
+                disabled={!alta.motivoId}
+                onChange={(e) =>
+                  setAlta((a) => ({ ...a, detalhe: e.target.value }))
+                }
+              >
+                <option value="">
+                  {!alta.motivoId
+                    ? "Selecione o motivo primeiro"
+                    : detalhesDoMotivo.length === 0
+                      ? "Sem detalhes para este motivo"
+                      : "Selecione…"}
+                </option>
+                {detalhesDoMotivo.map((d) => (
+                  <option key={d.id} value={d.label}>
+                    {d.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-ink">
+                Observação (opcional)
+              </span>
+              <textarea
+                rows={3}
+                value={alta.observacao}
+                onChange={(e) =>
+                  setAlta((a) => ({ ...a, observacao: e.target.value }))
+                }
+                placeholder="Orientações, cuidados, retorno, sinais de alerta..."
+                className="w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+          </div>
+        )}
       </Modal>
     </>
   );

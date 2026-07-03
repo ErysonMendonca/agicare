@@ -18,6 +18,8 @@ export type Documento = {
   /** Alta */
   motivo: string | null;
   orientacoes: string | null;
+  dataAlta: string | null;
+  detalhe: string | null;
 };
 
 function fmtData(iso: string | null): string | null {
@@ -52,6 +54,8 @@ const DEMO_DOCUMENTOS: Documento[] = [
     exibirCid: true,
     motivo: null,
     orientacoes: null,
+    dataAlta: null,
+    detalhe: null,
   },
   {
     id: "demo-doc-2",
@@ -68,6 +72,8 @@ const DEMO_DOCUMENTOS: Documento[] = [
     exibirCid: true,
     motivo: "Melhora clínica.",
     orientacoes: "Retornar em caso de febre ou piora da dor. Hidratação oral.",
+    dataAlta: "11/06/2026 16:30",
+    detalhe: "Sintomas resolvidos",
   },
 ];
 
@@ -79,7 +85,7 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
   const { data, error } = await supabase
     .from("certificates")
     .select(
-      "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, created_at, professionals(profiles(full_name))",
+      "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, discharge_at, discharge_detail, created_at, professionals(profiles(full_name))",
     )
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
@@ -109,6 +115,8 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
       exibirCid: (c.show_cid as boolean | null) ?? true,
       motivo: (c.reason as string | null) ?? null,
       orientacoes: (c.post_discharge as string | null) ?? null,
+      dataAlta: fmtDataHora((c.discharge_at as string | null) ?? null),
+      detalhe: (c.discharge_detail as string | null) ?? null,
     };
   });
 }

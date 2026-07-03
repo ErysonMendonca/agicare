@@ -37,6 +37,10 @@ const DEMO_OPTIONS: Record<AttendanceOptionCategory, string[]> = {
   convenio: ["SUS", "Unimed", "Particular", "Bradesco Saúde", "Amil"],
   plano: ["Ambulatorial", "Hospitalar", "Completo"],
   parentesco: ["Pai", "Mãe", "Cônjuge", "Filho(a)", "Outro"],
+  // Catálogos de alta têm telas próprias (Motivos/Detalhes de Alta) e são lidos
+  // por listAltaCatalogos(); aqui ficam vazios só para satisfazer o Record.
+  motivo_alta: [],
+  detalhe_alta: [],
 };
 
 function demoOptions(): AttendanceOptionsByCategory {
