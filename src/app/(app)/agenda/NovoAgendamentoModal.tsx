@@ -29,6 +29,7 @@ import { CpfInput } from "@/components/ui/MaskedInput";
 import { Select } from "@/components/ui/Select";
 import { type Paciente } from "@/lib/data/patients";
 import { type Profissional } from "@/lib/data/professionals";
+import { type AttendanceOption } from "@/lib/data/attendance-options.shared";
 import {
   createAppointment,
   listSlots,
@@ -60,11 +61,14 @@ export function NovoAgendamentoModal({
   onClose,
   pacientes,
   profissionais,
+  especialidades: catalogoEspecialidades,
 }: {
   open: boolean;
   onClose: () => void;
   pacientes: Paciente[];
   profissionais: Profissional[];
+  /** Catálogo de especialidades (attendance_options), fonte única do sistema. */
+  especialidades: AttendanceOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -135,17 +139,23 @@ export function NovoAgendamentoModal({
     [protocolo],
   );
 
-  const especialidades = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          profissionais
-            .map((p) => p.especialidade)
-            .filter((e) => e && e !== "—"),
-        ),
-      ),
-    [profissionais],
-  );
+  // Opções vêm do catálogo; unimos as especialidades já presentes nos
+  // profissionais (legado/fora do catálogo) para não sumir do filtro.
+  const especialidades = useMemo(() => {
+    const opts = catalogoEspecialidades.map((e) => ({
+      value: e.value,
+      label: e.label,
+    }));
+    const seen = new Set(opts.map((o) => o.value));
+    for (const p of profissionais) {
+      const v = p.especialidade;
+      if (v && v !== "—" && !seen.has(v)) {
+        seen.add(v);
+        opts.push({ value: v, label: v });
+      }
+    }
+    return opts;
+  }, [catalogoEspecialidades, profissionais]);
 
   const profFiltrados = useMemo(
     () =>
@@ -477,7 +487,9 @@ export function NovoAgendamentoModal({
             >
               <option value="">Todas as especialidades</option>
               {especialidades.map((e) => (
-                <option key={e}>{e}</option>
+                <option key={e.value} value={e.value}>
+                  {e.label}
+                </option>
               ))}
             </Select>
             <Select

@@ -37,14 +37,6 @@ export default async function RelatoriosPage({
     id: p.id,
     nome: p.nome,
   }));
-  const opcoesEspecialidades = [
-    ...new Set(
-      profissionais
-        .map((p) => p.especialidade)
-        .filter((e) => e && e !== "—"),
-    ),
-  ].sort((a, b) => a.localeCompare(b, "pt-BR"));
-
   const [
     data,
     tempoEspera,
@@ -66,6 +58,15 @@ export default async function RelatoriosPage({
     // Opções parametrizadas: cruzadas com o BI para apontar as "sem uso".
     listAttendanceOptions(),
   ]);
+
+  // Filtro de especialidade: catálogo (attendance_options) unido às
+  // especialidades já presentes nos profissionais (legado), sem duplicar.
+  const opcoesEspecialidades = [
+    ...new Set([
+      ...(opcoesAtendimento.especialidade ?? []).map((e) => e.value),
+      ...profissionais.map((p) => p.especialidade).filter((e) => e && e !== "—"),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
   // Auditoria (Conformidade LGPD): trilha só é lida/serializada para gestor.
   // Para não-gestor as listas saem vazias e nem chegam ao payload do client.
