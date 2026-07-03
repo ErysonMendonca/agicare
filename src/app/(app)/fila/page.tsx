@@ -40,8 +40,11 @@ export default async function FilaPage({
   const [fila, agendados, stages, attendanceOptions, triageTemplates, settings] =
     await Promise.all([
       listQueue(todoPeriodo ? {} : { date: dataSelecionada }),
-      // "Aguardando chegada" só faz sentido para o dia de hoje.
-      isHoje ? listAgendadosHoje() : Promise.resolve([]),
+      // "Aguardando chegada" respeita o dia selecionado; em "Todo o período"
+      // não faz sentido (não há um dia único), então fica vazio.
+      todoPeriodo
+        ? Promise.resolve([])
+        : listAgendadosHoje({ date: dataSelecionada }),
       getAttendanceFlow(),
       listAttendanceOptions(),
       listTriageTemplates(),

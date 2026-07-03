@@ -423,6 +423,8 @@ const MOCK_AGENDADOS: FilaItem[] = [
  */
 export async function listAgendadosHoje(opts?: {
   specialty?: string | null;
+  /** Dia a consultar (YYYY-MM-DD). Sem valor → hoje. */
+  date?: string | null;
 }): Promise<FilaItem[]> {
   if (isDemoMode()) {
     return opts?.specialty
@@ -432,7 +434,11 @@ export async function listAgendadosHoje(opts?: {
 
   try {
     const supabase = await createClient();
-    const { startISO, endISO } = todayRangeISO();
+    // Respeita o dia selecionado na fila (agendados de outras datas também
+    // aparecem ao navegar para o dia deles); sem data → hoje.
+    const { startISO, endISO } = opts?.date
+      ? dayRangeISO(opts.date)
+      : todayRangeISO();
 
     // Pacientes que JÁ fizeram check-in hoje (têm queue_entries no dia) → excluir.
     const { data: checkedIn } = await supabase
