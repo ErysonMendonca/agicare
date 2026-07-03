@@ -37,6 +37,65 @@ const ABAS = [
 
 type AbaId = (typeof ABAS)[number]["id"];
 
+/**
+ * Campos obrigatórios do cadastro (espelham o schema Zod compartilhado
+ * `pacienteCampos`). Validados no cliente porque o `required` nativo NÃO
+ * dispara em inputs dentro de abas ocultas (display:none/hidden não são
+ * focáveis) — o submit travaria calado. Reusado pelo EditarPacienteModal.
+ */
+export const CAMPOS_OBRIGATORIOS: {
+  name: string;
+  label: string;
+  aba: AbaId;
+  minDigits?: number;
+  /** Campo alternativo que também satisfaz a obrigatoriedade (ex.: celular no lugar do telefone). */
+  altName?: string;
+}[] = [
+  { name: "full_name", label: "Nome completo", aba: "pessoais" },
+  { name: "cpf", label: "CPF", aba: "pessoais" },
+  { name: "birth_date", label: "Data de nascimento", aba: "pessoais" },
+  { name: "gender", label: "Gênero", aba: "pessoais" },
+  {
+    name: "phone",
+    label: "Telefone ou celular",
+    aba: "contato",
+    minDigits: 8,
+    altName: "cell",
+  },
+];
+
+/**
+ * Guard de submit: no PRIMEIRO campo obrigatório faltante, previne o envio,
+ * salta para a aba do campo e avisa por toast. Retorna `true` se tudo ok.
+ */
+export function validarObrigatorios(
+  e: React.FormEvent<HTMLFormElement>,
+  setAba: (aba: AbaId) => void,
+): boolean {
+  const fd = new FormData(e.currentTarget);
+  for (const campo of CAMPOS_OBRIGATORIOS) {
+    const bruto = String(fd.get(campo.name) ?? "").trim();
+    let faltando: boolean;
+    if (campo.minDigits) {
+      const alt = campo.altName
+        ? String(fd.get(campo.altName) ?? "").trim()
+        : "";
+      const digitos = (v: string) => v.replace(/\D/g, "").length;
+      faltando =
+        digitos(bruto) < campo.minDigits && digitos(alt) < campo.minDigits;
+    } else {
+      faltando = bruto === "";
+    }
+    if (faltando) {
+      e.preventDefault();
+      setAba(campo.aba);
+      toast.error("Informe: " + campo.label);
+      return false;
+    }
+  }
+  return true;
+}
+
 type ViaCep = {
   logradouro?: string;
   bairro?: string;
@@ -264,15 +323,19 @@ export function CadastroPacienteModal() {
           })}
         </div>
 
-        <form id="form-cad-paciente" action={formAction} className="space-y-4">
+        <form
+          id="form-cad-paciente"
+          action={formAction}
+          onSubmit={(e) => validarObrigatorios(e, setAba)}
+          className="space-y-4"
+        >
           {/* Aba 1 — Dados Pessoais */}
           <div className={aba === "pessoais" ? "space-y-4" : "hidden"}>
             <Input
               id="cp-nome"
               name="full_name"
-              label="Nome completo"
+              label="Nome completo *"
               placeholder="Ex.: João Pedro Oliveira"
-              required
             />
 
             <label className="flex items-center gap-2.5 text-sm text-ink">
@@ -300,7 +363,7 @@ export function CadastroPacienteModal() {
                     <CpfInput
                       id="cp-cpf"
                       name="cpf"
-                      label="CPF"
+                      label="CPF *"
                       placeholder="000.000.000-00"
                       value={cpf}
                       onChange={(e) => setCpf(e.target.value)}
@@ -360,10 +423,10 @@ export function CadastroPacienteModal() {
               <Input
                 id="cp-nasc"
                 name="birth_date"
-                label="Data de nascimento"
+                label="Data de nascimento *"
                 type="date"
               />
-              <Select id="cp-genero" name="gender" label="Gênero" defaultValue="">
+              <Select id="cp-genero" name="gender" label="Gênero *" defaultValue="">
                 <option value="" disabled>
                   Selecione
                 </option>
@@ -502,7 +565,7 @@ export function CadastroPacienteModal() {
               <TelefoneInput
                 id="cp-tel"
                 name="phone"
-                label="Telefone"
+                label="Telefone *"
                 placeholder="(11) 3456-7890"
               />
               <TelefoneInput
