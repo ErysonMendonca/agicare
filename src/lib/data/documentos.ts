@@ -8,10 +8,13 @@ export type Documento = {
   profissional: string;
   /** Atestado */
   dias: number | null;
+  dataAtestado: string | null;
   inicio: string | null;
   fim: string | null;
   diagnostico: string | null;
   cid10: string | null;
+  observacao: string | null;
+  exibirCid: boolean;
   /** Alta */
   motivo: string | null;
   orientacoes: string | null;
@@ -40,10 +43,13 @@ const DEMO_DOCUMENTOS: Documento[] = [
     dataHora: "12/06/2026 09:00",
     profissional: "Dra. Ana Beatriz Costa",
     dias: 3,
+    dataAtestado: "12/06/2026",
     inicio: "12/06/2026",
     fim: "14/06/2026",
     diagnostico: "Síndrome gripal.",
     cid10: null,
+    observacao: null,
+    exibirCid: true,
     motivo: null,
     orientacoes: null,
   },
@@ -53,10 +59,13 @@ const DEMO_DOCUMENTOS: Documento[] = [
     dataHora: "11/06/2026 16:30",
     profissional: "Dr. Carlos Eduardo",
     dias: null,
+    dataAtestado: null,
     inicio: null,
     fim: null,
     diagnostico: "Quadro estável.",
     cid10: null,
+    observacao: null,
+    exibirCid: true,
     motivo: "Melhora clínica.",
     orientacoes: "Retornar em caso de febre ou piora da dor. Hidratação oral.",
   },
@@ -70,7 +79,7 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
   const { data, error } = await supabase
     .from("certificates")
     .select(
-      "id, kind, days, start_date, end_date, diagnosis, cid10, reason, post_discharge, created_at, professionals(profiles(full_name))",
+      "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, created_at, professionals(profiles(full_name))",
     )
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
@@ -91,10 +100,13 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
       dataHora: fmtDataHora(c.created_at as string | null),
       profissional: profile?.full_name ?? "—",
       dias: c.days != null ? Number(c.days) : null,
+      dataAtestado: fmtData(c.issue_date as string | null),
       inicio: fmtData(c.start_date as string | null),
       fim: fmtData(c.end_date as string | null),
       diagnostico: (c.diagnosis as string | null) ?? null,
       cid10: (c.cid10 as string | null) ?? null,
+      observacao: (c.observation as string | null) ?? null,
+      exibirCid: (c.show_cid as boolean | null) ?? true,
       motivo: (c.reason as string | null) ?? null,
       orientacoes: (c.post_discharge as string | null) ?? null,
     };
