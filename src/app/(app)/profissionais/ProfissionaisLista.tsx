@@ -26,6 +26,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { NovoProfissionalModal, EditarProfissionalModal } from "./NovoProfissionalModal";
 import type { Profissional } from "@/lib/data/professionals";
+import type { AttendanceOption } from "@/lib/data/attendance-options.shared";
 
 type AbaId = "clinica" | "administrativa" | "perfis";
 
@@ -61,6 +62,7 @@ const LINK_BTN_MD = `${LINK_BTN_BASE} h-10 gap-2 px-4 text-sm`;
 export function ProfissionaisLista({
   profissionais,
   kpis,
+  especialidades,
 }: {
   profissionais: Profissional[];
   kpis: {
@@ -69,6 +71,7 @@ export function ProfissionaisLista({
     administrativa: number;
     ativos: number;
   };
+  especialidades: AttendanceOption[];
 }) {
   const [aba, setAba] = useState<AbaId>("clinica");
   const [busca, setBusca] = useState("");
@@ -79,14 +82,16 @@ export function ProfissionaisLista({
   );
   const [filtroEspec, setFiltroEspec] = useState("todas");
 
-  // Especialidades presentes nos dados → opções do filtro (sem inventar valores).
-  const especialidades = useMemo(() => {
+  // Opções do filtro: catálogo (attendance_options) unido às especialidades já
+  // presentes nos profissionais (legado), para nada ficar sem filtro.
+  const especialidadesFiltro = useMemo(() => {
     const set = new Set<string>();
+    for (const e of especialidades) if (e.value) set.add(e.value);
     for (const p of profissionais) {
       if (p.especialidade && p.especialidade !== "—") set.add(p.especialidade);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [profissionais]);
+  }, [especialidades, profissionais]);
 
   const filtrosAtivos =
     (filtroStatus !== "todos" ? 1 : 0) + (filtroEspec !== "todas" ? 1 : 0);
@@ -247,7 +252,11 @@ export function ProfissionaisLista({
                         </span>
                       )}
                     </Button>
-                    <NovoProfissionalModal triggerLabel="Novo Cadastro" size="md" />
+                    <NovoProfissionalModal
+                      triggerLabel="Novo Cadastro"
+                      size="md"
+                      especialidades={especialidades}
+                    />
                   </>
                 )}
               </div>
@@ -279,7 +288,7 @@ export function ProfissionaisLista({
                   onChange={(e) => setFiltroEspec(e.target.value)}
                 >
                   <option value="todas">Todas</option>
-                  {especialidades.map((e) => (
+                  {especialidadesFiltro.map((e) => (
                     <option key={e} value={e}>
                       {e}
                     </option>
@@ -377,7 +386,11 @@ export function ProfissionaisLista({
                       </div>
                     ) : (
                       <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
-                        <EditarProfissionalModal id={p.id} edit={p.edit} />
+                        <EditarProfissionalModal
+                          id={p.id}
+                          edit={p.edit}
+                          especialidades={especialidades}
+                        />
                         <Link
                           href={`/profissionais/${p.id}/agenda`}
                           className={LINK_BTN_SM}

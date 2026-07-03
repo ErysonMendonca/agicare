@@ -17,8 +17,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { type Profissional } from "@/lib/data/professionals";
 import { type Escala } from "@/lib/data/schedules";
+import { type AttendanceOption } from "@/lib/data/attendance-options.shared";
 import { type Procedimento } from "@/lib/data/procedures";
 import { EXAMES_TUSS } from "@/lib/clinico/exames-shared";
 import { createSchedule, updateSchedule } from "@/lib/actions/appointments";
@@ -73,14 +73,15 @@ function gerarHorarios(start: string, end: string, stepMin: number): string[] {
 export function EscalaHorariosModal({
   open,
   onClose,
-  profissionais,
+  especialidades,
   procedimentos,
   escalas = [],
   escalaParaEditar,
 }: {
   open: boolean;
   onClose: () => void;
-  profissionais: Profissional[];
+  /** Catálogo de especialidades (attendance_options), fonte única do sistema. */
+  especialidades: AttendanceOption[];
   procedimentos: Procedimento[];
   /** Escalas existentes — usadas p/ avisar de conflito (escala única por especialidade). */
   escalas?: Escala[];
@@ -179,17 +180,16 @@ export function EscalaHorariosModal({
     return faixa ? gerarHorarios(faixa.start, faixa.end, slotMin) : [];
   }, [diaGrade, horariosPorDia, slotMin]);
 
-  const especialidades = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          profissionais
-            .map((p) => p.especialidade)
-            .filter((e) => e && e !== "—"),
-        ),
-      ),
-    [profissionais],
-  );
+  // Opções do Select vêm do catálogo. Em edição, preserva o valor atual mesmo
+  // que não esteja (mais) no catálogo, para não perder o dado da escala.
+  const listaEspecialidades = useMemo(() => {
+    const opts = especialidades.map((e) => ({ value: e.value, label: e.label }));
+    const atual = esc?.specialty ?? "";
+    if (atual && !opts.some((o) => o.value === atual)) {
+      return [{ value: atual, label: atual }, ...opts];
+    }
+    return opts;
+  }, [especialidades, esc]);
 
   function toggleDia(n: number) {
     setDias((cur) => {
@@ -473,8 +473,10 @@ export function EscalaHorariosModal({
             onChange={(e) => setEspecialidade(e.target.value)}
           >
             <option value="">Selecione a especialidade</option>
-            {especialidades.map((e) => (
-              <option key={e}>{e}</option>
+            {listaEspecialidades.map((e) => (
+              <option key={e.value} value={e.value}>
+                {e.label}
+              </option>
             ))}
           </Select>
           <Select

@@ -49,6 +49,7 @@ import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.
 import { AnamneseBuilder } from "./AnamneseBuilder";
 import { TriagemBuilder } from "./TriagemBuilder";
 import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
+import { EspecialidadesConfig } from "./EspecialidadesConfig";
 
 const BASE_TABS = [
   "Geral",
@@ -62,11 +63,13 @@ const BASE_TABS = [
 
 const TRIAGEM_TAB = "Triagem";
 const ATENDIMENTO_TAB = "Dados de Atendimento";
+const ESPECIALIDADES_TAB = "Especialidades";
 
 type Tab =
   | (typeof BASE_TABS)[number]
   | typeof TRIAGEM_TAB
-  | typeof ATENDIMENTO_TAB;
+  | typeof ATENDIMENTO_TAB
+  | typeof ESPECIALIDADES_TAB;
 
 export function ConfiguracoesClient({
   settings,
@@ -83,9 +86,9 @@ export function ConfiguracoesClient({
   attendanceOptions: AttendanceOptionsByCategory;
   isGestor: boolean;
 }) {
-  // "Triagem" e "Dados de Atendimento" são abas extras só para gestor.
+  // "Triagem", "Dados de Atendimento" e "Especialidades" são abas extras só para gestor.
   const tabs: Tab[] = isGestor
-    ? [...BASE_TABS, TRIAGEM_TAB, ATENDIMENTO_TAB]
+    ? [...BASE_TABS, TRIAGEM_TAB, ATENDIMENTO_TAB, ESPECIALIDADES_TAB]
     : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
@@ -560,6 +563,12 @@ export function ConfiguracoesClient({
           fora do form de configurações. */}
       {isGestor && tabAtiva === ATENDIMENTO_TAB && (
         <AtendimentoOpcoes options={attendanceOptions} />
+      )}
+
+      {/* Catálogo de especialidades dos profissionais — editor próprio
+          (gestor-only), fora do form de configurações. */}
+      {isGestor && tabAtiva === ESPECIALIDADES_TAB && (
+        <EspecialidadesConfig options={attendanceOptions} />
       )}
     </>
   );

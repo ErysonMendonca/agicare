@@ -4,21 +4,31 @@ import { listPatients } from "@/lib/data/patients";
 import { listProfessionals } from "@/lib/data/professionals";
 import { listSchedules } from "@/lib/data/schedules";
 import { listProcedures } from "@/lib/data/procedures";
+import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { requireView } from "@/lib/permissions";
 import { AgendaActions } from "./AgendaActions";
 import { AgendaList } from "./AgendaList";
 
 export default async function AgendaPage() {
   await requireView("agenda");
-  const [atendimentos, pacientes, profissionais, escalas, procedimentos] =
-    await Promise.all([
-      listAppointments(),
-      listPatients(),
-      listProfessionals(),
-      listSchedules(),
-      listProcedures(),
-    ]);
+  const [
+    atendimentos,
+    pacientes,
+    profissionais,
+    escalas,
+    procedimentos,
+    attendanceOptions,
+  ] = await Promise.all([
+    listAppointments(),
+    listPatients(),
+    listProfessionals(),
+    listSchedules(),
+    listProcedures(),
+    listAttendanceOptions(),
+  ]);
   const kpis = countByStatus(atendimentos);
+  // Catálogo de especialidades (mesma fonte do cadastro de profissional).
+  const especialidades = attendanceOptions.especialidade ?? [];
 
   return (
     <>
@@ -31,6 +41,7 @@ export default async function AgendaPage() {
             profissionais={profissionais}
             escalas={escalas}
             procedimentos={procedimentos}
+            especialidades={especialidades}
           />
         }
       />

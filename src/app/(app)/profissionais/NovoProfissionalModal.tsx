@@ -20,6 +20,7 @@ import type {
   ProfissionalEdit,
   CredencialEdit,
 } from "@/lib/data/professionals";
+import type { AttendanceOption } from "@/lib/data/attendance-options.shared";
 
 /** Uma credencial de convênio vazia (nova linha do formulário). */
 const credVazia = (): CredencialEdit => ({
@@ -71,14 +72,22 @@ function CamposProfissional({
   defaults,
   mostrarEmail,
   mostrarStatus,
+  especialidades,
 }: {
   prefixo: string;
   defaults: FormDefaults;
   mostrarEmail: boolean;
   mostrarStatus: boolean;
+  especialidades: AttendanceOption[];
 }) {
   // Controlados p/ máscara/estado.
   const [telefone, setTelefone] = useState(defaults.phone ?? "");
+  // Especialidade atual pode ser um valor legado (texto livre) fora do catálogo;
+  // nesse caso incluímos como opção extra para não perder o dado na edição.
+  const especialidadeAtual = defaults.specialty ?? "";
+  const especialidadeLegada =
+    especialidadeAtual !== "" &&
+    !especialidades.some((e) => e.value === especialidadeAtual);
   const [personType, setPersonType] = useState(defaults.person_type || "cpf");
   const [documento, setDocumento] = useState(defaults.document ?? "");
   const [creds, setCreds] = useState<CredencialEdit[]>(
@@ -212,13 +221,22 @@ function CamposProfissional({
       {/* ── Tipo de profissional ──────────────────────────────────── */}
       <Secao titulo="Tipo de profissional">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Input
+          <Select
             id={`${prefixo}-especialidade`}
             name="specialty"
             label="Especialidade"
-            placeholder="Ex.: Cardiologia"
-            defaultValue={defaults.specialty ?? ""}
-          />
+            defaultValue={especialidadeAtual}
+          >
+            <option value="">Selecione...</option>
+            {especialidades.map((e) => (
+              <option key={e.id} value={e.value}>
+                {e.label}
+              </option>
+            ))}
+            {especialidadeLegada && (
+              <option value={especialidadeAtual}>{especialidadeAtual}</option>
+            )}
+          </Select>
           <CnsInput
             id={`${prefixo}-cns`}
             name="cns"
@@ -539,11 +557,13 @@ export function NovoProfissionalModal({
   variant,
   size = "md",
   triggerIcon = <Plus className="h-4 w-4" />,
+  especialidades,
 }: {
   triggerLabel?: string;
   variant?: ButtonProps["variant"];
   size?: ButtonProps["size"];
   triggerIcon?: ReactNode;
+  especialidades: AttendanceOption[];
 }) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
@@ -592,6 +612,7 @@ export function NovoProfissionalModal({
             defaults={{ active: true }}
             mostrarEmail
             mostrarStatus
+            especialidades={especialidades}
           />
           {state?.error && (
             <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -611,9 +632,11 @@ export function NovoProfissionalModal({
 export function EditarProfissionalModal({
   id,
   edit,
+  especialidades,
 }: {
   id: string;
   edit: ProfissionalEdit;
+  especialidades: AttendanceOption[];
 }) {
   const [open, setOpen] = useState(false);
   const updateWithId = updateProfessional.bind(null, id);
@@ -665,6 +688,7 @@ export function EditarProfissionalModal({
             defaults={edit}
             mostrarEmail={false}
             mostrarStatus
+            especialidades={especialidades}
           />
           {state?.error && (
             <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
