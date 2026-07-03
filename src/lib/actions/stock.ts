@@ -224,6 +224,46 @@ export async function concluirSeparacao(id: string): Promise<ActionState> {
   return { ok: true };
 }
 
+const recusaSchema = z.object({
+  id: idSchema,
+  motivo: z
+    .string()
+    .trim()
+    .min(5, "Informe o motivo da recusa (mín. 5 caracteres)."),
+});
+
+/**
+ * Recusa uma solicitação de retirada (dispensação): pendente|separacao →
+ * cancelado, gravando o motivo em `cancel_reason` (0075). O guard
+ * `.in("status", ["pendente","separacao"])` garante que só pedidos ainda NÃO
+ * concluídos/recusados sejam recusados — evita "desfazer" uma retirada já
+ * concluída (a baixa de estoque só ocorre ao concluir; a recusa não debita).
+ * Se nada casar (já concluído/recusado por outro), devolve erro amigável.
+ */
+export async function recusarDispensacao(
+  id: string,
+  motivo: string,
+): Promise<ActionState> {
+  const parsed = recusaSchema.safeParse({ id, motivo });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  if (isDemoMode()) return { ok: true };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("dispensations")
+    .update({ status: "cancelado", cancel_reason: parsed.data.motivo })
+    .eq("id", parsed.data.id)
+    .in("status", ["pendente", "separacao"])
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+  if (!data) return { error: "Este pedido não pode mais ser recusado." };
+  revalidateEstoque();
+  return { ok: true };
+}
+
 const progressoSchema = z.object({
   id: idSchema,
   progresso: z.number().int().min(0).max(100),
