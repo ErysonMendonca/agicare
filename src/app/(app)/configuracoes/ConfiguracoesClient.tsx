@@ -50,6 +50,8 @@ import { AnamneseBuilder } from "./AnamneseBuilder";
 import { TriagemBuilder } from "./TriagemBuilder";
 import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
 import { EspecialidadesConfig } from "./EspecialidadesConfig";
+import { CidConfig } from "./CidConfig";
+import type { CidCode } from "@/lib/data/cid";
 
 const BASE_TABS = [
   "Geral",
@@ -64,12 +66,14 @@ const BASE_TABS = [
 const TRIAGEM_TAB = "Triagem";
 const ATENDIMENTO_TAB = "Dados de Atendimento";
 const ESPECIALIDADES_TAB = "Especialidades";
+const CID_TAB = "Catálogo CID";
 
 type Tab =
   | (typeof BASE_TABS)[number]
   | typeof TRIAGEM_TAB
   | typeof ATENDIMENTO_TAB
-  | typeof ESPECIALIDADES_TAB;
+  | typeof ESPECIALIDADES_TAB
+  | typeof CID_TAB;
 
 export function ConfiguracoesClient({
   settings,
@@ -77,6 +81,7 @@ export function ConfiguracoesClient({
   anamneseTemplates,
   triageTemplates,
   attendanceOptions,
+  cidCodes,
   isGestor,
 }: {
   settings: ClinicSettings;
@@ -84,11 +89,13 @@ export function ConfiguracoesClient({
   anamneseTemplates: AnamneseTemplate[];
   triageTemplates: TriageTemplate[];
   attendanceOptions: AttendanceOptionsByCategory;
+  cidCodes: CidCode[];
   isGestor: boolean;
 }) {
-  // "Triagem", "Dados de Atendimento" e "Especialidades" são abas extras só para gestor.
+  // "Triagem", "Dados de Atendimento", "Especialidades" e "Catálogo CID" são
+  // abas extras só para gestor.
   const tabs: Tab[] = isGestor
-    ? [...BASE_TABS, TRIAGEM_TAB, ATENDIMENTO_TAB, ESPECIALIDADES_TAB]
+    ? [...BASE_TABS, TRIAGEM_TAB, ATENDIMENTO_TAB, ESPECIALIDADES_TAB, CID_TAB]
     : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
   const [state, formAction, pending] = useActionState(
@@ -570,6 +577,9 @@ export function ConfiguracoesClient({
       {isGestor && tabAtiva === ESPECIALIDADES_TAB && (
         <EspecialidadesConfig options={attendanceOptions} />
       )}
+
+      {/* Catálogo global de CIDs (gestor-only), fora do form de configurações. */}
+      {isGestor && tabAtiva === CID_TAB && <CidConfig cids={cidCodes} />}
     </>
   );
 }
