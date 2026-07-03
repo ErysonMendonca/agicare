@@ -170,6 +170,8 @@ export type Dispensacao = {
   origem: { rotulo: string; nome: string; identificador: string };
   solicitante: { nome: string; data: string };
   itens: DispensacaoItem[];
+  /** Motivo da recusa (só quando statusRaw === "cancelado"). */
+  motivoRecusa: string | null;
 };
 
 const MOCK_DISPENSACOES: Dispensacao[] = [
@@ -178,6 +180,7 @@ const MOCK_DISPENSACOES: Dispensacao[] = [
     status: { label: "Pendente", tone: "warn" }, statusRaw: "pendente", urgente: true, progresso: 0,
     origem: { rotulo: "Paciente", nome: "Maria Silva", identificador: "PAC-2025-0123" },
     solicitante: { nome: "Dr. João Santos", data: "15/01/2025 14:30" },
+    motivoRecusa: null,
     itens: [
       { nome: "Dipirona 500mg", quantidade: "3 ampolas", localizacao: "Prateleira A3", codigoBarras: "7891234560012", lote: "LT-8842", validade: "10/2026", separado: false },
       { nome: "Soro Fisiológico 0,9% 500ml", quantidade: "2 unidades", localizacao: "Prateleira B1", codigoBarras: "7891234560029", lote: "LT-7720", validade: "03/2027", separado: false },
@@ -188,6 +191,7 @@ const MOCK_DISPENSACOES: Dispensacao[] = [
     status: { label: "Pendente", tone: "warn" }, statusRaw: "pendente", urgente: false, progresso: 0,
     origem: { rotulo: "Paciente", nome: "João Pedro Oliveira", identificador: "PAC-2025-0098" },
     solicitante: { nome: "Dra. Ana Costa", data: "15/01/2025 13:10" },
+    motivoRecusa: null,
     itens: [
       { nome: "Amoxicilina 875mg", quantidade: "14 comprimidos", localizacao: "Prateleira A2", codigoBarras: "7891234560036", lote: "LT-1180", validade: "01/2027", separado: false },
       { nome: "Paracetamol 750mg", quantidade: "10 comprimidos", localizacao: "Prateleira A1", codigoBarras: "7891234560043", lote: "LT-6604", validade: "06/2027", separado: false },
@@ -198,6 +202,7 @@ const MOCK_DISPENSACOES: Dispensacao[] = [
     status: { label: "Em Separação", tone: "active" }, statusRaw: "separacao", urgente: false, progresso: 50,
     origem: { rotulo: "Setor", nome: "UTI Adulto", identificador: "SET-UTI-01" },
     solicitante: { nome: "Enf. Carla Menezes", data: "15/01/2025 11:45" },
+    motivoRecusa: null,
     itens: [
       { nome: "Luva Cirúrgica nº 7,5", quantidade: "5 caixas", localizacao: "Prateleira C2", codigoBarras: "7891234560050", lote: "LT-3391", validade: "08/2027", separado: true },
       { nome: "Seringa 10ml", quantidade: "50 unidades", localizacao: "Prateleira C4", codigoBarras: "7891234560067", lote: "LT-5510", validade: "12/2026", separado: false },
@@ -205,9 +210,10 @@ const MOCK_DISPENSACOES: Dispensacao[] = [
   },
   {
     id: "d4", codigo: "REQ-015", tipo: "Setor",
-    status: { label: "Pendente", tone: "warn" }, statusRaw: "pendente", urgente: false, progresso: 0,
+    status: { label: "Recusado", tone: "danger" }, statusRaw: "cancelado", urgente: false, progresso: 0,
     origem: { rotulo: "Setor", nome: "Centro Cirúrgico", identificador: "SET-CC-02" },
     solicitante: { nome: "Enf. Roberto Lima", data: "15/01/2025 10:20" },
+    motivoRecusa: "Itens indisponíveis no estoque; solicitar via compra.",
     itens: [
       { nome: "Compressa de Gaze Estéril", quantidade: "20 pacotes", localizacao: "Prateleira D1", codigoBarras: "7891234560074", lote: "LT-9921", validade: "05/2028", separado: false },
       { nome: "Álcool 70% 1L", quantidade: "8 frascos", localizacao: "Prateleira D3", codigoBarras: "7891234560081", lote: "LT-4410", validade: "11/2026", separado: false },
@@ -220,7 +226,7 @@ const DISP_STATUS: Record<string, { label: string; tone: Status }> = {
   pendente: { label: "Pendente", tone: "warn" },
   separacao: { label: "Em Separação", tone: "active" },
   concluido: { label: "Concluído", tone: "ok" },
-  cancelado: { label: "Cancelado", tone: "danger" },
+  cancelado: { label: "Recusado", tone: "danger" },
 };
 
 function fmtDataHora(iso: string | null): string {
@@ -240,7 +246,7 @@ export async function listDispensacoes(): Promise<Dispensacao[]> {
   const { data, error } = await supabase
     .from("dispensations")
     .select(
-      "id, code, kind, status, urgent, origin_label, origin_name, origin_ref, requested_by, progress, created_at, dispensation_items(name, quantity, location, barcode, lot, expiry, picked)",
+      "id, code, kind, status, urgent, origin_label, origin_name, origin_ref, requested_by, progress, created_at, cancel_reason, dispensation_items(name, quantity, location, barcode, lot, expiry, picked)",
     )
     .order("created_at", { ascending: false });
 
@@ -266,6 +272,7 @@ export async function listDispensacoes(): Promise<Dispensacao[]> {
         nome: (d.requested_by as string | null) ?? "—",
         data: fmtDataHora((d.created_at as string | null) ?? null),
       },
+      motivoRecusa: (d.cancel_reason as string | null) ?? null,
       itens: itensRaw.map((it) => ({
         nome: (it.name as string | null) ?? "—",
         quantidade: (it.quantity as string | null) ?? "—",
