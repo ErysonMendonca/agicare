@@ -23,7 +23,8 @@ function montarDocumento(
   doc: Documento,
 ): string {
   const dataAlta = limpo(doc.dataAlta ?? "") || limpo(doc.dataHora);
-  const cid = limpo(doc.cid10 ?? "");
+  // CID só consta no documento quando o checkbox "Exibir CID" estiver marcado (LGPD).
+  const cid = doc.exibirCid ? limpo(doc.cid10 ?? "") : "";
 
   const corpo = `
     Declaro, para os devidos fins, que o(a) paciente
