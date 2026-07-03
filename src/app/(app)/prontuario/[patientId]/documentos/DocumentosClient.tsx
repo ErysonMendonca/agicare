@@ -20,6 +20,7 @@ import {
   type ClinicaImpressao,
   type PacienteImpressao,
 } from "./AtestadoImpressao";
+import { imprimirAlta } from "./AltaImpressao";
 
 type ModalKind = "atestado" | "alta" | null;
 
@@ -292,7 +293,7 @@ export function DocumentosClient({
                       onClick={() =>
                         isAtestado
                           ? imprimirAtestado(clinica, paciente, d)
-                          : window.print()
+                          : imprimirAlta(clinica, paciente, d)
                       }
                     >
                       <Printer className="h-4 w-4" /> Imprimir
