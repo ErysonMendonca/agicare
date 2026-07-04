@@ -94,7 +94,16 @@ const baseSchema = z.object({
 });
 
 const createSchema = baseSchema.extend({
-  email: z.string().trim().email("E-mail inválido."),
+  // Nome de acesso (login). Sempre minúsculo; e-mail sintético interno é
+  // derivado como `${username}@agicare.local` para o Supabase Auth.
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(
+      /^[a-z0-9._-]{3,40}$/,
+      "Usuário inválido (3-40 caracteres: letras minúsculas, números, . _ -).",
+    ),
   // Status inicial do profissional (toggle disponível também na criação).
   active: z.enum(["true", "false"]).optional(),
 });
@@ -206,23 +215,20 @@ async function replaceCredentials(
 }
 
 /**
- * Procura um usuário Auth existente por e-mail (case-insensitive), paginando a
- * admin API. Service-role only. Retorna o id ou null.
+ * Procura um usuário existente pelo nome de acesso (username) na tabela
+ * `profiles` (citext unique). Service-role only. Retorna o id (profile.id ==
+ * auth.users.id) ou null.
  */
-async function findUserIdByEmail(
+async function findUserIdByUsername(
   svc: SupabaseClient,
-  email: string,
+  username: string,
 ): Promise<string | null> {
-  const target = email.trim().toLowerCase();
-  // A admin API não expõe getByEmail; paginamos listUsers (páginas de 200).
-  for (let page = 1; page <= 25; page++) {
-    const { data, error } = await svc.auth.admin.listUsers({ page, perPage: 200 });
-    if (error || !data) return null;
-    const hit = data.users.find((u) => u.email?.toLowerCase() === target);
-    if (hit) return hit.id;
-    if (data.users.length < 200) break; // última página
-  }
-  return null;
+  const { data } = await svc
+    .from("profiles")
+    .select("id")
+    .eq("username", username)
+    .maybeSingle();
+  return (data?.id as string | undefined) ?? null;
 }
 
 /**
@@ -252,6 +258,8 @@ export async function createProfessional(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
   const d = parsed.data;
+  // E-mail sintético interno para o Supabase Auth (o login real é por username).
+  const syntheticEmail = `${d.username}@agicare.local`;
   // Status inicial (default ativo). Espelha o toggle de status da edição: só
   // afeta professionals.active; a membership na clínica permanece ativa.
   const ativo = d.active ? d.active === "true" : true;
@@ -261,8 +269,8 @@ export async function createProfessional(
 
   try {
     return await withTenantService(async ({ svc, clinicId }) => {
-      // 1) Já existe conta com este e-mail? → associação direta (sem criar conta).
-      const existingUserId = await findUserIdByEmail(svc, d.email);
+      // 1) Já existe conta com este username? → associação direta (sem criar conta).
+      const existingUserId = await findUserIdByUsername(svc, d.username);
 
       if (existingUserId) {
         // 1a) Garante a membership na clínica ativa (papel da tela).
@@ -348,7 +356,7 @@ export async function createProfessional(
       // 2) Não existe → cria a conta Auth. email_confirm=true para não disparar
       //    e-mail aqui; o convite/definição de senha fica como follow-up.
       const { data: created, error: authError } = await svc.auth.admin.createUser({
-        email: d.email,
+        email: syntheticEmail,
         email_confirm: true,
         user_metadata: { full_name: d.full_name, role: d.role },
       });
@@ -356,7 +364,7 @@ export async function createProfessional(
       if (authError || !created?.user) {
         const msg = authError?.message ?? "";
         if (/already|registered|exists/i.test(msg)) {
-          return { error: "Já existe um usuário com este e-mail." };
+          return { error: "Já existe um usuário com este nome de acesso." };
         }
         return { error: "Não foi possível criar a conta do profissional." };
       }
@@ -366,7 +374,12 @@ export async function createProfessional(
       // 2a) Completa o profile criado pelo trigger (profile é GLOBAL → sem clinic_id).
       const { error: profileError } = await svc
         .from("profiles")
-        .update({ full_name: d.full_name, role: d.role, phone: d.phone || null })
+        .update({
+          full_name: d.full_name,
+          role: d.role,
+          phone: d.phone || null,
+          username: d.username,
+        })
         .eq("id", userId);
 
       if (profileError) {
