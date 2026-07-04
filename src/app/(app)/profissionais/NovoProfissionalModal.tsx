@@ -2,7 +2,7 @@
 
 import { useState, useActionState, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, SquarePen, Trash2 } from "lucide-react";
+import { Plus, SquarePen, Trash2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button, type ButtonProps } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -129,6 +129,7 @@ function CamposProfissional({
   const [documento, setDocumento] = useState(defaults.document ?? "");
   // Usuário de acesso: só letras minúsculas, números e . _ - (regra do backend).
   const [username, setUsername] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   // Endereço controlado p/ autopreenchimento via ViaCEP.
   const [cep, setCep] = useState(defaults.cep ?? "");
   const [endereco, setEndereco] = useState(defaults.address ?? "");
@@ -379,47 +380,26 @@ function CamposProfissional({
             value={telefone}
             onChange={(e) => setTelefone(e.target.value)}
           />
-          {mostrarEmail ? (
-            <Input
-              id={`${prefixo}-username`}
-              name="username"
-              type="text"
-              inputMode="text"
-              label="Usuário de acesso"
-              placeholder="ex.: joao.silva"
-              autoCapitalize="none"
-              autoComplete="username"
-              value={username}
-              onChange={(e) =>
-                setUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))
-              }
-              hint="Somente letras minúsculas, números e . _ - (3 a 40 caracteres)."
-              required
-            />
-          ) : (
-            <Select
-              id={`${prefixo}-cargo`}
-              name="role"
-              label="Cargo"
-              defaultValue={papelDefault(defaults.role)}
-            >
-              <option value="medico">Médico</option>
-              <option value="recepcao">Recepção</option>
-            </Select>
-          )}
+          <Input
+            id={`${prefixo}-email`}
+            name="email"
+            type="email"
+            label="E-mail"
+            placeholder="email@exemplo.com"
+            autoComplete="email"
+            defaultValue={defaults.email ?? ""}
+          />
         </div>
 
-        {mostrarEmail && (
-          <Select
-            id={`${prefixo}-cargo`}
-            name="role"
-            label="Cargo"
-            defaultValue={papelDefault(defaults.role)}
-          >
-            <option value="medico">Médico</option>
-            <option value="recepcao">Recepção</option>
-          </Select>
-        )}
+        <Select
+          id={`${prefixo}-cargo`}
+          name="role"
+          label="Cargo"
+          defaultValue={papelDefault(defaults.role)}
+        >
+          <option value="medico">Médico</option>
+          <option value="recepcao">Recepção</option>
+        </Select>
 
         {mostrarStatus && (
           <Select
@@ -637,6 +617,58 @@ function CamposProfissional({
           className="w-full resize-y rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
       </Secao>
+
+      {/* ── Acesso (só na criação) ────────────────────────────────── */}
+      {mostrarEmail && (
+        <Secao titulo="Acesso">
+          <p className="text-sm text-muted">
+            Credenciais que o profissional usará para entrar no sistema.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input
+              id={`${prefixo}-username`}
+              name="username"
+              type="text"
+              inputMode="text"
+              label="Usuário de acesso"
+              placeholder="ex.: joao.silva"
+              autoCapitalize="none"
+              autoComplete="username"
+              value={username}
+              onChange={(e) =>
+                setUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))
+              }
+              hint="Somente letras minúsculas, números e . _ - (3 a 40 caracteres)."
+              required
+            />
+            <div className="relative">
+              <Input
+                id={`${prefixo}-password`}
+                name="password"
+                type={mostrarSenha ? "text" : "password"}
+                label="Senha de acesso"
+                placeholder="mín. 6 caracteres"
+                autoComplete="new-password"
+                hint="Mínimo 6 caracteres"
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarSenha((v) => !v)}
+                aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                className="absolute right-2 top-[34px] rounded-md p-1 text-muted hover:text-ink"
+              >
+                {mostrarSenha ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </Secao>
+      )}
     </div>
   );
 }
