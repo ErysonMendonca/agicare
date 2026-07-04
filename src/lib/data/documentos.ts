@@ -88,6 +88,8 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
       "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, discharge_at, discharge_detail, created_at, professionals(profiles(full_name))",
     )
     .eq("patient_id", patientId)
+    // Aba Documentos = só atestado/alta. Receituários têm aba própria.
+    .in("kind", ["atestado", "alta"])
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];
