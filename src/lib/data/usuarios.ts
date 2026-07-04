@@ -14,9 +14,9 @@ const MOCK_CARGOS: Cargo[] = [
   { id: "c1", nome: "Fisioterapeuta", baseRole: "medico" },
 ];
 const MOCK_USUARIOS: Usuario[] = [
-  { userId: "u1", nome: "Dr. João Pedro Oliveira", roleBase: "medico", cargoId: null, cargoLabel: "Médico", ativo: true },
-  { userId: "u2", nome: "Recepção Central", roleBase: "recepcao", cargoId: null, cargoLabel: "Recepção", ativo: true },
-  { userId: "u3", nome: "Ana (Fisio)", roleBase: "medico", cargoId: "c1", cargoLabel: "Fisioterapeuta", ativo: true },
+  { userId: "u1", nome: "Dr. João Pedro Oliveira", username: "joao.oliveira", roleBase: "medico", cargoId: null, cargoLabel: "Médico", ativo: true },
+  { userId: "u2", nome: "Recepção Central", username: "recepcao", roleBase: "recepcao", cargoId: null, cargoLabel: "Recepção", ativo: true },
+  { userId: "u3", nome: "Ana (Fisio)", username: null, roleBase: "medico", cargoId: "c1", cargoLabel: "Fisioterapeuta", ativo: true },
 ];
 
 /** Cargos personalizados da clínica ativa. */
@@ -50,7 +50,7 @@ export async function listUsuarios(): Promise<Usuario[]> {
   const { data, error } = await supabase
     .from("clinic_members")
     .select(
-      "user_id, role, active, cargo_id, profiles(full_name), cargos(name)",
+      "user_id, role, active, cargo_id, profiles(full_name, username), cargos(name)",
     )
     .eq("clinic_id", clinicId)
     .neq("role", "paciente")
@@ -61,12 +61,15 @@ export async function listUsuarios(): Promise<Usuario[]> {
     Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v as T) ?? null);
 
   return data.map((m) => {
-    const perfil = one<{ full_name: string | null }>(m.profiles);
+    const perfil = one<{ full_name: string | null; username: string | null }>(
+      m.profiles,
+    );
     const cargo = one<{ name: string | null }>(m.cargos);
     const roleBase = (m.role as string | null) ?? "recepcao";
     return {
       userId: m.user_id as string,
       nome: perfil?.full_name ?? "—",
+      username: perfil?.username ?? null,
       roleBase,
       cargoId: (m.cargo_id as string | null) ?? null,
       cargoLabel: cargo?.name ?? rotuloBase(roleBase),

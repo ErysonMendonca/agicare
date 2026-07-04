@@ -198,3 +198,75 @@ export async function definirSenha(input: {
     return { error: "Não foi possível atualizar a senha." };
   }
 }
+
+// ── Definir usuário (username) de um membro (não-paciente) ────────
+/** Admin define/redefine o nome de acesso (username) de um membro da clínica. */
+export async function definirUsuario(input: {
+  userId: string;
+  username: string;
+}): Promise<ActionState> {
+  if (isDemoMode()) {
+    return { error: "Definição de usuário indisponível no modo demonstração." };
+  }
+
+  const schema = z.object({
+    userId: z.string().uuid("Usuário inválido."),
+    username: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(
+        /^[a-z0-9._-]{3,40}$/,
+        "Usuário inválido (3-40: letras minúsculas, números, . _ -).",
+      ),
+  });
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+  const { userId, username } = parsed.data;
+
+  // Rate-limit por alvo (userId já validado como uuid): 10 def. por 15 min.
+  const rl = consume(`set-user:${userId}`, 10, 15 * 60 * 1000);
+  if (!rl.ok) {
+    return {
+      error: `Muitas tentativas para este usuário. Tente novamente em ${retryLabel(rl.retryAfterSec)}.`,
+    };
+  }
+
+  try {
+    return await withTenantService(async ({ svc, clinicId }) => {
+      // O alvo DEVE ser membro desta clínica e NÃO pode ser paciente.
+      const { data: membro, error: mErr } = await svc
+        .from("clinic_members")
+        .select("role")
+        .eq("clinic_id", clinicId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (mErr) return { error: "Falha ao validar o usuário." };
+      if (!membro) return { error: "Usuário não é membro desta clínica." };
+      if (membro.role === "paciente") {
+        return { error: "Não é possível definir usuário de paciente." };
+      }
+
+      const { error } = await svc
+        .from("profiles")
+        .update({ username })
+        .eq("id", userId);
+      if (error) {
+        if (
+          error.code === "23505" ||
+          /duplicate|unique/i.test(error.message ?? "")
+        ) {
+          return { error: "Já existe um usuário com esse nome de acesso." };
+        }
+        return { error: "Não foi possível definir o usuário." };
+      }
+      revalidar();
+      return { ok: true };
+    });
+  } catch (e) {
+    if (e instanceof TenantAuthError) return { error: e.message };
+    return { error: "Não foi possível definir o usuário." };
+  }
+}

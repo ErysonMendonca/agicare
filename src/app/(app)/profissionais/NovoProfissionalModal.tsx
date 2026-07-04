@@ -2,7 +2,7 @@
 
 import { useState, useActionState, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, SquarePen, Trash2, Eye, EyeOff } from "lucide-react";
+import { Plus, SquarePen, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, type ButtonProps } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -51,9 +51,9 @@ function papelDefault(role?: string): string {
 }
 
 /**
- * Campos compartilhados entre criar e editar. `mostrarEmail` só na criação
- * (o usuário de acesso é definido aqui; não é editável na edição).
- * `mostrarStatus` só na edição (toggle ativo/inativo).
+ * Campos compartilhados entre criar e editar. As credenciais de acesso
+ * (usuário e senha) NÃO são geridas aqui — ficam em "Perfis de Acesso ›
+ * Usuários". `mostrarStatus` controla o toggle ativo/inativo.
  */
 /** Cabeçalho de seção do formulário. */
 /**
@@ -107,13 +107,11 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 function CamposProfissional({
   prefixo,
   defaults,
-  mostrarEmail,
   mostrarStatus,
   especialidades,
 }: {
   prefixo: string;
   defaults: FormDefaults;
-  mostrarEmail: boolean;
   mostrarStatus: boolean;
   especialidades: AttendanceOption[];
 }) {
@@ -127,9 +125,6 @@ function CamposProfissional({
     !especialidades.some((e) => e.value === especialidadeAtual);
   const [personType, setPersonType] = useState(defaults.person_type || "cpf");
   const [documento, setDocumento] = useState(defaults.document ?? "");
-  // Usuário de acesso: só letras minúsculas, números e . _ - (regra do backend).
-  const [username, setUsername] = useState("");
-  const [mostrarSenha, setMostrarSenha] = useState(false);
   // Endereço controlado p/ autopreenchimento via ViaCEP.
   const [cep, setCep] = useState(defaults.cep ?? "");
   const [endereco, setEndereco] = useState(defaults.address ?? "");
@@ -617,58 +612,6 @@ function CamposProfissional({
           className="w-full resize-y rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
       </Secao>
-
-      {/* ── Acesso (só na criação) ────────────────────────────────── */}
-      {mostrarEmail && (
-        <Secao titulo="Acesso">
-          <p className="text-sm text-muted">
-            Credenciais que o profissional usará para entrar no sistema.
-          </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input
-              id={`${prefixo}-username`}
-              name="username"
-              type="text"
-              inputMode="text"
-              label="Usuário de acesso"
-              placeholder="ex.: joao.silva"
-              autoCapitalize="none"
-              autoComplete="username"
-              value={username}
-              onChange={(e) =>
-                setUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))
-              }
-              hint="Somente letras minúsculas, números e . _ - (3 a 40 caracteres)."
-              required
-            />
-            <div className="relative">
-              <Input
-                id={`${prefixo}-password`}
-                name="password"
-                type={mostrarSenha ? "text" : "password"}
-                label="Senha de acesso"
-                placeholder="mín. 6 caracteres"
-                autoComplete="new-password"
-                hint="Mínimo 6 caracteres"
-                required
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setMostrarSenha((v) => !v)}
-                aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
-                className="absolute right-2 top-[34px] rounded-md p-1 text-muted hover:text-ink"
-              >
-                {mostrarSenha ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-          </div>
-        </Secao>
-      )}
     </div>
   );
 }
@@ -754,7 +697,6 @@ export function NovoProfissionalModal({
           <CamposProfissional
             prefixo="np"
             defaults={{ active: true }}
-            mostrarEmail
             mostrarStatus
             especialidades={especialidades}
           />
@@ -849,7 +791,6 @@ export function EditarProfissionalModal({
           <CamposProfissional
             prefixo={`ep-${id}`}
             defaults={edit}
-            mostrarEmail={false}
             mostrarStatus
             especialidades={especialidades}
           />

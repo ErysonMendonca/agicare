@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, KeyRound } from "lucide-react";
+import { Plus, KeyRound, AtSign } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -10,7 +10,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
-import { criarCargo, atribuirCargo, definirSenha } from "@/lib/actions/usuarios";
+import {
+  criarCargo,
+  atribuirCargo,
+  definirSenha,
+  definirUsuario,
+} from "@/lib/actions/usuarios";
 import { BASE_ROLES, type Usuario, type Cargo } from "@/lib/data/usuarios.shared";
 
 /** Valor do select de cargo para um usuário (cargo-base puro vs personalizado). */
@@ -40,6 +45,10 @@ export function UsuariosSection({
   const [senhaUser, setSenhaUser] = useState<Usuario | null>(null);
   const [senha, setSenha] = useState("");
   const [senha2, setSenha2] = useState("");
+
+  // Modal: definir usuário (login)
+  const [usuarioUser, setUsuarioUser] = useState<Usuario | null>(null);
+  const [usuarioLogin, setUsuarioLogin] = useState("");
 
   function salvarCargo() {
     if (cargoNome.trim().length < 2) {
@@ -93,12 +102,30 @@ export function UsuariosSection({
     });
   }
 
+  function salvarUsuario() {
+    if (!usuarioUser) return;
+    startTransition(async () => {
+      const res = await definirUsuario({
+        userId: usuarioUser.userId,
+        username: usuarioLogin.trim(),
+      });
+      if (res?.ok) {
+        toast.success(`Usuário de ${usuarioUser.nome} atualizado.`);
+        setUsuarioUser(null);
+        setUsuarioLogin("");
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível definir o usuário.");
+      }
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted">
-          Defina o cargo e a senha de cada usuário (pacientes não entram como
-          usuário).
+          Defina o cargo, o usuário e a senha de acesso de cada usuário
+          (pacientes não entram como usuário).
         </p>
         <Button variant="outline" size="sm" onClick={() => setCargoOpen(true)}>
           <Plus className="h-4 w-4" /> Adicionar cargo
@@ -110,15 +137,16 @@ export function UsuariosSection({
           <thead className="border-b border-line bg-muted-surface text-left text-xs uppercase text-muted">
             <tr>
               <th className="px-4 py-3 font-medium">Usuário</th>
+              <th className="px-4 py-3 font-medium">Usuário (login)</th>
               <th className="px-4 py-3 font-medium">Cargo</th>
               <th className="px-4 py-3 font-medium">Alterar cargo</th>
-              <th className="px-4 py-3 font-medium">Senha</th>
+              <th className="px-4 py-3 font-medium">Acesso</th>
             </tr>
           </thead>
           <tbody>
             {usuarios.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted">
+                <td colSpan={5} className="px-4 py-8 text-center text-muted">
                   Nenhum usuário (fora pacientes) nesta clínica.
                 </td>
               </tr>
@@ -133,6 +161,15 @@ export function UsuariosSection({
                       <span className="font-medium text-ink">{u.nome}</span>
                       {!u.ativo && <Badge status="danger">Inativo</Badge>}
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {u.username ? (
+                      <span className="font-mono text-sm text-ink">
+                        {u.username}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted">não definido</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <Badge status="active">{u.cargoLabel}</Badge>
@@ -164,17 +201,29 @@ export function UsuariosSection({
                     </Select>
                   </td>
                   <td className="px-4 py-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSenhaUser(u);
-                        setSenha("");
-                        setSenha2("");
-                      }}
-                    >
-                      <KeyRound className="h-3.5 w-3.5" /> Definir senha
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setUsuarioUser(u);
+                          setUsuarioLogin(u.username ?? "");
+                        }}
+                      >
+                        <AtSign className="h-3.5 w-3.5" /> Definir usuário
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSenhaUser(u);
+                          setSenha("");
+                          setSenha2("");
+                        }}
+                      >
+                        <KeyRound className="h-3.5 w-3.5" /> Definir senha
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -263,6 +312,42 @@ export function UsuariosSection({
           />
           <p className="text-xs text-muted">
             A senha vale imediatamente e respeita a política de senha da clínica.
+          </p>
+        </div>
+      </Modal>
+
+      {/* Modal: definir usuário (login) */}
+      <Modal
+        open={!!usuarioUser}
+        onClose={() => setUsuarioUser(null)}
+        title="Definir usuário"
+        subtitle={usuarioUser ? `Usuário: ${usuarioUser.nome}` : ""}
+        className="max-w-md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setUsuarioUser(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={salvarUsuario} disabled={pending}>
+              {pending ? "Salvando..." : "Salvar usuário"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="Usuário de acesso"
+            placeholder="ex.: joao.silva"
+            autoCapitalize="none"
+            autoComplete="username"
+            hint="3 a 40: letras minúsculas, números, . _ -"
+            value={usuarioLogin}
+            onChange={(e) =>
+              setUsuarioLogin(e.target.value.toLowerCase().replace(/\s+/g, ""))
+            }
+          />
+          <p className="text-xs text-muted">
+            É com este usuário (login) que a pessoa entra no sistema.
           </p>
         </div>
       </Modal>
