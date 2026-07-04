@@ -3,10 +3,12 @@ import { cn } from "@/lib/utils";
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  /** Texto de apoio exibido abaixo do campo. */
+  hint?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, id, ...props }, ref) => {
+  ({ className, label, hint, id, ...props }, ref) => {
     const input = (
       <input
         ref={ref}
@@ -18,11 +20,24 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         {...props}
       />
     );
-    if (!label) return input;
+    const hintEl = hint ? (
+      <span className="mt-1 block text-xs text-muted">{hint}</span>
+    ) : null;
+    if (!label) {
+      return hintEl ? (
+        <span className="block">
+          {input}
+          {hintEl}
+        </span>
+      ) : (
+        input
+      );
+    }
     return (
       <label htmlFor={id} className="block">
         <span className="mb-1.5 block text-sm font-medium text-ink">{label}</span>
         {input}
+        {hintEl}
       </label>
     );
   },

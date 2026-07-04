@@ -491,7 +491,7 @@ export function AltaCatalogoConfig({
                               <div className="ml-6 rounded-lg border border-line bg-white">
                                 <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
                                   <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                                    Detalhes de "{m.label}"
+                                    Detalhes de &ldquo;{m.label}&rdquo;
                                   </span>
                                   <Button
                                     type="button"

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { isDemoMode } from "@/lib/supabase/config";
 import {
   getMyClinics,
@@ -44,7 +45,8 @@ export type AuthState =
  *  • 1 clínica  → auto-seleciona (setActiveClinic) e sinaliza refresh ao client.
  *  • N clínicas → devolve a lista para o seletor (needsClinic).
  *  • 0 clínicas → erro (sem tenant, a RLS negaria tudo).
- * O campo "usuario" do formulário é tratado como e-mail.
+ * O campo "usuario" resolve para um nome de acesso (username). Se contiver "@"
+ * é tratado como e-mail direto (compat com admins antigos).
  */
 export async function signIn(
   _prev: AuthState,
@@ -52,13 +54,15 @@ export async function signIn(
 ): Promise<AuthState> {
   if (isDemoMode()) redirect("/dashboard");
 
-  const email = String(formData.get("usuario") ?? "").trim();
+  const usuario = String(formData.get("usuario") ?? "").trim();
   const password = String(formData.get("senha") ?? "");
 
-  if (!email || !password) return { error: "Informe usuário e senha." };
+  if (!usuario || !password) return { error: "Informe usuário e senha." };
+
+  const usuarioNorm = usuario.toLowerCase();
 
   // Rate-limit anti força-bruta: bloqueia após LOGIN_LIMIT falhas na janela.
-  const rlKey = `login:${await clientIp()}:${email.toLowerCase()}`;
+  const rlKey = `login:${await clientIp()}:${usuarioNorm}`;
   const limited = isRateLimited(rlKey, LOGIN_LIMIT);
   if (!limited.ok) {
     return {
@@ -66,8 +70,43 @@ export async function signIn(
     };
   }
 
+  // Resolve o e-mail de autenticação:
+  //  • Se o input tem "@" → é e-mail direto (compat com admins antigos).
+  //  • Caso contrário → é username: busca em profiles (service-role, ignora RLS)
+  //    e obtém o e-mail real do Auth via getUserById. Erros são genéricos para
+  //    não revelar se o usuário existe.
+  let resolvedEmail: string;
+  if (usuario.includes("@")) {
+    resolvedEmail = usuario;
+  } else {
+    const svc = createServiceClient();
+    const { data: profile } = await svc
+      .from("profiles")
+      .select("id")
+      .eq("username", usuarioNorm)
+      .maybeSingle();
+
+    const userId = profile?.id as string | undefined;
+    if (!userId) {
+      registerHit(rlKey, LOGIN_WINDOW_MS);
+      return { error: "Credenciais inválidas." };
+    }
+
+    const { data: authUser, error: authErr } =
+      await svc.auth.admin.getUserById(userId);
+    const realEmail = authUser?.user?.email;
+    if (authErr || !realEmail) {
+      registerHit(rlKey, LOGIN_WINDOW_MS);
+      return { error: "Credenciais inválidas." };
+    }
+    resolvedEmail = realEmail;
+  }
+
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({
+    email: resolvedEmail,
+    password,
+  });
   if (error) {
     // Conta só as FALHAS (login bem-sucedido não gasta o limite).
     registerHit(rlKey, LOGIN_WINDOW_MS);

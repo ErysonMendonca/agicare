@@ -52,10 +52,47 @@ function papelDefault(role?: string): string {
 
 /**
  * Campos compartilhados entre criar e editar. `mostrarEmail` só na criação
- * (o e-mail vive em auth.users e não é editável por aqui). `mostrarStatus`
- * só na edição (toggle ativo/inativo).
+ * (o usuário de acesso é definido aqui; não é editável na edição).
+ * `mostrarStatus` só na edição (toggle ativo/inativo).
  */
 /** Cabeçalho de seção do formulário. */
+/**
+ * Diálogo de confirmação de descarte, empilhado por cima do modal principal.
+ * Reaproveita o Modal (a pilha global já suporta empilhamento).
+ */
+function ConfirmarDescarte({
+  open,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title="Descartar alterações?"
+      className="max-w-md"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button variant="danger" onClick={onConfirm}>
+            Sim, descartar
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-muted">
+        Você tem alterações não salvas. Se sair agora, elas serão perdidas.
+      </p>
+    </Modal>
+  );
+}
+
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
     <fieldset className="rounded-xl border border-line p-4">
@@ -90,6 +127,43 @@ function CamposProfissional({
     !especialidades.some((e) => e.value === especialidadeAtual);
   const [personType, setPersonType] = useState(defaults.person_type || "cpf");
   const [documento, setDocumento] = useState(defaults.document ?? "");
+  // Usuário de acesso: só letras minúsculas, números e . _ - (regra do backend).
+  const [username, setUsername] = useState("");
+  // Endereço controlado p/ autopreenchimento via ViaCEP.
+  const [cep, setCep] = useState(defaults.cep ?? "");
+  const [endereco, setEndereco] = useState(defaults.address ?? "");
+  const [bairro, setBairro] = useState(defaults.neighborhood ?? "");
+  const [cidade, setCidade] = useState(defaults.city ?? "");
+  const [uf, setUf] = useState(defaults.state ?? "");
+  const [buscandoCep, setBuscandoCep] = useState(false);
+
+  async function buscarCep(valor: string) {
+    const limpo = valor.replace(/\D/g, "");
+    if (limpo.length !== 8) return;
+    setBuscandoCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
+      const data: {
+        erro?: boolean;
+        logradouro?: string;
+        bairro?: string;
+        localidade?: string;
+        uf?: string;
+      } = await res.json();
+      if (data.erro) {
+        toast.error("CEP não encontrado.");
+        return;
+      }
+      setEndereco(data.logradouro ?? "");
+      setBairro(data.bairro ?? "");
+      setCidade(data.localidade ?? "");
+      setUf(data.uf ?? "");
+    } catch {
+      toast.error("Não foi possível consultar o CEP.");
+    } finally {
+      setBuscandoCep(false);
+    }
+  }
   const [creds, setCreds] = useState<CredencialEdit[]>(
     defaults.credentials && defaults.credentials.length > 0
       ? defaults.credentials
@@ -261,7 +335,7 @@ function CamposProfissional({
           name="council_reg"
           defaultValue={defaults.council_reg ?? ""}
         />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
             id={`${prefixo}-council-number`}
             name="council_number"
@@ -307,11 +381,19 @@ function CamposProfissional({
           />
           {mostrarEmail ? (
             <Input
-              id={`${prefixo}-email`}
-              name="email"
-              type="email"
-              label="E-mail (login de acesso)"
-              placeholder="email@clinica.com"
+              id={`${prefixo}-username`}
+              name="username"
+              type="text"
+              inputMode="text"
+              label="Usuário de acesso"
+              placeholder="ex.: joao.silva"
+              autoCapitalize="none"
+              autoComplete="username"
+              value={username}
+              onChange={(e) =>
+                setUsername(e.target.value.toLowerCase().replace(/\s+/g, ""))
+              }
+              hint="Somente letras minúsculas, números e . _ - (3 a 40 caracteres)."
               required
             />
           ) : (
@@ -357,9 +439,16 @@ function CamposProfissional({
             <CepInput
               id={`${prefixo}-cep`}
               name="cep"
-              label="CEP"
+              label={buscandoCep ? "CEP (buscando...)" : "CEP"}
               placeholder="00000-000"
-              defaultValue={defaults.cep ?? ""}
+              value={cep}
+              onChange={(e) => {
+                setCep(e.target.value);
+                if (e.target.value.replace(/\D/g, "").length === 8) {
+                  buscarCep(e.target.value);
+                }
+              }}
+              onBlur={(e) => buscarCep(e.target.value)}
             />
             <div className="sm:col-span-2">
               <Input
@@ -367,7 +456,8 @@ function CamposProfissional({
                 name="address"
                 label="Logradouro"
                 placeholder="Rua, avenida..."
-                defaultValue={defaults.address ?? ""}
+                value={endereco}
+                onChange={(e) => setEndereco(e.target.value)}
               />
             </div>
           </div>
@@ -395,14 +485,16 @@ function CamposProfissional({
               name="neighborhood"
               label="Bairro"
               placeholder="Centro"
-              defaultValue={defaults.neighborhood ?? ""}
+              value={bairro}
+              onChange={(e) => setBairro(e.target.value)}
             />
             <Input
               id={`${prefixo}-cidade`}
               name="city"
               label="Cidade"
               placeholder="São Paulo"
-              defaultValue={defaults.city ?? ""}
+              value={cidade}
+              onChange={(e) => setCidade(e.target.value)}
             />
             <Input
               id={`${prefixo}-uf`}
@@ -410,7 +502,8 @@ function CamposProfissional({
               label="UF"
               placeholder="SP"
               maxLength={2}
-              defaultValue={defaults.state ?? ""}
+              value={uf}
+              onChange={(e) => setUf(e.target.value)}
             />
           </div>
         </div>
@@ -566,17 +659,32 @@ export function NovoProfissionalModal({
   especialidades: AttendanceOption[];
 }) {
   const [open, setOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [confirmar, setConfirmar] = useState(false);
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     createProfessional,
     undefined,
   );
   const router = useRouter();
 
+  // Fecha de verdade (descarta e limpa flags).
+  function fecharDeVerdade() {
+    setConfirmar(false);
+    setDirty(false);
+    setOpen(false);
+  }
+
+  // Tentativa de fechar (backdrop/ESC/X/Cancelar): confirma se houver alterações.
+  function tentarFechar() {
+    if (dirty) setConfirmar(true);
+    else fecharDeVerdade();
+  }
+
   useEffect(() => {
     if (state?.ok) {
       toast.success("Profissional cadastrado com sucesso!");
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setOpen(false);
+      fecharDeVerdade();
       router.refresh();
     } else if (state?.error) {
       toast.error(state.error);
@@ -591,13 +699,13 @@ export function NovoProfissionalModal({
 
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={tentarFechar}
         title="Novo Profissional"
         subtitle="Preencha os dados do profissional"
         className="max-w-4xl"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
+            <Button variant="ghost" onClick={tentarFechar}>
               Cancelar
             </Button>
             <Button type="submit" form="form-novo-profissional" disabled={pending}>
@@ -606,7 +714,11 @@ export function NovoProfissionalModal({
           </>
         }
       >
-        <form id="form-novo-profissional" action={formAction}>
+        <form
+          id="form-novo-profissional"
+          action={formAction}
+          onInput={() => setDirty(true)}
+        >
           <CamposProfissional
             prefixo="np"
             defaults={{ active: true }}
@@ -621,13 +733,19 @@ export function NovoProfissionalModal({
           )}
         </form>
       </Modal>
+
+      <ConfirmarDescarte
+        open={confirmar}
+        onCancel={() => setConfirmar(false)}
+        onConfirm={fecharDeVerdade}
+      />
     </>
   );
 }
 
 /**
  * Botão "Editar" por linha + modal pré-preenchido.
- * `id` é fixado na action via bind; o e-mail não é editável aqui.
+ * `id` é fixado na action via bind; o usuário de acesso não é editável aqui.
  */
 export function EditarProfissionalModal({
   id,
@@ -639,6 +757,8 @@ export function EditarProfissionalModal({
   especialidades: AttendanceOption[];
 }) {
   const [open, setOpen] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [confirmar, setConfirmar] = useState(false);
   const updateWithId = updateProfessional.bind(null, id);
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
     updateWithId,
@@ -646,11 +766,22 @@ export function EditarProfissionalModal({
   );
   const router = useRouter();
 
+  function fecharDeVerdade() {
+    setConfirmar(false);
+    setDirty(false);
+    setOpen(false);
+  }
+
+  function tentarFechar() {
+    if (dirty) setConfirmar(true);
+    else fecharDeVerdade();
+  }
+
   useEffect(() => {
     if (state?.ok) {
       toast.success("Profissional atualizado com sucesso!");
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setOpen(false);
+      fecharDeVerdade();
       router.refresh();
     } else if (state?.error) {
       toast.error(state.error);
@@ -667,13 +798,13 @@ export function EditarProfissionalModal({
 
       <Modal
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={tentarFechar}
         title="Editar Profissional"
         subtitle="Atualize os dados do profissional"
         className="max-w-4xl"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
+            <Button variant="ghost" onClick={tentarFechar}>
               Cancelar
             </Button>
             <Button type="submit" form={formId} disabled={pending}>
@@ -682,7 +813,7 @@ export function EditarProfissionalModal({
           </>
         }
       >
-        <form id={formId} action={formAction}>
+        <form id={formId} action={formAction} onInput={() => setDirty(true)}>
           <CamposProfissional
             prefixo={`ep-${id}`}
             defaults={edit}
@@ -697,6 +828,12 @@ export function EditarProfissionalModal({
           )}
         </form>
       </Modal>
+
+      <ConfirmarDescarte
+        open={confirmar}
+        onCancel={() => setConfirmar(false)}
+        onConfirm={fecharDeVerdade}
+      />
     </>
   );
 }
