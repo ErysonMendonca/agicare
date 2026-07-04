@@ -53,9 +53,17 @@ const credentialsField = z
   })
   .pipe(z.array(credentialSchema).max(50, "Limite de convênios excedido."));
 
-/** Campos comuns a criar e editar (sem e-mail, que só existe na criação). */
+/** Campos comuns a criar e editar. */
 const baseSchema = z.object({
   full_name: z.string().trim().min(2, "Informe o nome completo."),
+  // E-mail de CONTATO real do profissional (opcional). Diferente do e-mail
+  // sintético interno do Auth (derivado do username). Coluna em 0085.
+  email: z
+    .string()
+    .trim()
+    .email("E-mail inválido.")
+    .optional()
+    .or(z.literal("")),
   // Dados pessoais (0070)
   person_type: z.enum(["cpf", "cnpj"]).optional().or(z.literal("")),
   document: opt, // nº do CPF/CNPJ
@@ -104,6 +112,8 @@ const createSchema = baseSchema.extend({
       /^[a-z0-9._-]{3,40}$/,
       "Usuário inválido (3-40 caracteres: letras minúsculas, números, . _ -).",
     ),
+  // Senha inicial da conta (só na criação; conta nasce utilizável).
+  password: z.string().min(6, "A senha deve ter ao menos 6 caracteres."),
   // Status inicial do profissional (toggle disponível também na criação).
   active: z.enum(["true", "false"]).optional(),
 });
@@ -153,6 +163,8 @@ function professionalPayload(d: z.infer<typeof baseSchema>) {
     council_uf: d.council_uf || null,
     council_expiry: d.council_expiry || null,
     council_reg: derivarCouncilReg(d),
+    // E-mail de contato real (0085). Comum a create e update.
+    email: d.email || null,
   };
 }
 
@@ -353,10 +365,11 @@ export async function createProfessional(
         return { ok: true };
       }
 
-      // 2) Não existe → cria a conta Auth. email_confirm=true para não disparar
-      //    e-mail aqui; o convite/definição de senha fica como follow-up.
+      // 2) Não existe → cria a conta Auth já com senha (conta utilizável).
+      //    email_confirm=true evita disparo de e-mail (login é por username).
       const { data: created, error: authError } = await svc.auth.admin.createUser({
         email: syntheticEmail,
+        password: d.password,
         email_confirm: true,
         user_metadata: { full_name: d.full_name, role: d.role },
       });

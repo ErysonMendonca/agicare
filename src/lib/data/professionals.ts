@@ -22,6 +22,8 @@ export type ProfissionalEdit = {
   full_name: string;
   specialty: string;
   council_reg: string;
+  /** E-mail de contato real do profissional (0085). */
+  email: string;
   phone: string;
   role: string;
   active: boolean;
@@ -71,7 +73,7 @@ export type Profissional = {
   consultasHoje: number;
   /** Próxima consulta futura ("Hoje 14:30" / "12/06 09:00") ou null. */
   proximaConsulta: string | null;
-  /** Dados crus p/ edição (form). E-mail fica de fora (vive em auth.users). */
+  /** Dados crus p/ edição (form). E-mail de contato real vive em professionals (0085). */
   edit: ProfissionalEdit;
 };
 
@@ -102,6 +104,7 @@ export function isClinico(p: Profissional): boolean {
 
 /** Endereço + observações vazios (campos opcionais) para entradas mock. */
 const ENDERECO_VAZIO = {
+  email: "",
   cep: "",
   address: "",
   address_number: "",
@@ -299,7 +302,7 @@ export async function listProfessionals(): Promise<Profissional[]> {
   const { data, error } = await supabase
     .from("professionals")
     .select(
-      "id, profile_id, specialty, council_reg, active, cep, address, address_number, complement, neighborhood, city, state, notes, " +
+      "id, profile_id, specialty, council_reg, active, email, cep, address, address_number, complement, neighborhood, city, state, notes, " +
         "person_type, document, social_name, birth_date, sex, gender, mother_name, race, birthplace, nationality, cns, cnes, " +
         "council_number, council_name, council_uf, council_expiry, " +
         "professional_insurance_credentials(convenio, vigencia, convenio_code, lab_code, tiss_login, tiss_password, recebe_eletivo, recebe_urgencia, recebe_internacao, xml_tag, cpf_or_convenio_code), " +
@@ -318,6 +321,7 @@ export async function listProfessionals(): Promise<Profissional[]> {
     specialty: S;
     council_reg: S;
     active: boolean | null;
+    email: S;
     cep: S;
     address: S;
     address_number: S;
@@ -364,7 +368,7 @@ export async function listProfessionals(): Promise<Profissional[]> {
       especialidade: r.specialty ?? "—",
       crm: r.council_reg ?? "—",
       cargo: rotuloCargo(role),
-      email: "",
+      email: r.email ?? "",
       telefone: perfil?.phone ?? "—",
       ativo: !!r.active,
       role,
@@ -375,6 +379,7 @@ export async function listProfessionals(): Promise<Profissional[]> {
         full_name: perfil?.full_name ?? "",
         specialty: r.specialty ?? "",
         council_reg: r.council_reg ?? "",
+        email: r.email ?? "",
         phone: perfil?.phone ?? "",
         role: role || "medico",
         active: !!r.active,
