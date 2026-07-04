@@ -1,28 +1,28 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Package, MapPin, Pencil } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, Package, MapPin, Pencil, Plus } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { type ProdutoEstoque, type Fornecedor } from "@/lib/data/stock";
-import { CadastroProdutoModal } from "./CadastroProdutoModal";
 import { moedaBR } from "./format";
 
 export function CadastroTab({
   produtos,
-  fornecedores,
+  fornecedores: _fornecedores,
   gestor,
 }: {
   produtos: ProdutoEstoque[];
   fornecedores: Fornecedor[];
   gestor: boolean;
 }) {
+  const router = useRouter();
   const [busca, setBusca] = useState("");
   const [categoria, setCategoria] = useState("todas");
-  const [editar, setEditar] = useState<ProdutoEstoque | null>(null);
 
   const categorias = useMemo(
     () => Array.from(new Set(produtos.map((p) => p.categoria))).sort(),
@@ -50,7 +50,12 @@ export function CadastroTab({
             Catálogo de medicamentos, materiais e insumos
           </p>
         </div>
-        <CadastroProdutoModal fornecedores={fornecedores} gestor={gestor} />
+        <Button
+          variant="primary"
+          onClick={() => router.push("/estoque/produtos/novo")}
+        >
+          <Plus className="h-4 w-4" /> Novo Produto
+        </Button>
       </div>
 
       <Card className="mt-4 p-4">
@@ -125,7 +130,7 @@ export function CadastroTab({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setEditar(p)}
+                        onClick={() => router.push(`/estoque/produtos/${p.id}`)}
                         aria-label={`Editar ${p.produto}`}
                       >
                         <Pencil className="h-4 w-4" /> Editar
@@ -138,18 +143,6 @@ export function CadastroTab({
           </table>
         </div>
       </Card>
-
-      {/* Modal de edição (controlado) — reaproveita o modal de cadastro. */}
-      {editar && (
-        <CadastroProdutoModal
-          key={editar.id}
-          fornecedores={fornecedores}
-          gestor={gestor}
-          produto={editar}
-          open={editar !== null}
-          onClose={() => setEditar(null)}
-        />
-      )}
     </div>
   );
 }

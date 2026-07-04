@@ -6,12 +6,15 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 import { requireClinico, isGestor } from "@/lib/auth";
+import { logAction } from "@/lib/system-log";
 import {
   listItensPrescritosPaciente,
   type ItemPrescrito,
 } from "@/lib/data/stock";
 
-export type ActionState = { error?: string; ok?: boolean } | undefined;
+export type ActionState =
+  | { error?: string; ok?: boolean; id?: string }
+  | undefined;
 
 function revalidateEstoque() {
   revalidatePath("/estoque");
@@ -24,6 +27,72 @@ const numeroOpcional = z
   .optional()
   .transform((v) => (v && v !== "" ? Number(v.replace(",", ".")) : 0))
   .pipe(z.number().min(0, "Valor inválido."));
+
+const textOpt = z.string().trim().optional().or(z.literal(""));
+// Booleanos chegam do FormData como string ("true"/"false"); default = false.
+const boolStr = z.string().optional();
+
+// Campos-texto/seleção novos (editor multi-abas, migration 0080).
+const TEXT_FIELDS = [
+  "product_type",
+  "product_group",
+  "classification",
+  "subclassification",
+  "cfop",
+  "solicita_se_necessario",
+  "sal_principio_ativo",
+] as const;
+
+// Campos booleanos novos (migration 0080). Todos default false.
+const BOOL_FIELDS = [
+  "port_344",
+  "ctrl_lote_validade",
+  "ctrl_opme",
+  "ctrl_numero_serie",
+  "ctrl_marca",
+  "presc_qualquer_via",
+  "presc_qualquer_frequencia",
+  "presc_se_necessario",
+  "info_alto_custo",
+  "info_alto_risco",
+  "info_urgencia",
+  "info_oncologia",
+  "info_antimicrobiano_restrito",
+  "info_dva",
+  "info_uso_continuo",
+  "info_nao_padrao",
+  "sol_componente_diluido",
+  "sol_componente_diluente",
+] as const;
+
+// Sub-schemas gerados a partir das listas (mantém DRY e evita divergência
+// entre cadastro e edição).
+const textFieldsShape = Object.fromEntries(
+  TEXT_FIELDS.map((k) => [k, textOpt]),
+) as Record<(typeof TEXT_FIELDS)[number], typeof textOpt>;
+const boolFieldsShape = Object.fromEntries(
+  BOOL_FIELDS.map((k) => [k, boolStr]),
+) as Record<(typeof BOOL_FIELDS)[number], typeof boolStr>;
+
+type RawForm = Record<string, string | undefined>;
+
+/** Monta o patch dos campos novos (texto→null quando vazio; bool→ `=== "true"`). */
+function novosCamposPatch(
+  d: RawForm,
+  raw: RawForm,
+  onlyPresent: boolean,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of TEXT_FIELDS) {
+    if (onlyPresent && !(k in raw)) continue;
+    out[k] = d[k] ? d[k] : null;
+  }
+  for (const k of BOOL_FIELDS) {
+    if (onlyPresent && !(k in raw)) continue;
+    out[k] = d[k] === "true";
+  }
+  return out;
+}
 
 const produtoSchema = z.object({
   // `code` NÃO vem do form: é gerado automático (sequencial por clínica) pelo
@@ -52,6 +121,8 @@ const produtoSchema = z.object({
   supplier_id: z.string().trim().optional().or(z.literal("")),
   active: z.string().optional(),
   notes: z.string().trim().optional().or(z.literal("")),
+  ...textFieldsShape,
+  ...boolFieldsShape,
 });
 
 /** Cria um produto de estoque. Valida com Zod e insere via cliente de servidor (RLS staff). */
@@ -59,7 +130,8 @@ export async function createStockProduct(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const parsed = produtoSchema.safeParse(Object.fromEntries(formData));
+  const raw = Object.fromEntries(formData) as RawForm;
+  const parsed = produtoSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
@@ -68,40 +140,57 @@ export async function createStockProduct(
 
   const d = parsed.data;
   const clinicId = await requireClinic();
+  const gestor = await isGestor();
   const supabase = await createClient();
-  const { error } = await supabase.from("stock_products").insert({
-    clinic_id: clinicId,
-    // code/code_number são atribuídos automaticamente pelo trigger 0058.
-    name: d.name,
-    active_ingredient: d.active_ingredient || null,
-    presentation: d.presentation || null,
-    barcode: d.barcode || null,
-    anvisa_registration: d.anvisa_registration || null,
-    category: d.category || null,
-    therapeutic_class: d.therapeutic_class || null,
-    unit: d.unit || "un",
-    controlled_class: d.controlled_class || null,
-    requires_prescription: d.requires_prescription === "true",
-    lot: d.lot || null,
-    expiry: d.expiry || null,
-    ncm: d.ncm || null,
-    cest: d.cest || null,
-    quantity: d.quantity,
-    min_quantity: d.min_quantity,
-    max_quantity: d.max_quantity,
-    location: d.location || null,
-    cost: d.cost,
-    price: d.price,
-    manufacturer: d.manufacturer || null,
-    supplier_id: d.supplier_id || null,
-    active: d.active !== "false",
-    notes: d.notes || null,
-  });
+  // A coluna legada `category` alimenta a listagem/filtro do estoque; quando o
+  // editor novo não a envia, herda o Tipo de Produto para não nascer sem categoria.
+  const categoria = d.category || (raw.product_type as string) || null;
+  const { data: created, error } = await supabase
+    .from("stock_products")
+    .insert({
+      clinic_id: clinicId,
+      // code/code_number são atribuídos automaticamente pelo trigger 0058.
+      name: d.name,
+      active_ingredient: d.active_ingredient || null,
+      presentation: d.presentation || null,
+      barcode: d.barcode || null,
+      anvisa_registration: d.anvisa_registration || null,
+      category: categoria,
+      therapeutic_class: d.therapeutic_class || null,
+      unit: d.unit || "un",
+      controlled_class: d.controlled_class || null,
+      requires_prescription: d.requires_prescription === "true",
+      lot: d.lot || null,
+      expiry: d.expiry || null,
+      ncm: d.ncm || null,
+      cest: d.cest || null,
+      quantity: d.quantity,
+      min_quantity: d.min_quantity,
+      max_quantity: d.max_quantity,
+      location: d.location || null,
+      // Financeiro só quando gestor (evita não-gestor definir custo/preço).
+      cost: gestor ? d.cost : 0,
+      price: gestor ? d.price : 0,
+      manufacturer: d.manufacturer || null,
+      supplier_id: d.supplier_id || null,
+      active: d.active !== "false",
+      notes: d.notes || null,
+      ...novosCamposPatch(d as unknown as RawForm, raw, false),
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
 
+  await logAction({
+    action: "create",
+    module: "estoque",
+    summary: `Cadastrou o produto ${d.name}`,
+    entity: "product",
+    entityId: created?.id as string | undefined,
+  });
   revalidateEstoque();
-  return { ok: true };
+  return { ok: true, id: created?.id as string | undefined };
 }
 
 // ── Edição de produto ───────────────────────────────────────────────
@@ -112,15 +201,31 @@ export async function createStockProduct(
 const produtoUpdateSchema = z.object({
   id: z.string().min(1, "Produto inválido."),
   name: z.string().trim().min(2, "Nome muito curto."),
+  active_ingredient: z.string().trim().optional().or(z.literal("")),
+  presentation: z.string().trim().optional().or(z.literal("")),
+  barcode: z.string().trim().optional().or(z.literal("")),
+  anvisa_registration: z.string().trim().optional().or(z.literal("")),
   category: z.string().trim().optional().or(z.literal("")),
+  therapeutic_class: z.string().trim().optional().or(z.literal("")),
   unit: z.string().trim().optional().or(z.literal("")),
+  controlled_class: z.string().trim().optional().or(z.literal("")),
+  requires_prescription: z.string().optional(),
   quantity: numeroOpcional,
   min_quantity: numeroOpcional,
+  max_quantity: numeroOpcional,
   lot: z.string().trim().optional().or(z.literal("")),
+  expiry: z.string().trim().optional().or(z.literal("")),
+  ncm: z.string().trim().optional().or(z.literal("")),
+  cest: z.string().trim().optional().or(z.literal("")),
   location: z.string().trim().optional().or(z.literal("")),
   cost: numeroOpcional,
   price: numeroOpcional,
+  manufacturer: z.string().trim().optional().or(z.literal("")),
+  supplier_id: z.string().trim().optional().or(z.literal("")),
   active: z.string().optional(),
+  notes: z.string().trim().optional().or(z.literal("")),
+  ...textFieldsShape,
+  ...boolFieldsShape,
 });
 
 /**
@@ -132,7 +237,8 @@ export async function updateStockProduct(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const parsed = produtoUpdateSchema.safeParse(Object.fromEntries(formData));
+  const raw = Object.fromEntries(formData) as RawForm;
+  const parsed = produtoUpdateSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
@@ -144,16 +250,48 @@ export async function updateStockProduct(
   const gestor = await isGestor();
   const supabase = await createClient();
 
+  // SÓ `name` e `active` são sempre enviados pela aba Produto do editor.
   const patch: Record<string, unknown> = {
     name: d.name,
-    category: d.category || null,
-    unit: d.unit || "un",
-    quantity: d.quantity,
-    min_quantity: d.min_quantity,
-    lot: d.lot || null,
-    location: d.location || null,
     active: d.active !== "false",
   };
+
+  // Demais campos-mestre: só sobrescreve quando a chave veio no form (evita
+  // zerar colunas que a aba correspondente não renderizou). CRÍTICO para
+  // quantity/unit/category/lot/location — que agora vivem em abas-filhas e
+  // NÃO estão na aba Produto: incluí-los incondicionalmente zerava o saldo e
+  // apagava a categoria a cada Salvar.
+  const optText: Array<keyof typeof d> = [
+    "category",
+    "unit",
+    "lot",
+    "location",
+    "active_ingredient",
+    "presentation",
+    "barcode",
+    "anvisa_registration",
+    "therapeutic_class",
+    "controlled_class",
+    "expiry",
+    "ncm",
+    "cest",
+    "manufacturer",
+    "supplier_id",
+    "notes",
+  ];
+  for (const k of optText) {
+    if (k in raw) patch[k] = d[k] ? d[k] : null;
+  }
+  if ("requires_prescription" in raw) {
+    patch.requires_prescription = d.requires_prescription === "true";
+  }
+  if ("quantity" in raw) patch.quantity = d.quantity;
+  if ("min_quantity" in raw) patch.min_quantity = d.min_quantity;
+  if ("max_quantity" in raw) patch.max_quantity = d.max_quantity;
+
+  // Campos novos (0080): só as chaves presentes.
+  Object.assign(patch, novosCamposPatch(d as unknown as RawForm, raw, true));
+
   // Financeiro só quando gestor (não-gestor nem vê os campos no form).
   if (gestor) {
     patch.cost = d.cost;
@@ -168,6 +306,46 @@ export async function updateStockProduct(
 
   if (error) return { error: error.message };
 
+  await logAction({
+    action: "update",
+    module: "estoque",
+    summary: `Editou o produto ${d.name}`,
+    entity: "product",
+    entityId: d.id,
+  });
+  revalidateEstoque();
+  return { ok: true };
+}
+
+// ── Exclusão de produto ─────────────────────────────────────────────
+/**
+ * Exclui um produto do catálogo (DELETE por id + clinic_id/RLS). As tabelas-filhas
+ * (0080) caem em cascata (on delete cascade). Usado pelo botão "Excluir" do editor
+ * de produto. Só staff da clínica dona (RLS). Em demo, simula sucesso.
+ */
+export async function deleteStockProduct(id: string): Promise<ActionState> {
+  const parsed = z.string().min(1, "Produto inválido.").safeParse(id);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  if (isDemoMode()) return { ok: true };
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("stock_products")
+    .delete()
+    .eq("id", parsed.data)
+    .eq("clinic_id", clinicId);
+
+  if (error) return { error: error.message };
+
+  await logAction({
+    action: "delete",
+    module: "estoque",
+    summary: "Excluiu um produto do catálogo",
+    entity: "product",
+    entityId: parsed.data,
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -197,7 +375,17 @@ async function updateDispensacao(
 export async function iniciarSeparacao(id: string): Promise<ActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  return updateDispensacao(parsed.data, { status: "separacao" });
+  const res = await updateDispensacao(parsed.data, { status: "separacao" });
+  if (res?.ok) {
+    await logAction({
+      action: "update",
+      module: "estoque",
+      summary: "Iniciou a separação de uma dispensação",
+      entity: "dispensation",
+      entityId: parsed.data,
+    });
+  }
+  return res;
 }
 
 /**
@@ -220,6 +408,13 @@ export async function concluirSeparacao(id: string): Promise<ActionState> {
     .eq("status", "separacao");
 
   if (error) return { error: error.message };
+  await logAction({
+    action: "update",
+    module: "estoque",
+    summary: "Concluiu a separação de uma dispensação",
+    entity: "dispensation",
+    entityId: parsed.data,
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -260,6 +455,13 @@ export async function recusarDispensacao(
 
   if (error) return { error: error.message };
   if (!data) return { error: "Este pedido não pode mais ser recusado." };
+  await logAction({
+    action: "update",
+    module: "estoque",
+    summary: "Recusou a solicitação de retirada",
+    entity: "dispensation",
+    entityId: parsed.data.id,
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -286,7 +488,19 @@ export async function marcarUrgente(
 ): Promise<ActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  return updateDispensacao(parsed.data, { urgent: urgente });
+  const res = await updateDispensacao(parsed.data, { urgent: urgente });
+  if (res?.ok) {
+    await logAction({
+      action: "update",
+      module: "estoque",
+      summary: urgente
+        ? "Marcou uma dispensação como urgente"
+        : "Removeu a urgência de uma dispensação",
+      entity: "dispensation",
+      entityId: parsed.data,
+    });
+  }
+  return res;
 }
 
 // ── Nova Dispensação (criação de pedido) ────────────────────────────
@@ -485,6 +699,13 @@ export async function criarDispensacao(
     return { error: itErr.message };
   }
 
+  await logAction({
+    action: "create",
+    module: "estoque",
+    summary: `Criou dispensação ${code}`,
+    entity: "dispensation",
+    entityId: disp.id as string,
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -550,6 +771,12 @@ export async function registrarEntrada(
   const { error } = await supabase.from("stock_movements").insert(rows);
   if (error) return { error: error.message };
 
+  await logAction({
+    action: "create",
+    module: "estoque",
+    summary: `Registrou entrada de produtos da NF ${d.invoice_number}`,
+    entity: "stock_movement",
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -587,6 +814,12 @@ export async function criarSolicitacaoCompra(
   });
 
   if (error) return { error: error.message };
+  await logAction({
+    action: "create",
+    module: "estoque",
+    summary: `Criou solicitação de compra ${code} (${d.product_name})`,
+    entity: "purchase_request",
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -682,6 +915,13 @@ export async function criarCotacao(
     .eq("id", d.purchase_request_id)
     .eq("status", "solicitado");
 
+  await logAction({
+    action: "create",
+    module: "estoque",
+    summary: `Registrou cotação do fornecedor ${d.supplier_name}`,
+    entity: "quotation",
+    entityId: d.purchase_request_id,
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -724,6 +964,15 @@ export async function decidirCompra(
     .eq("id", parsed.data);
 
   if (error) return { error: error.message };
+  await logAction({
+    action: "update",
+    module: "estoque",
+    summary: aprovar
+      ? "Aprovou uma solicitação de compra"
+      : "Reprovou uma solicitação de compra",
+    entity: "purchase_request",
+    entityId: parsed.data,
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -793,6 +1042,13 @@ export async function abrirInventario(
     if (snapErr) return { error: snapErr.message };
   }
 
+  await logAction({
+    action: "create",
+    module: "estoque",
+    summary: `Abriu inventário ${code}`,
+    entity: "inventory",
+    entityId: inv.id as string,
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -844,6 +1100,13 @@ export async function salvarContagem(input: {
     .eq("id", d.id);
 
   if (error) return { error: error.message };
+  await logAction({
+    action: "update",
+    module: "estoque",
+    summary: "Salvou contagem de inventário",
+    entity: "inventory_count",
+    entityId: d.id,
+  });
   revalidateEstoque();
   return { ok: true };
 }
@@ -869,6 +1132,13 @@ export async function fecharInventario(id: string): Promise<ActionState> {
     .eq("status", "aberto");
 
   if (error) return { error: error.message };
+  await logAction({
+    action: "update",
+    module: "estoque",
+    summary: "Fechou um inventário",
+    entity: "inventory",
+    entityId: parsed.data,
+  });
   revalidateEstoque();
   return { ok: true };
 }

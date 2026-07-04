@@ -41,6 +41,13 @@ const DEMO_OPTIONS: Record<AttendanceOptionCategory, string[]> = {
   // por listAltaCatalogos(); aqui ficam vazios só para satisfazer o Record.
   motivo_alta: [],
   detalhe_alta: [],
+  // Catálogos do cadastro de produto (demo).
+  tipo_produto: ["Medicamento", "Material", "Solução", "Insumo", "EPI"],
+  grupo_produto: ["0001 - Drogas e Medicamentos", "0002 - Material Médico Hospitalar"],
+  unidade_medida: ["Ampola (AMP)", "Comprimido (COMP)", "Frasco (FR)", "Unidade (UN)"],
+  via_administracao: ["Intramuscular (IM)", "Subcutânea (SC)", "Intravenosa (IV)", "Oral (VO)"],
+  principio_ativo: ["Atropina", "Dipirona", "Adrenalina"],
+  marca: [],
 };
 
 function demoOptions(): AttendanceOptionsByCategory {

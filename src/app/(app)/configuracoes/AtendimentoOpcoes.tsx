@@ -34,6 +34,13 @@ const CATEGORY_LABELS: Record<AttendanceOptionCategory, string> = {
   // Catálogos de alta têm telas dedicadas (não editar aqui) — excluídos abaixo.
   motivo_alta: "Motivos de Alta",
   detalhe_alta: "Detalhes de Alta",
+  // Catálogos do cadastro de produto (gerenciáveis aqui pelo gestor).
+  tipo_produto: "Tipo de Produto",
+  grupo_produto: "Grupo de Produto",
+  unidade_medida: "Unidade de Medida",
+  via_administracao: "Via de Administração",
+  principio_ativo: "Princípio Ativo",
+  marca: "Marca",
 };
 
 /**
