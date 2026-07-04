@@ -14,12 +14,14 @@ export async function SecaoClinica({
   identificacao,
   title,
   subtitle,
+  actions,
   children,
 }: {
   patientId: string;
   identificacao: Identificacao | null;
   title: string;
   subtitle: string;
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   // Auditoria LGPD: registra o acesso à seção clínica (best-effort, nunca lança).
@@ -43,7 +45,7 @@ export async function SecaoClinica({
         </Link>
       </div>
 
-      <PageHeader title={title} subtitle={subtitle} />
+      <PageHeader title={title} subtitle={subtitle} actions={actions} />
 
       {identificacao ? (
         <>
