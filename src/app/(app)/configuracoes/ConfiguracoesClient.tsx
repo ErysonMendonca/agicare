@@ -51,10 +51,9 @@ import { TriagemBuilder } from "./TriagemBuilder";
 import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
 import { EspecialidadesConfig } from "./EspecialidadesConfig";
 import { CidConfig } from "./CidConfig";
-import { MotivosAltaConfig } from "./MotivosAltaConfig";
-import { DetalhesAltaConfig } from "./DetalhesAltaConfig";
+import { AltaCatalogoConfig } from "./AltaCatalogoConfig";
 import type { CidCode } from "@/lib/data/cid";
-import type { MotivoAlta, DetalheAlta } from "@/lib/data/alta";
+import type { MotivoAltaCfg, DetalheAltaCfg } from "@/lib/data/alta";
 import type { Especialidade } from "@/lib/data/especialidades";
 
 const BASE_TABS = [
@@ -71,8 +70,7 @@ const TRIAGEM_TAB = "Triagem";
 const ATENDIMENTO_TAB = "Dados de Atendimento";
 const ESPECIALIDADES_TAB = "Especialidades";
 const CID_TAB = "Catálogo CID";
-const MOTIVOS_ALTA_TAB = "Motivos de Alta";
-const DETALHES_ALTA_TAB = "Detalhes de Alta";
+const ALTA_CATALOGO_TAB = "Motivos e Detalhes de Alta";
 
 type Tab =
   | (typeof BASE_TABS)[number]
@@ -80,8 +78,7 @@ type Tab =
   | typeof ATENDIMENTO_TAB
   | typeof ESPECIALIDADES_TAB
   | typeof CID_TAB
-  | typeof MOTIVOS_ALTA_TAB
-  | typeof DETALHES_ALTA_TAB;
+  | typeof ALTA_CATALOGO_TAB;
 
 export function ConfiguracoesClient({
   settings,
@@ -102,8 +99,8 @@ export function ConfiguracoesClient({
   attendanceOptions: AttendanceOptionsByCategory;
   especialidades: Especialidade[];
   cidCodes: CidCode[];
-  motivosAlta: MotivoAlta[];
-  detalhesAlta: DetalheAlta[];
+  motivosAlta: MotivoAltaCfg[];
+  detalhesAlta: DetalheAltaCfg[];
   isGestor: boolean;
 }) {
   // As abas de catálogo (Triagem, Dados de Atendimento, Especialidades,
@@ -115,8 +112,7 @@ export function ConfiguracoesClient({
         ATENDIMENTO_TAB,
         ESPECIALIDADES_TAB,
         CID_TAB,
-        MOTIVOS_ALTA_TAB,
-        DETALHES_ALTA_TAB,
+        ALTA_CATALOGO_TAB,
       ]
     : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
@@ -603,12 +599,9 @@ export function ConfiguracoesClient({
       {/* Catálogo global de CIDs (gestor-only), fora do form de configurações. */}
       {isGestor && tabAtiva === CID_TAB && <CidConfig cids={cidCodes} />}
 
-      {/* Catálogos de alta (gestor-only), fora do form de configurações. */}
-      {isGestor && tabAtiva === MOTIVOS_ALTA_TAB && (
-        <MotivosAltaConfig motivos={motivosAlta} />
-      )}
-      {isGestor && tabAtiva === DETALHES_ALTA_TAB && (
-        <DetalhesAltaConfig motivos={motivosAlta} detalhes={detalhesAlta} />
+      {/* Catálogos de alta (motivo + detalhe, gestor-only) numa tela só. */}
+      {isGestor && tabAtiva === ALTA_CATALOGO_TAB && (
+        <AltaCatalogoConfig motivos={motivosAlta} detalhes={detalhesAlta} />
       )}
     </>
   );
