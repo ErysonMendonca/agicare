@@ -25,6 +25,8 @@ export const ATTENDANCE_OPTION_CATEGORIES = [
   "via_administracao",
   "principio_ativo",
   "marca",
+  "localizacao",
+  "classificacao_xyz",
 ] as const;
 
 export type AttendanceOptionCategory =

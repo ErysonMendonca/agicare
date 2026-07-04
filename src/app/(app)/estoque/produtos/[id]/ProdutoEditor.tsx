@@ -17,45 +17,24 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
-import { FadeInUp } from "@/components/ui/Motion";
 import {
   createStockProduct,
   updateStockProduct,
   deleteStockProduct,
   type ActionState,
 } from "@/lib/actions/stock";
+import {
+  setProdutoSelecoes,
+  addProductXyz,
+  removeProductXyz,
+} from "@/lib/actions/stock-product-children";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
-import type { ProdutoCompleto, ProdutoChildren } from "./types";
-
-// Abas-filhas (Fael) — convenção: export function XTab({ productId, data }).
-import { UnidadesTab } from "./tabs/UnidadesTab";
-import { EstoqueMinMaxTab } from "./tabs/EstoqueMinMaxTab";
-import { ViasAdministracaoTab } from "./tabs/ViasAdministracaoTab";
-import { PrincipiosAtivosTab } from "./tabs/PrincipiosAtivosTab";
-import { MarcasTab } from "./tabs/MarcasTab";
-import { LocalizacoesTab } from "./tabs/LocalizacoesTab";
-import { ClassificacaoXyzTab } from "./tabs/ClassificacaoXyzTab";
-
-type TabKey =
-  | "produto"
-  | "unidades"
-  | "minmax"
-  | "vias"
-  | "principios"
-  | "marcas"
-  | "locais"
-  | "xyz";
-
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "produto", label: "Produto" },
-  { key: "unidades", label: "Unidade de Medida" },
-  { key: "minmax", label: "Estoque Mínimo e Máximo" },
-  { key: "vias", label: "Via de Administração" },
-  { key: "principios", label: "Princípio Ativo" },
-  { key: "marcas", label: "Marca" },
-  { key: "locais", label: "Localização para Requisição" },
-  { key: "xyz", label: "Classificação XYZ" },
-];
+import type { ProdutoCatalogos } from "@/lib/data/produto-catalogos";
+import type {
+  ProdutoCompleto,
+  ProdutoChildren,
+  ProductXyzClass,
+} from "./types";
 
 export function ProdutoEditor({
   novo,
@@ -63,6 +42,7 @@ export function ProdutoEditor({
   produto,
   childrenData,
   options,
+  catalogos,
   gestor,
 }: {
   novo: boolean;
@@ -70,10 +50,10 @@ export function ProdutoEditor({
   produto: ProdutoCompleto;
   childrenData: ProdutoChildren | null;
   options: AttendanceOptionsByCategory;
+  catalogos: ProdutoCatalogos;
   gestor: boolean;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<TabKey>("produto");
 
   // Intenção do submit (Salvar fica; Salvar e Fechar volta à listagem).
   const intentRef = useRef<"salvar" | "fechar">("salvar");
@@ -85,129 +65,115 @@ export function ProdutoEditor({
   // Toggle "Ativo" controlado → grava valor explícito no hidden input.
   const [ativo, setAtivo] = useState(produto.active);
 
+  // ── Multi-seleções (rótulos escolhidos dos catálogos) ──────────────
+  const [selUnidades, setSelUnidades] = useState<string[]>(
+    () => (childrenData?.units ?? []).map((u) => u.unitLabel),
+  );
+  const [selVias, setSelVias] = useState<string[]>(
+    () => (childrenData?.routes ?? []).map((r) => r.routeLabel),
+  );
+  const [selPrincipios, setSelPrincipios] = useState<string[]>(
+    () => (childrenData?.ingredients ?? []).map((i) => i.ingredientLabel),
+  );
+  const [selMarcas, setSelMarcas] = useState<string[]>(
+    () => (childrenData?.brands ?? []).map((b) => b.brandLabel),
+  );
+  const [selLocais, setSelLocais] = useState<string[]>(
+    () => (childrenData?.locations ?? []).map((l) => l.locationLabel),
+  );
+
+  // Classificação XYZ (seleção simples) — usa a filha ativa existente.
+  const xyzInicial =
+    (childrenData?.xyz ?? []).find((x) => x.active)?.xyzClass ??
+    (childrenData?.xyz ?? [])[0]?.xyzClass ??
+    "";
+  const [selXyz, setSelXyz] = useState<ProductXyzClass | "">(xyzInicial);
+
+  // Transição para persistir as seleções após salvar o produto.
+  const [savingSel, startSaveSel] = useTransition();
+
+  // Sincroniza as filhas de rótulo + a classificação XYZ do produto salvo.
+  async function persistSelecoes(id: string): Promise<boolean> {
+    const res = await setProdutoSelecoes(id, {
+      unidades: selUnidades,
+      vias: selVias,
+      principios: selPrincipios,
+      marcas: selMarcas,
+      localizacoes: selLocais,
+    });
+    if (!res.ok) {
+      toast.error(res.error ?? "Não foi possível salvar as seleções.");
+      return false;
+    }
+    // XYZ: só mexe se mudou. Remove as classificações existentes e (re)adiciona.
+    if (selXyz !== xyzInicial) {
+      for (const x of childrenData?.xyz ?? []) {
+        await removeProductXyz(x.id, id);
+      }
+      if (selXyz) {
+        // Deriva a classe (X/Y/Z) da 1ª letra do rótulo do catálogo — robusto a
+        // rótulos renomeados (ex.: "X - Crítico") que o enum da action rejeitaria.
+        const xyzClass = selXyz.trim().charAt(0).toUpperCase();
+        if (xyzClass === "X" || xyzClass === "Y" || xyzClass === "Z") {
+          await addProductXyz({ productId: id, xyzClass });
+        }
+      }
+    }
+    return true;
+  }
+
   useEffect(() => {
     if (state?.ok) {
-      toast.success(novo ? "Produto cadastrado!" : "Produto atualizado!");
-      // Cadastro novo OU "Salvar e Fechar" → volta à lista do estoque (o produto
-      // recém-criado aparece lá; para editar as seleções — unidade/via/marca/etc.
-      // — abrir o produto na lista, onde as abas já ficam habilitadas).
-      if (novo || intentRef.current === "fechar") {
-        router.push("/estoque");
+      const id = novo ? state.id : produto.id;
+      if (!id) {
+        toast.error("Produto salvo, mas não foi possível obter o código.");
         return;
       }
-      // Edição de produto existente com "Salvar" (fica): reflete os dados salvos.
-      router.refresh();
+      startSaveSel(async () => {
+        const ok = await persistSelecoes(id);
+        toast.success(novo ? "Produto cadastrado!" : "Produto atualizado!");
+        // Fluxo padrão: salvar produto → seleções → lista do estoque.
+        // "Salvar" (fica) numa edição só recarrega para refletir os dados.
+        if (novo || intentRef.current === "fechar" || !ok) {
+          router.push("/estoque");
+          return;
+        }
+        router.refresh();
+      });
     } else if (state?.error) {
       toast.error(state.error);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  const filhasHabilitadas = !novo;
-
   return (
     <div className="space-y-4">
-      {/* Barra de abas */}
-      <div
-        role="tablist"
-        aria-label="Seções do produto"
-        className="flex flex-wrap gap-1 border-b border-line"
-      >
-        {TABS.map((t) => {
-          const disabled = t.key !== "produto" && !filhasHabilitadas;
-          const activeTab = tab === t.key;
-          return (
-            <button
-              key={t.key}
-              role="tab"
-              type="button"
-              aria-selected={activeTab}
-              disabled={disabled}
-              title={
-                disabled ? "Salve o produto primeiro" : undefined
-              }
-              onClick={() => setTab(t.key)}
-              className={[
-                "relative -mb-px whitespace-nowrap rounded-t-lg px-3.5 py-2.5 text-sm font-medium transition-colors",
-                activeTab
-                  ? "border-b-2 border-brand-500 text-brand-600"
-                  : "text-muted hover:text-ink",
-                disabled && "cursor-not-allowed opacity-40 hover:text-muted",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Conteúdo */}
-      {tab === "produto" ? (
-        <ProdutoForm
-          novo={novo}
-          empresa={empresa}
-          produto={produto}
-          options={options}
-          gestor={gestor}
-          ativo={ativo}
-          setAtivo={setAtivo}
-          formAction={formAction}
-          pending={pending}
-          intentRef={intentRef}
-          state={state}
-        />
-      ) : (
-        <FadeInUp key={tab}>
-          {tab === "unidades" && (
-            <UnidadesTab
-              productId={produto.id}
-              data={childrenData?.units ?? []}
-              options={options}
-            />
-          )}
-          {tab === "minmax" && (
-            <EstoqueMinMaxTab
-              productId={produto.id}
-              data={childrenData?.minMax ?? []}
-            />
-          )}
-          {tab === "vias" && (
-            <ViasAdministracaoTab
-              productId={produto.id}
-              data={childrenData?.routes ?? []}
-              options={options}
-            />
-          )}
-          {tab === "principios" && (
-            <PrincipiosAtivosTab
-              productId={produto.id}
-              data={childrenData?.ingredients ?? []}
-              options={options}
-            />
-          )}
-          {tab === "marcas" && (
-            <MarcasTab
-              productId={produto.id}
-              data={childrenData?.brands ?? []}
-              options={options}
-            />
-          )}
-          {tab === "locais" && (
-            <LocalizacoesTab
-              productId={produto.id}
-              data={childrenData?.locations ?? []}
-            />
-          )}
-          {tab === "xyz" && (
-            <ClassificacaoXyzTab
-              productId={produto.id}
-              data={childrenData?.xyz ?? []}
-            />
-          )}
-        </FadeInUp>
-      )}
+      <ProdutoForm
+        novo={novo}
+        empresa={empresa}
+        produto={produto}
+        options={options}
+        catalogos={catalogos}
+        gestor={gestor}
+        ativo={ativo}
+        setAtivo={setAtivo}
+        selUnidades={selUnidades}
+        setSelUnidades={setSelUnidades}
+        selVias={selVias}
+        setSelVias={setSelVias}
+        selPrincipios={selPrincipios}
+        setSelPrincipios={setSelPrincipios}
+        selMarcas={selMarcas}
+        setSelMarcas={setSelMarcas}
+        selLocais={selLocais}
+        setSelLocais={setSelLocais}
+        selXyz={selXyz}
+        setSelXyz={setSelXyz}
+        formAction={formAction}
+        pending={pending || savingSel}
+        intentRef={intentRef}
+        state={state}
+      />
     </div>
   );
 }
@@ -220,9 +186,22 @@ function ProdutoForm({
   empresa,
   produto,
   options,
+  catalogos,
   gestor,
   ativo,
   setAtivo,
+  selUnidades,
+  setSelUnidades,
+  selVias,
+  setSelVias,
+  selPrincipios,
+  setSelPrincipios,
+  selMarcas,
+  setSelMarcas,
+  selLocais,
+  setSelLocais,
+  selXyz,
+  setSelXyz,
   formAction,
   pending,
   intentRef,
@@ -232,9 +211,22 @@ function ProdutoForm({
   empresa: string;
   produto: ProdutoCompleto;
   options: AttendanceOptionsByCategory;
+  catalogos: ProdutoCatalogos;
   gestor: boolean;
   ativo: boolean;
   setAtivo: (v: boolean) => void;
+  selUnidades: string[];
+  setSelUnidades: (v: string[]) => void;
+  selVias: string[];
+  setSelVias: (v: string[]) => void;
+  selPrincipios: string[];
+  setSelPrincipios: (v: string[]) => void;
+  selMarcas: string[];
+  setSelMarcas: (v: string[]) => void;
+  selLocais: string[];
+  setSelLocais: (v: string[]) => void;
+  selXyz: ProductXyzClass | "";
+  setSelXyz: (v: ProductXyzClass | "") => void;
   formAction: (fd: FormData) => void;
   pending: boolean;
   intentRef: RefObject<"salvar" | "fechar">;
@@ -246,6 +238,14 @@ function ProdutoForm({
 
   const tipos = options["tipo_produto"] ?? [];
   const grupos = options["grupo_produto"] ?? [];
+
+  // Opções ATIVAS dos catálogos (rótulos) para cada multi-seleção.
+  const optUnidades = activeLabels(catalogos.unidade_medida, selUnidades);
+  const optVias = activeLabels(catalogos.via_administracao, selVias);
+  const optPrincipios = activeLabels(catalogos.principio_ativo, selPrincipios);
+  const optMarcas = activeLabels(catalogos.marca, selMarcas);
+  const optLocais = activeLabels(catalogos.localizacao, selLocais);
+  const optXyz = catalogos.classificacao_xyz.filter((o) => o.active);
 
   function excluir() {
     startDelete(async () => {
@@ -443,6 +443,89 @@ function ProdutoForm({
           )}
         </Card>
 
+        {/* Estoque Mínimo e Máximo (campos do próprio produto) */}
+        <Card className="p-5">
+          <SectionTitle>Estoque Mínimo e Máximo</SectionTitle>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Input
+              id="pr-min"
+              name="min_quantity"
+              type="number"
+              min={0}
+              step="any"
+              label="Estoque Mínimo"
+              defaultValue={String(produto.minQuantity ?? 0)}
+            />
+            <Input
+              id="pr-max"
+              name="max_quantity"
+              type="number"
+              min={0}
+              step="any"
+              label="Estoque Máximo"
+              defaultValue={String(produto.maxQuantity ?? 0)}
+            />
+          </div>
+        </Card>
+
+        {/* Seleções (multi-seleção a partir dos catálogos de Configurações) */}
+        <Card className="p-5">
+          <SectionTitle>Seleções</SectionTitle>
+          <p className="-mt-2 mb-4 text-xs text-muted">
+            Marque os itens que se aplicam a este produto. As opções são geridas
+            nos catálogos em Configurações.
+          </p>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <CheckboxGroup
+              legend="Unidade de Medida"
+              options={optUnidades}
+              selected={selUnidades}
+              onChange={setSelUnidades}
+            />
+            <CheckboxGroup
+              legend="Via de Administração"
+              options={optVias}
+              selected={selVias}
+              onChange={setSelVias}
+            />
+            <CheckboxGroup
+              legend="Princípio Ativo"
+              options={optPrincipios}
+              selected={selPrincipios}
+              onChange={setSelPrincipios}
+            />
+            <CheckboxGroup
+              legend="Marca"
+              options={optMarcas}
+              selected={selMarcas}
+              onChange={setSelMarcas}
+            />
+            <CheckboxGroup
+              legend="Localização para Requisição"
+              options={optLocais}
+              selected={selLocais}
+              onChange={setSelLocais}
+            />
+            <div>
+              <Select
+                id="pr-xyz"
+                label="Classificação XYZ"
+                value={selXyz}
+                onChange={(e) =>
+                  setSelXyz(e.target.value as ProductXyzClass | "")
+                }
+              >
+                <option value="">Sem classificação</option>
+                {optXyz.map((o) => (
+                  <option key={o.id} value={o.label}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+        </Card>
+
         {state?.error && (
           <p className="rounded-lg bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
             {state.error}
@@ -528,6 +611,77 @@ function CheckGrid({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Rótulos ATIVOS do catálogo + quaisquer rótulos já selecionados que não estejam
+ * mais ativos (legado) — para que o usuário continue vendo/mantendo o que o
+ * produto já tinha. Ordenados como vieram do catálogo; extras ao final.
+ */
+function activeLabels(
+  items: { id: string; label: string; active: boolean }[],
+  selected: string[],
+): string[] {
+  const ativos = items.filter((i) => i.active).map((i) => i.label);
+  const set = new Set(ativos.map((l) => l.toLowerCase()));
+  const extras = selected.filter((l) => !set.has(l.toLowerCase()));
+  return [...ativos, ...extras];
+}
+
+/** Lista de checkboxes (multi-seleção controlada) para uma categoria. */
+function CheckboxGroup({
+  legend,
+  options,
+  selected,
+  onChange,
+}: {
+  legend: string;
+  options: string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+}) {
+  function toggle(label: string, checked: boolean) {
+    if (checked) {
+      if (!selected.some((s) => s.toLowerCase() === label.toLowerCase())) {
+        onChange([...selected, label]);
+      }
+    } else {
+      onChange(selected.filter((s) => s.toLowerCase() !== label.toLowerCase()));
+    }
+  }
+
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-2 text-sm font-medium text-ink">{legend}</legend>
+      {options.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-line px-3 py-2 text-xs text-muted">
+          Nenhuma opção cadastrada em Configurações.
+        </p>
+      ) : (
+        <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-lg border border-line p-3">
+          {options.map((label) => {
+            const checked = selected.some(
+              (s) => s.toLowerCase() === label.toLowerCase(),
+            );
+            return (
+              <label
+                key={label}
+                className="flex cursor-pointer items-center gap-2 text-sm text-ink"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => toggle(label, e.target.checked)}
+                  className="h-4 w-4 rounded border-line text-brand-500 accent-brand-500 focus:ring-2 focus:ring-brand-100"
+                />
+                {label}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
 function optionList(
   opts: { id: string; label: string; value: string }[],
   current: string,
@@ -556,6 +710,10 @@ function Checkbox({
 }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+      {/* Companion: checkbox desmarcado não vai no FormData. O hidden "false"
+          garante que k∈raw sempre (senão o update pula o campo e o uncheck
+          — true→false — é perdido silenciosamente). Marcado: o "true" vence. */}
+      <input type="hidden" name={name} value="false" />
       <input
         type="checkbox"
         name={name}

@@ -76,6 +76,17 @@ const boolFieldsShape = Object.fromEntries(
 
 type RawForm = Record<string, string | undefined>;
 
+// Campos-texto que são NOT NULL no banco (migration 0080) e têm DEFAULT próprio.
+// NUNCA podem virar null: mapear vazio → o default. Sem isto, o INSERT do
+// cadastro (que inclui TODOS os TEXT_FIELDS) viola o NOT NULL e o produto NÃO
+// era salvo — causa raiz do "cadastrar produto não persiste".
+const TEXT_FIELD_NOT_NULL_DEFAULTS: Partial<
+  Record<(typeof TEXT_FIELDS)[number], string>
+> = {
+  solicita_se_necessario: "NAO SOLICITA",
+  sal_principio_ativo: "NAO SUBSTITUI",
+};
+
 /** Monta o patch dos campos novos (texto→null quando vazio; bool→ `=== "true"`). */
 function novosCamposPatch(
   d: RawForm,
@@ -85,7 +96,9 @@ function novosCamposPatch(
   const out: Record<string, unknown> = {};
   for (const k of TEXT_FIELDS) {
     if (onlyPresent && !(k in raw)) continue;
-    out[k] = d[k] ? d[k] : null;
+    const fallback = TEXT_FIELD_NOT_NULL_DEFAULTS[k];
+    // Campos NOT NULL nunca podem ser null: vazio → default do banco.
+    out[k] = d[k] ? d[k] : fallback ?? null;
   }
   for (const k of BOOL_FIELDS) {
     if (onlyPresent && !(k in raw)) continue;

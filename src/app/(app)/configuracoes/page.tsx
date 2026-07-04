@@ -6,6 +6,7 @@ import { listAnamneseTemplates } from "@/lib/data/anamnese-templates";
 import { listTriageTemplates } from "@/lib/data/triage-templates";
 import { listCidCodes } from "@/lib/data/cid";
 import { listAltaCatalogosConfig } from "@/lib/data/alta";
+import { listProdutoCatalogos } from "@/lib/data/produto-catalogos";
 import { requireView } from "@/lib/permissions";
 import { isGestor } from "@/lib/auth";
 import { ConfiguracoesClient } from "./ConfiguracoesClient";
@@ -21,6 +22,7 @@ export default async function ConfiguracoesPage() {
     especialidades,
     cidCodes,
     altaCatalogos,
+    produtoCatalogos,
     gestor,
   ] = await Promise.all([
     getSettings(),
@@ -31,6 +33,7 @@ export default async function ConfiguracoesPage() {
     listEspecialidades(),
     listCidCodes(),
     listAltaCatalogosConfig(),
+    listProdutoCatalogos(),
     isGestor(),
   ]);
   return (
@@ -44,6 +47,7 @@ export default async function ConfiguracoesPage() {
       cidCodes={cidCodes}
       motivosAlta={altaCatalogos.motivos}
       detalhesAlta={altaCatalogos.detalhes}
+      produtoCatalogos={produtoCatalogos}
       isGestor={gestor}
     />
   );

@@ -52,9 +52,11 @@ import { AtendimentoOpcoes } from "./AtendimentoOpcoes";
 import { EspecialidadesConfig } from "./EspecialidadesConfig";
 import { CidConfig } from "./CidConfig";
 import { AltaCatalogoConfig } from "./AltaCatalogoConfig";
+import { ProdutoCatalogosConfig } from "./ProdutoCatalogosConfig";
 import type { CidCode } from "@/lib/data/cid";
 import type { MotivoAltaCfg, DetalheAltaCfg } from "@/lib/data/alta";
 import type { Especialidade } from "@/lib/data/especialidades";
+import type { ProdutoCatalogos } from "@/lib/data/produto-catalogos";
 
 const BASE_TABS = [
   "Geral",
@@ -71,6 +73,7 @@ const ATENDIMENTO_TAB = "Dados de Atendimento";
 const ESPECIALIDADES_TAB = "Especialidades";
 const CID_TAB = "Catálogo CID";
 const ALTA_CATALOGO_TAB = "Motivos e Detalhes de Alta";
+const PRODUTO_TAB = "Produto";
 
 type Tab =
   | (typeof BASE_TABS)[number]
@@ -78,7 +81,8 @@ type Tab =
   | typeof ATENDIMENTO_TAB
   | typeof ESPECIALIDADES_TAB
   | typeof CID_TAB
-  | typeof ALTA_CATALOGO_TAB;
+  | typeof ALTA_CATALOGO_TAB
+  | typeof PRODUTO_TAB;
 
 export function ConfiguracoesClient({
   settings,
@@ -90,6 +94,7 @@ export function ConfiguracoesClient({
   cidCodes,
   motivosAlta,
   detalhesAlta,
+  produtoCatalogos,
   isGestor,
 }: {
   settings: ClinicSettings;
@@ -101,6 +106,7 @@ export function ConfiguracoesClient({
   cidCodes: CidCode[];
   motivosAlta: MotivoAltaCfg[];
   detalhesAlta: DetalheAltaCfg[];
+  produtoCatalogos: ProdutoCatalogos;
   isGestor: boolean;
 }) {
   // As abas de catálogo (Triagem, Dados de Atendimento, Especialidades,
@@ -113,6 +119,7 @@ export function ConfiguracoesClient({
         ESPECIALIDADES_TAB,
         CID_TAB,
         ALTA_CATALOGO_TAB,
+        PRODUTO_TAB,
       ]
     : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
@@ -602,6 +609,11 @@ export function ConfiguracoesClient({
       {/* Catálogos de alta (motivo + detalhe, gestor-only) numa tela só. */}
       {isGestor && tabAtiva === ALTA_CATALOGO_TAB && (
         <AltaCatalogoConfig motivos={motivosAlta} detalhes={detalhesAlta} />
+      )}
+
+      {/* Catálogos do cadastro de produto (gestor-only), fora do form. */}
+      {isGestor && tabAtiva === PRODUTO_TAB && (
+        <ProdutoCatalogosConfig catalogos={produtoCatalogos} />
       )}
     </>
   );
