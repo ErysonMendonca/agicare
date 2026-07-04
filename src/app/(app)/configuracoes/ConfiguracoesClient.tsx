@@ -55,6 +55,7 @@ import { MotivosAltaConfig } from "./MotivosAltaConfig";
 import { DetalhesAltaConfig } from "./DetalhesAltaConfig";
 import type { CidCode } from "@/lib/data/cid";
 import type { MotivoAlta, DetalheAlta } from "@/lib/data/alta";
+import type { Especialidade } from "@/lib/data/especialidades";
 
 const BASE_TABS = [
   "Geral",
@@ -88,6 +89,7 @@ export function ConfiguracoesClient({
   anamneseTemplates,
   triageTemplates,
   attendanceOptions,
+  especialidades,
   cidCodes,
   motivosAlta,
   detalhesAlta,
@@ -98,6 +100,7 @@ export function ConfiguracoesClient({
   anamneseTemplates: AnamneseTemplate[];
   triageTemplates: TriageTemplate[];
   attendanceOptions: AttendanceOptionsByCategory;
+  especialidades: Especialidade[];
   cidCodes: CidCode[];
   motivosAlta: MotivoAlta[];
   detalhesAlta: DetalheAlta[];
@@ -594,7 +597,7 @@ export function ConfiguracoesClient({
       {/* Catálogo de especialidades dos profissionais — editor próprio
           (gestor-only), fora do form de configurações. */}
       {isGestor && tabAtiva === ESPECIALIDADES_TAB && (
-        <EspecialidadesConfig options={attendanceOptions} />
+        <EspecialidadesConfig especialidades={especialidades} />
       )}
 
       {/* Catálogo global de CIDs (gestor-only), fora do form de configurações. */}
