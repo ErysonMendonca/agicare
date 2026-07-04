@@ -42,6 +42,8 @@ const CATEGORY_LABELS: Record<AttendanceOptionCategory, string> = {
   via_administracao: "Via de Administração",
   principio_ativo: "Princípio Ativo",
   marca: "Marca",
+  localizacao: "Localização",
+  classificacao_xyz: "Classificação XYZ",
 };
 
 /**
@@ -50,7 +52,17 @@ const CATEGORY_LABELS: Record<AttendanceOptionCategory, string> = {
  * (parent_id), então são omitidos aqui para não gerar detalhe órfão sem motivo.
  */
 const EDITABLE_CATEGORIES = ATTENDANCE_OPTION_CATEGORIES.filter(
-  (c) => c !== "motivo_alta" && c !== "detalhe_alta",
+  (c) =>
+    c !== "motivo_alta" &&
+    c !== "detalhe_alta" &&
+    // Catálogos do produto geridos pela tela rica "Produto" (Configurações) —
+    // evita gestão duplicada da mesma categoria em dois lugares.
+    c !== "unidade_medida" &&
+    c !== "via_administracao" &&
+    c !== "principio_ativo" &&
+    c !== "marca" &&
+    c !== "localizacao" &&
+    c !== "classificacao_xyz",
 );
 
 export function AtendimentoOpcoes({

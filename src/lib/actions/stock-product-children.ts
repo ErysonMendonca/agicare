@@ -615,3 +615,176 @@ export async function removeProductXyz(
 ): Promise<ActionResult> {
   return removeChild("product_xyz", id, productId ?? "", "Removeu a classificação XYZ do produto");
 }
+
+// ════════════════════════════════════════════════════════════════════
+// SYNC de multi-seleção (catálogos → tabelas-filhas)
+// ════════════════════════════════════════════════════════════════════
+// O formulário de produto oferece MULTI-SELEÇÃO a partir dos catálogos geridos
+// no admin (listProdutoCatalogos). Ao salvar, chamamos setProdutoSelecoes com os
+// RÓTULOS escolhidos de cada categoria e sincronizamos a tabela-filha
+// correspondente: inserimos os rótulos novos e removemos os que saíram. Escopo
+// por clínica + product_id; RLS de staff é a 2ª camada. Idempotente.
+
+/** Normaliza a lista de rótulos: trim, remove vazios e deduplica. */
+function normalizeLabels(input: unknown): string[] {
+  const arr = Array.isArray(input) ? input : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of arr) {
+    const s = String(raw ?? "").trim();
+    if (!s || s.length > 160) continue;
+    const key = s.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
+const selecoesSchema = z.object({
+  unidades: z.array(z.string()).optional(),
+  vias: z.array(z.string()).optional(),
+  principios: z.array(z.string()).optional(),
+  marcas: z.array(z.string()).optional(),
+  localizacoes: z.array(z.string()).optional(),
+});
+
+export type ProdutoSelecoes = z.infer<typeof selecoesSchema>;
+
+/**
+ * Sincroniza UMA tabela-filha de rótulos com a seleção desejada. Insere rótulos
+ * novos (case-insensitive) e remove os que saíram, sempre no escopo
+ * clínica+produto. Não confia no client: só mexe nas linhas do produto/clínica.
+ */
+async function syncLabelChild(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  table: Table,
+  labelColumn: string,
+  clinicId: string,
+  productId: string,
+  desired: string[],
+): Promise<string | null> {
+  const { data: existentes, error: selErr } = await supabase
+    .from(table)
+    .select(`id, ${labelColumn}`)
+    .eq("product_id", productId)
+    .eq("clinic_id", clinicId);
+  if (selErr) {
+    console.error(`[${table}] select (sync) falhou:`, selErr);
+    return "Não foi possível carregar as seleções atuais.";
+  }
+
+  // Coluna dinâmica no select confunde a inferência do supabase-js → cast via unknown.
+  const rows = (existentes ?? []) as unknown as Array<Record<string, unknown>>;
+  const existentesByKey = new Map<string, string>(); // labelLower → id
+  for (const r of rows) {
+    const lbl = String(r[labelColumn] ?? "").trim();
+    if (lbl) existentesByKey.set(lbl.toLowerCase(), r.id as string);
+  }
+
+  const desiredKeys = new Set(desired.map((l) => l.toLowerCase()));
+
+  // Inserir os que não existem ainda.
+  const toInsert = desired.filter((l) => !existentesByKey.has(l.toLowerCase()));
+  if (toInsert.length > 0) {
+    const { error: insErr } = await supabase.from(table).insert(
+      toInsert.map((label) => ({
+        clinic_id: clinicId,
+        product_id: productId,
+        active: true,
+        [labelColumn]: label,
+      })),
+    );
+    if (insErr) {
+      console.error(`[${table}] insert (sync) falhou:`, insErr);
+      return "Não foi possível salvar as seleções.";
+    }
+  }
+
+  // Remover os que saíram da seleção.
+  const toRemoveIds: string[] = [];
+  for (const [key, id] of existentesByKey) {
+    if (!desiredKeys.has(key)) toRemoveIds.push(id);
+  }
+  if (toRemoveIds.length > 0) {
+    const { error: delErr } = await supabase
+      .from(table)
+      .delete()
+      .in("id", toRemoveIds)
+      .eq("clinic_id", clinicId)
+      .eq("product_id", productId);
+    if (delErr) {
+      console.error(`[${table}] delete (sync) falhou:`, delErr);
+      return "Não foi possível remover seleções.";
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Sincroniza TODAS as multi-seleções de catálogo do produto de uma vez (chamado
+ * pelo formulário ao salvar). Recebe os RÓTULOS escolhidos por categoria e faz o
+ * sync de cada tabela-filha (product_units / admin_routes / active_ingredients /
+ * brands / requisition_locations). Categorias omitidas NÃO são tocadas; para
+ * ZERAR uma categoria, envie um array vazio explicitamente. Guard (staff da
+ * clínica, mesmo nível do produto-pai) + Zod. Em demo, simula sucesso.
+ */
+export async function setProdutoSelecoes(
+  productId: string,
+  selecoes: ProdutoSelecoes,
+): Promise<ActionResult> {
+  const g = await gate();
+  if ("error" in g) return g;
+  if (!UUID.test(productId)) return { error: "Produto inválido." };
+
+  const parsed = selecoesSchema.safeParse(selecoes);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+
+  const supabase = await createClient();
+  const erro = await validarProduto(supabase, productId, g.clinicId);
+  if (erro) return { error: erro };
+
+  const d = parsed.data;
+  // (table, coluna-rótulo, seleção) — só sincroniza as categorias enviadas.
+  const jobs: Array<[Table, string, string[]]> = [];
+  if (d.unidades) jobs.push(["product_units", "unit_label", normalizeLabels(d.unidades)]);
+  if (d.vias) jobs.push(["product_admin_routes", "route_label", normalizeLabels(d.vias)]);
+  if (d.principios)
+    jobs.push([
+      "product_active_ingredients",
+      "ingredient_label",
+      normalizeLabels(d.principios),
+    ]);
+  if (d.marcas) jobs.push(["product_brands", "brand_label", normalizeLabels(d.marcas)]);
+  if (d.localizacoes)
+    jobs.push([
+      "product_requisition_locations",
+      "location_label",
+      normalizeLabels(d.localizacoes),
+    ]);
+
+  for (const [table, col, desired] of jobs) {
+    const err = await syncLabelChild(
+      supabase,
+      table,
+      col,
+      g.clinicId,
+      productId,
+      desired,
+    );
+    if (err) return { error: err };
+  }
+
+  await logAction({
+    action: "update",
+    module: "estoque",
+    summary: "Atualizou as seleções de catálogo do produto",
+    entity: "stock_product",
+    entityId: productId,
+  });
+  revalidateProduto(productId);
+  return { ok: true };
+}

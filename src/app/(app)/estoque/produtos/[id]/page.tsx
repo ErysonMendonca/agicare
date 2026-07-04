@@ -4,6 +4,7 @@ import { requireView } from "@/lib/permissions";
 import { isGestor } from "@/lib/auth";
 import { getActiveClinicId, getMyClinics } from "@/lib/tenant";
 import { listAttendanceOptions } from "@/lib/data/attendance-options";
+import { listProdutoCatalogos } from "@/lib/data/produto-catalogos";
 import { getProdutoCompleto, type ProdutoCompleto } from "@/lib/data/stock";
 import { getProdutoChildren } from "@/lib/data/stock-product-children";
 import { ProdutoEditor } from "./ProdutoEditor";
@@ -75,9 +76,10 @@ export default async function ProdutoEditorPage({
   const { id } = await params;
   const novo = id === "novo";
 
-  const [gestor, options, clinicId, clinicas] = await Promise.all([
+  const [gestor, options, catalogos, clinicId, clinicas] = await Promise.all([
     isGestor(),
     listAttendanceOptions(),
+    listProdutoCatalogos(),
     getActiveClinicId(),
     getMyClinics(),
   ]);
@@ -112,6 +114,7 @@ export default async function ProdutoEditorPage({
         produto={produto}
         childrenData={children}
         options={options}
+        catalogos={catalogos}
         gestor={gestor}
       />
     </>
