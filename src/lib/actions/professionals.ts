@@ -102,18 +102,9 @@ const baseSchema = z.object({
 });
 
 const createSchema = baseSchema.extend({
-  // Nome de acesso (login). Sempre minúsculo; e-mail sintético interno é
-  // derivado como `${username}@agicare.local` para o Supabase Auth.
-  username: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(
-      /^[a-z0-9._-]{3,40}$/,
-      "Usuário inválido (3-40 caracteres: letras minúsculas, números, . _ -).",
-    ),
-  // Senha inicial da conta (só na criação; conta nasce utilizável).
-  password: z.string().min(6, "A senha deve ter ao menos 6 caracteres."),
+  // Credenciais (usuário/senha) NÃO são mais coletadas no cadastro — a conta
+  // nasce sem senha usável e recebe usuário/senha depois em
+  // "Perfis de Acesso › Usuários".
   // Status inicial do profissional (toggle disponível também na criação).
   active: z.enum(["true", "false"]).optional(),
 });
@@ -227,37 +218,17 @@ async function replaceCredentials(
 }
 
 /**
- * Procura um usuário existente pelo nome de acesso (username) na tabela
- * `profiles` (citext unique). Service-role only. Retorna o id (profile.id ==
- * auth.users.id) ou null.
- */
-async function findUserIdByUsername(
-  svc: SupabaseClient,
-  username: string,
-): Promise<string | null> {
-  const { data } = await svc
-    .from("profiles")
-    .select("id")
-    .eq("username", username)
-    .maybeSingle();
-  return (data?.id as string | undefined) ?? null;
-}
-
-/**
- * Cria/associa um profissional à CLÍNICA ATIVA do admin — fluxo de convite híbrido.
+ * Cria um profissional NOVO na CLÍNICA ATIVA do admin (sem credenciais).
  *
  * Autorização e tenant: tudo passa por `withTenantService`, que valida que o
  * logado é admin ATIVO na clínica ativa e entrega `{ svc, clinicId }`. O
  * `clinic_id` SEMPRE vem do servidor (clínica ativa), NUNCA do formulário.
  *
- * Fluxo:
- *  • Usuário JÁ existe (e-mail encontrado em auth.users) → NÃO cria conta;
- *    apenas associa: insere clinic_members(clinic_id ativa, user_id, role) e
- *    garante a linha em professionals (com clinic_id). (E-mail de notificação
- *    fica como follow-up — ver TODO.)
- *  • Usuário NÃO existe → cria a conta Auth (trigger handle_new_user gera o
- *    profile), associa via clinic_members e cria professionals com clinic_id.
- *    Em falha após createUser → rollback deleteUser (sem órfãos).
+ * Fluxo: cria SEMPRE uma conta Auth nova (sem senha e com e-mail sintético
+ * único), associa via clinic_members e cria a linha em professionals. O
+ * usuário (username) e a senha são definidos DEPOIS em
+ * "Perfis de Acesso › Usuários". Em falha após createUser → rollback deleteUser
+ * (sem órfãos).
  *
  * Assinatura `(prev, formData)` p/ uso com useActionState (padrão do projeto).
  */
@@ -270,8 +241,9 @@ export async function createProfessional(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
   const d = parsed.data;
-  // E-mail sintético interno para o Supabase Auth (o login real é por username).
-  const syntheticEmail = `${d.username}@agicare.local`;
+  // E-mail sintético interno ÚNICO para o Supabase Auth. A conta nasce SEM
+  // username/senha usável — credenciais são definidas em Perfis de Acesso.
+  const syntheticEmail = `${crypto.randomUUID()}@agicare.local`;
   // Status inicial (default ativo). Espelha o toggle de status da edição: só
   // afeta professionals.active; a membership na clínica permanece ativa.
   const ativo = d.active ? d.active === "true" : true;
@@ -281,117 +253,28 @@ export async function createProfessional(
 
   try {
     return await withTenantService(async ({ svc, clinicId }) => {
-      // 1) Já existe conta com este username? → associação direta (sem criar conta).
-      const existingUserId = await findUserIdByUsername(svc, d.username);
-
-      if (existingUserId) {
-        // 1a) Garante a membership na clínica ativa (papel da tela).
-        const { error: memberError } = await svc
-          .from("clinic_members")
-          .upsert(
-            {
-              clinic_id: clinicId,
-              user_id: existingUserId,
-              role: d.role,
-              active: true,
-            },
-            { onConflict: "clinic_id,user_id" },
-          );
-        if (memberError) {
-          return { error: "Não foi possível associar o profissional à clínica." };
-        }
-
-        // 1b) Garante a linha clínica DESTA clínica (não recria se já existir).
-        const { data: existingProf } = await svc
-          .from("professionals")
-          .select("id")
-          .eq("profile_id", existingUserId)
-          .eq("clinic_id", clinicId)
-          .maybeSingle();
-
-        let professionalId = existingProf?.id as string | undefined;
-        if (!existingProf) {
-          const { data: novo, error: profError } = await svc
-            .from("professionals")
-            .insert({
-              profile_id: existingUserId,
-              clinic_id: clinicId,
-              specialty: d.specialty || null,
-              active: ativo,
-              notes: d.notes || null,
-              ...professionalPayload(d),
-              ...addressPayload(d),
-            })
-            .select("id")
-            .single();
-          if (profError || !novo) {
-            return { error: "Não foi possível concluir o cadastro do profissional." };
-          }
-          professionalId = novo.id as string;
-        } else {
-          // Já vinculado a esta clínica → atualiza os dados do cadastro completo.
-          const { error: upErr } = await svc
-            .from("professionals")
-            .update({
-              specialty: d.specialty || null,
-              active: ativo,
-              notes: d.notes || null,
-              ...professionalPayload(d),
-              ...addressPayload(d),
-            })
-            .eq("id", existingProf.id)
-            .eq("clinic_id", clinicId);
-          if (upErr) {
-            return { error: "Não foi possível atualizar o profissional." };
-          }
-        }
-
-        if (professionalId) {
-          const credErr = await replaceCredentials(
-            svc,
-            clinicId,
-            professionalId,
-            d.credentials,
-          );
-          if (credErr) {
-            revalidatePath("/profissionais");
-            return { error: "Não foi possível salvar o credenciamento de convênio." };
-          }
-        }
-
-        // TODO(multitenant): notificar o usuário por e-mail que foi adicionado
-        //   a uma nova clínica (convite/aviso). Opcional — fora do escopo atual.
-        revalidatePath("/profissionais");
-        return { ok: true };
-      }
-
-      // 2) Não existe → cria a conta Auth já com senha (conta utilizável).
-      //    email_confirm=true evita disparo de e-mail (login é por username).
+      // Cria a conta Auth SEM senha (conta sem senha usável até o admin definir
+      // em Perfis de Acesso). email_confirm=true evita disparo de e-mail.
       const { data: created, error: authError } = await svc.auth.admin.createUser({
         email: syntheticEmail,
-        password: d.password,
         email_confirm: true,
         user_metadata: { full_name: d.full_name, role: d.role },
       });
 
       if (authError || !created?.user) {
-        const msg = authError?.message ?? "";
-        if (/already|registered|exists/i.test(msg)) {
-          return { error: "Já existe um usuário com este nome de acesso." };
-        }
         return { error: "Não foi possível criar a conta do profissional." };
       }
 
       const userId = created.user.id;
 
-      // 2a) Completa o profile criado pelo trigger (profile é GLOBAL → sem clinic_id).
+      // Completa o profile criado pelo trigger (profile é GLOBAL → sem clinic_id).
+      // O username fica NULL — definido depois em Perfis de Acesso.
       const { error: profileError } = await svc
         .from("profiles")
         .update({
           full_name: d.full_name,
           role: d.role,
           phone: d.phone || null,
-          username: d.username,
         })
         .eq("id", userId);
 
@@ -400,7 +283,7 @@ export async function createProfessional(
         return { error: "Não foi possível salvar os dados do profissional." };
       }
 
-      // 2b) Membership na clínica ativa (papel POR clínica).
+      // Membership na clínica ativa (papel POR clínica).
       const { error: memberError } = await svc.from("clinic_members").insert({
         clinic_id: clinicId,
         user_id: userId,
@@ -412,7 +295,7 @@ export async function createProfessional(
         return { error: "Não foi possível associar o profissional à clínica." };
       }
 
-      // 2c) Linha clínica DESTA clínica.
+      // Linha clínica DESTA clínica.
       const { data: novoProf, error: profError } = await svc
         .from("professionals")
         .insert({
@@ -433,7 +316,7 @@ export async function createProfessional(
         return { error: "Não foi possível concluir o cadastro do profissional." };
       }
 
-      // 2d) Credenciamento de convênio (0070). Falha aqui NÃO faz rollback da
+      // Credenciamento de convênio (0070). Falha aqui NÃO faz rollback da
       //     conta (profissional já criado) — só reporta para reenvio.
       const credErr = await replaceCredentials(
         svc,

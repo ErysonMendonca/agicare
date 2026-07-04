@@ -20,6 +20,8 @@ export type Cargo = {
 export type Usuario = {
   userId: string;
   nome: string;
+  /** Nome de acesso (login). null = ainda não definido em Perfis de Acesso. */
+  username: string | null;
   roleBase: string;
   /** Cargo personalizado atribuído (null = usa o cargo-base puro). */
   cargoId: string | null;
