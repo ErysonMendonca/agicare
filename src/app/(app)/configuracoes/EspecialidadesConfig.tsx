@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Check, X, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
@@ -42,6 +42,32 @@ export function EspecialidadesConfig({
 
   const lista = options[CATEGORIA] ?? [];
 
+  // Optimistic UI (React 19): a lista reflete a mudança NA HORA; quando a action
+  // termina e o router.refresh() traz o dado do servidor, o estado se reconcilia.
+  // Se a action falhar, o React reverte o otimista sozinho ao fim da transição.
+  type OptAction =
+    | { type: "add"; label: string }
+    | { type: "remove"; id: string }
+    | { type: "update"; id: string; label: string };
+  const [listaOtimista, aplicarOtimista] = useOptimistic(
+    lista,
+    (estado, acao: OptAction) => {
+      switch (acao.type) {
+        case "add":
+          return [
+            ...estado,
+            { id: `otimista-${acao.label}`, label: acao.label, value: acao.label },
+          ];
+        case "remove":
+          return estado.filter((o) => o.id !== acao.id);
+        case "update":
+          return estado.map((o) =>
+            o.id === acao.id ? { ...o, label: acao.label } : o,
+          );
+      }
+    },
+  );
+
   function refresh() {
     router.refresh();
   }
@@ -52,14 +78,16 @@ export function EspecialidadesConfig({
       toast.error("Informe o nome da especialidade.");
       return;
     }
+    setNovoLabel("");
     startTransition(async () => {
+      aplicarOtimista({ type: "add", label });
       const res = await addAttendanceOption({ category: CATEGORIA, label, value: label });
       if (res.error) {
         toast.error(res.error);
+        setNovoLabel(label);
         return;
       }
       toast.success("Especialidade adicionada.");
-      setNovoLabel("");
       refresh();
     });
   }
@@ -76,14 +104,16 @@ export function EspecialidadesConfig({
       toast.error("O nome da especialidade é obrigatório.");
       return;
     }
+    const id = editId;
+    setEditId(null);
     startTransition(async () => {
-      const res = await updateAttendanceOption(editId, { label, value: label });
+      aplicarOtimista({ type: "update", id, label });
+      const res = await updateAttendanceOption(id, { label, value: label });
       if (res.error) {
         toast.error(res.error);
         return;
       }
       toast.success("Especialidade atualizada.");
-      setEditId(null);
       refresh();
     });
   }
@@ -91,6 +121,7 @@ export function EspecialidadesConfig({
   async function remover(id: string, label: string) {
     if (!(await confirm({ message: `Remover a especialidade "${label}"? Esta ação não pode ser desfeita.`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
+      aplicarOtimista({ type: "remove", id });
       const res = await removeAttendanceOption(id);
       if (res.error) {
         toast.error(res.error);
@@ -118,12 +149,12 @@ export function EspecialidadesConfig({
 
         {/* Lista das especialidades */}
         <div className="space-y-2">
-          {lista.length === 0 ? (
+          {listaOtimista.length === 0 ? (
             <p className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
               Nenhuma especialidade cadastrada.
             </p>
           ) : (
-            lista.map((opt) => {
+            listaOtimista.map((opt) => {
               const emEdicao = editId === opt.id;
               return (
                 <div
