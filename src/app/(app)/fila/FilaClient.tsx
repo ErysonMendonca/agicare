@@ -120,6 +120,7 @@ export function FilaClient({
   agendados = [],
   stages = DEFAULT_STAGES,
   attendanceOptions,
+  profissionais = [],
   triageTemplates = [],
   kpis,
   dataSelecionada,
@@ -132,6 +133,13 @@ export function FilaClient({
   agendados?: FilaItem[];
   stages?: FlowStage[];
   attendanceOptions?: AttendanceOptionsByCategory;
+  /** Profissionais reais vinculados às especialidades (de fila/page.tsx). */
+  profissionais?: {
+    id: string;
+    nome: string;
+    especialidade: string;
+    ativo: boolean;
+  }[];
   /** Modelos de triagem por especialidade (gestor pode customizar). */
   triageTemplates?: TriageTemplate[];
   kpis?: {
@@ -588,6 +596,7 @@ export function FilaClient({
             onClose={fechar}
             onVoltar={() => setModal("acoes")}
             options={attendanceOptions}
+            profissionais={profissionais}
           />
           <DesistenciaModal
             item={selected}

@@ -92,6 +92,7 @@ export function DadosAtendimentoModal({
   onClose,
   onVoltar,
   options,
+  profissionais = [],
 }: {
   item: FilaItem;
   open: boolean;
@@ -99,6 +100,13 @@ export function DadosAtendimentoModal({
   onVoltar: () => void;
   /** Opções parametrizáveis (de fila/page.tsx → FilaClient). Fallback se vazio. */
   options?: AttendanceOptionsByCategory;
+  /** Profissionais reais vinculados às especialidades (de fila/page.tsx). */
+  profissionais?: {
+    id: string;
+    nome: string;
+    especialidade: string;
+    ativo: boolean;
+  }[];
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -160,9 +168,51 @@ export function DadosAtendimentoModal({
   const oPlano = resolveOptions(options, "plano");
   const oParent = resolveOptions(options, "parentesco");
 
-  // Especialidade e Profissional vêm do AGENDAMENTO (injeta se fora da lista).
+  // Especialidade vem do AGENDAMENTO (injeta se fora da lista); é CONTROLADA
+  // para que o Profissional possa reagir à especialidade escolhida.
   const espec = comAgendamento(oEspec, item.especialidade);
   const prof = comAgendamento(oMedico, item.medico);
+  const [especSel, setEspecSel] = useState(espec.value);
+
+  /**
+   * Opções de Profissional derivadas dos PROFISSIONAIS REAIS vinculados à
+   * especialidade selecionada. Preserva o profissional do AGENDAMENTO (injeta
+   * como 1ª opção se não estiver na lista filtrada) para não perder o vínculo.
+   */
+  const profOptionsFor = useCallback(
+    (espValue: string): AttendanceOption[] => {
+      const filtrados = profissionais
+        .filter((p) => norm(p.especialidade) === norm(espValue))
+        .map((p) => ({ id: p.id, label: p.nome, value: p.nome }));
+      const ag = (item.medico ?? "").trim();
+      if (
+        ag &&
+        norm(ag) !== "" &&
+        !filtrados.some((o) => norm(o.value) === norm(ag))
+      ) {
+        return [{ id: `ag-${ag}`, label: ag, value: ag }, ...filtrados];
+      }
+      return filtrados;
+    },
+    [profissionais, item.medico],
+  );
+
+  const profOptions = profOptionsFor(especSel);
+  const [profSel, setProfSel] = useState(prof.value);
+
+  /**
+   * Troca a especialidade e, se o profissional atual não pertencer mais à nova
+   * especialidade, ajusta para a 1ª opção disponível (ou "" se nenhuma). Feito
+   * no handler (não em useEffect) para evitar renders em cascata.
+   */
+  function trocarEspecialidade(nova: string) {
+    setEspecSel(nova);
+    const opts = profOptionsFor(nova);
+    if (!opts.some((o) => o.value === profSel)) {
+      setProfSel(opts[0]?.value ?? "");
+    }
+    markDirty();
+  }
 
   /** Snapshot completo do formulário (campos + estados controlados). */
   const snapshot = useCallback((): DraftShape => {
@@ -468,7 +518,8 @@ export function DadosAtendimentoModal({
               <Select
                 name="especialidade"
                 label="Especialidade"
-                defaultValue={espec.value}
+                value={especSel}
+                onChange={(e) => trocarEspecialidade(e.target.value)}
               >
                 {espec.options.map((o) => (
                   <option key={o.id} value={o.value}>
@@ -479,13 +530,23 @@ export function DadosAtendimentoModal({
               <Select
                 name="medico"
                 label="Profissional"
-                defaultValue={prof.value}
+                value={profSel}
+                onChange={(e) => {
+                  setProfSel(e.target.value);
+                  markDirty();
+                }}
               >
-                {prof.options.map((o) => (
-                  <option key={o.id} value={o.value}>
-                    {o.label}
+                {profOptions.length === 0 ? (
+                  <option value="" disabled>
+                    Nenhum profissional vinculado a esta especialidade
                   </option>
-                ))}
+                ) : (
+                  profOptions.map((o) => (
+                    <option key={o.id} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))
+                )}
               </Select>
               <Select
                 name="encaminhamento"

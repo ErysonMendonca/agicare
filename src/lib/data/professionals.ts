@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { getActiveClinicId } from "@/lib/tenant";
 
 /** Credenciamento de convênio (TISS 3.0) para o formulário (0070). */
 export type CredencialEdit = {
@@ -426,4 +427,59 @@ export async function listProfessionals(): Promise<Profissional[]> {
       },
     };
   });
+}
+
+/**
+ * Vínculo leve de profissional para filtros no modal de atendimento.
+ * Diferente de {@link Profissional}, NÃO calcula indicadores de agenda —
+ * só o essencial p/ filtrar a lista "Profissional" por especialidade.
+ */
+export type ProfissionalVinculo = {
+  id: string;
+  nome: string;
+  especialidade: string;
+  ativo: boolean;
+};
+
+/** Mock coerente com o catálogo de especialidades (modo demo). */
+const MOCK_VINCULO: ProfissionalVinculo[] = [
+  { id: "1", nome: "Dr. João Pedro Oliveira", especialidade: "2 - CARDIOLOGIA", ativo: true },
+  { id: "2", nome: "Dra. Ana Paula Costa", especialidade: "3 - ORTOPEDIA", ativo: true },
+  { id: "3", nome: "Dr. Carlos Eduardo Mendes", especialidade: "4 - DERMATOLOGIA", ativo: true },
+];
+
+/**
+ * Profissionais ATIVOS da clínica ativa, com nome e especialidade, ordenados
+ * por nome. Loader leve (sem agenda) para alimentar o filtro do modal de
+ * atendimento. RLS + filtro explícito por `clinic_id`.
+ */
+export async function listProfissionaisVinculo(): Promise<ProfissionalVinculo[]> {
+  if (isDemoMode()) return MOCK_VINCULO;
+
+  const clinicId = await getActiveClinicId();
+  if (!clinicId) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("professionals")
+    .select("id, specialty, active, profiles(full_name)")
+    .eq("clinic_id", clinicId)
+    .eq("active", true);
+  if (error || !data) return [];
+
+  // O embed do PostgREST pode vir como objeto ou array; normalizamos.
+  const one = <T,>(v: unknown): T | null =>
+    Array.isArray(v) ? ((v[0] ?? null) as T | null) : ((v as T) ?? null);
+
+  return data
+    .map((r) => {
+      const perfil = one<{ full_name: string | null }>(r.profiles);
+      return {
+        id: r.id as string,
+        nome: perfil?.full_name ?? "",
+        especialidade: (r.specialty as string | null) ?? "",
+        ativo: !!r.active,
+      };
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
