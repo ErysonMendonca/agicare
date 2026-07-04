@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 import { enviarNotificacao } from "@/lib/integrations/notifications";
+import { logAction } from "@/lib/system-log";
 
 /** Estado padrão das ações da agenda (estende o ActionState com o protocolo). */
 export type AgendaActionState =
@@ -126,6 +127,14 @@ export async function createAppointment(
 
   if (error) return { error: error.message };
 
+  await logAction({
+    action: "create",
+    module: "agenda",
+    summary: `Criou agendamento (protocolo ${protocol})`,
+    entity: "appointment",
+    entityId: d.patient_id,
+    metadata: { protocol },
+  });
   revalidateAgenda();
   return { ok: true, protocol };
 }
@@ -157,10 +166,20 @@ export async function cancelAppointment(
 ): Promise<AgendaActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  return updateAppointment(parsed.data, {
+  const res = await updateAppointment(parsed.data, {
     status: "cancelado",
     reason: motivo?.trim() || null,
   });
+  if (res?.ok) {
+    await logAction({
+      action: "update",
+      module: "agenda",
+      summary: "Cancelou um agendamento",
+      entity: "appointment",
+      entityId: parsed.data,
+    });
+  }
+  return res;
 }
 
 const remarcarSchema = z.object({
@@ -183,11 +202,21 @@ export async function remarcarAppointment(
   if (horarioNoPassado(d.date, d.time)) {
     return { error: "Não é possível remarcar para um horário que já passou." };
   }
-  return updateAppointment(d.id, {
+  const res = await updateAppointment(d.id, {
     starts_at: startsAt,
     ends_at: addMinutes(startsAt, d.slot_minutes),
     status: "agendado",
   });
+  if (res?.ok) {
+    await logAction({
+      action: "update",
+      module: "agenda",
+      summary: "Remarcou um agendamento",
+      entity: "appointment",
+      entityId: d.id,
+    });
+  }
+  return res;
 }
 
 const trocarSchema = z.object({
@@ -208,7 +237,17 @@ export async function trocarProfissional(
   // Sincroniza a especialidade do agendamento com a do profissional atribuído
   // (relevante p/ agendamentos criados por especialidade, antes "A definir").
   if (parsed.data.specialty?.trim()) patch.specialty = parsed.data.specialty.trim();
-  return updateAppointment(parsed.data.id, patch);
+  const res = await updateAppointment(parsed.data.id, patch);
+  if (res?.ok) {
+    await logAction({
+      action: "update",
+      module: "agenda",
+      summary: "Trocou o profissional de um agendamento",
+      entity: "appointment",
+      entityId: parsed.data.id,
+    });
+  }
+  return res;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -316,6 +355,61 @@ async function escalaConflitante(
 /** Mensagem padrão de conflito de escala (mesma especialidade, período sobreposto). */
 function msgConflitoEscala(c: { code: string; start: string; end: string }): string {
   return `Já existe uma escala ativa desta especialidade no período (${c.code}, de ${dataBR(c.start)} a ${dataBR(c.end)}). Ajuste o período ou desative a escala existente.`;
+}
+
+/**
+ * Procura um agendamento de paciente NÃO cancelado que dependa desta escala
+ * (mesma especialidade + horário dentro da vigência e nos dias da semana da
+ * escala — o vínculo appointment↔escala é lógico, não por schedule_id). Usado
+ * para bloquear a alteração da escala quando já há paciente marcado. Devolve o
+ * primeiro (nome do paciente + data/hora) ou null. RLS escopa por clínica.
+ */
+async function agendamentoDependenteDaEscala(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  escala: {
+    specialty: string | null;
+    start_date: unknown;
+    end_date: unknown;
+    weekdays: unknown;
+  },
+): Promise<{ paciente: string; quando: string } | null> {
+  if (!escala.specialty) return null;
+
+  const s = escala.start_date ? String(escala.start_date).slice(0, 10) : "";
+  const e = escala.end_date ? String(escala.end_date).slice(0, 10) : "";
+  const dias: number[] = Array.isArray(escala.weekdays)
+    ? (escala.weekdays as number[])
+    : [];
+
+  let q = supabase
+    .from("appointments")
+    .select("starts_at, status, patients(full_name)")
+    .eq("specialty", escala.specialty)
+    .neq("status", "cancelado")
+    .order("starts_at", { ascending: true });
+  // Vigência: limites nulos = sem fronteira (escala aberta cobre tudo).
+  if (s) q = q.gte("starts_at", `${s}T00:00:00`);
+  if (e) q = q.lte("starts_at", `${e}T23:59:59`);
+
+  const { data } = await q;
+  for (const a of data ?? []) {
+    const iso = String((a as { starts_at?: unknown }).starts_at ?? "");
+    if (!iso) continue;
+    // Filtra pelos dias da semana da escala (0=Dom..6=Sáb). Vazio = todos os dias.
+    if (dias.length > 0) {
+      const wd = new Date(iso).getDay();
+      if (!dias.includes(wd)) continue;
+    }
+    const prof = (a as { patients?: { full_name?: string } | { full_name?: string }[] })
+      .patients;
+    const nome = Array.isArray(prof) ? prof[0]?.full_name : prof?.full_name;
+    const dt = new Date(iso);
+    const quando = Number.isNaN(dt.getTime())
+      ? iso
+      : `${dt.toLocaleDateString("pt-BR")} ${dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+    return { paciente: nome ?? "paciente", quando };
+  }
+  return null;
 }
 
 /**
@@ -443,6 +537,13 @@ export async function createSchedule(
 
   if (error) return { error: error.message };
 
+  await logAction({
+    action: "create",
+    module: "agenda",
+    summary: `Criou a escala ${code} (${d.specialty})`,
+    entity: "schedule",
+    metadata: { code },
+  });
   revalidateAgenda();
   return { ok: true, protocol: code };
 }
@@ -476,6 +577,23 @@ export async function updateSchedule(
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
+
+  // Bloqueio: não permite alterar a escala se já houver paciente agendado que
+  // depende dela (verifica pelo ESCOPO ATUAL da escala, antes das mudanças).
+  const { data: atual } = await supabase
+    .from("schedules")
+    .select("specialty, start_date, end_date, weekdays")
+    .eq("id", idParsed.data)
+    .eq("clinic_id", clinicId)
+    .maybeSingle();
+  if (atual) {
+    const agendado = await agendamentoDependenteDaEscala(supabase, atual);
+    if (agendado) {
+      return {
+        error: `Não é possível alterar esta escala: há paciente agendado — ${agendado.paciente} em ${agendado.quando}. Cancele ou remarque o agendamento antes de alterar a escala.`,
+      };
+    }
+  }
 
   // Escala única por especialidade (na edição, ignora a própria escala).
   if (d.specialty) {
@@ -516,6 +634,13 @@ export async function updateSchedule(
 
   if (error) return { error: error.message };
 
+  await logAction({
+    action: "update",
+    module: "agenda",
+    summary: `Editou a escala (${d.specialty})`,
+    entity: "schedule",
+    entityId: idParsed.data,
+  });
   revalidateAgenda();
   return { ok: true };
 }
@@ -589,6 +714,13 @@ export async function createBlock(
 
   if (error) return { error: error.message };
 
+  await logAction({
+    action: "create",
+    module: "agenda",
+    summary: "Criou um bloqueio de horário",
+    entity: "schedule_block",
+    entityId: (data?.id as string) ?? undefined,
+  });
   revalidateAgenda();
   return { ok: true, protocol: (data?.id as string) ?? undefined };
 }
@@ -608,6 +740,13 @@ export async function removeBlock(id: string): Promise<AgendaActionState> {
 
   if (error) return { error: error.message };
 
+  await logAction({
+    action: "delete",
+    module: "agenda",
+    summary: "Removeu um bloqueio de horário",
+    entity: "schedule_block",
+    entityId: parsed.data,
+  });
   revalidateAgenda();
   return { ok: true };
 }
@@ -701,6 +840,13 @@ export async function enviarComprovante(
           : "Notificações por SMS estão desativadas nas configurações.",
     };
   }
+  await logAction({
+    action: "other",
+    module: "agenda",
+    summary: `Enviou comprovante de agendamento por ${d.channel}`,
+    entity: "appointment",
+    metadata: { protocol: d.protocol, channel: d.channel },
+  });
   return { ok: true };
 }
 
