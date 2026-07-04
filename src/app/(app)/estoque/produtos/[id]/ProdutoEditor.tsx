@@ -88,15 +88,14 @@ export function ProdutoEditor({
   useEffect(() => {
     if (state?.ok) {
       toast.success(novo ? "Produto cadastrado!" : "Produto atualizado!");
-      if (intentRef.current === "fechar") {
+      // Cadastro novo OU "Salvar e Fechar" → volta à lista do estoque (o produto
+      // recém-criado aparece lá; para editar as seleções — unidade/via/marca/etc.
+      // — abrir o produto na lista, onde as abas já ficam habilitadas).
+      if (novo || intentRef.current === "fechar") {
         router.push("/estoque");
         return;
       }
-      const newId = (state as { id?: string }).id;
-      if (novo && newId) {
-        router.push(`/estoque/produtos/${newId}`);
-        return;
-      }
+      // Edição de produto existente com "Salvar" (fica): reflete os dados salvos.
       router.refresh();
     } else if (state?.error) {
       toast.error(state.error);
