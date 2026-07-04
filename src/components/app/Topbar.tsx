@@ -44,7 +44,11 @@ export function Topbar({
   /** Permissões do papel logado: a busca só sugere módulos visíveis ao usuário. */
   permissions: PermissionMap;
   /** Contadores reais (fila aguardando + estoque crítico) → contagem de notificações. */
-  counters?: { filaAguardando: number; estoqueCriticos: number };
+  counters?: {
+    filaAguardando: number;
+    aguardandoPagamento: number;
+    estoqueCriticos: number;
+  };
   /** Notificações reais já filtradas por permissão (estoque/fila/faturas). */
   notificacoes?: Notificacao[];
 }) {
@@ -119,7 +123,9 @@ export function Topbar({
   // Notificações = pendências operacionais reais (fila aguardando + estoque crítico).
   // Ponto de integração: trocar por uma fonte de notificações dedicada quando existir.
   const notifCount =
-    (counters?.filaAguardando ?? 0) + (counters?.estoqueCriticos ?? 0);
+    (counters?.filaAguardando ?? 0) +
+    (counters?.aguardandoPagamento ?? 0) +
+    (counters?.estoqueCriticos ?? 0);
 
   const showResults = open && query.trim().length > 0;
 
