@@ -5,7 +5,7 @@ import { listEspecialidades } from "@/lib/data/especialidades";
 import { listAnamneseTemplates } from "@/lib/data/anamnese-templates";
 import { listTriageTemplates } from "@/lib/data/triage-templates";
 import { listCidCodes } from "@/lib/data/cid";
-import { listAltaCatalogos } from "@/lib/data/alta";
+import { listAltaCatalogosConfig } from "@/lib/data/alta";
 import { requireView } from "@/lib/permissions";
 import { isGestor } from "@/lib/auth";
 import { ConfiguracoesClient } from "./ConfiguracoesClient";
@@ -30,7 +30,7 @@ export default async function ConfiguracoesPage() {
     listAttendanceOptions(),
     listEspecialidades(),
     listCidCodes(),
-    listAltaCatalogos(),
+    listAltaCatalogosConfig(),
     isGestor(),
   ]);
   return (
