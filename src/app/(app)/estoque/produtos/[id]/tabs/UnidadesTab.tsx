@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { useConfirm } from "@/lib/store/confirm";
 import { Modal } from "@/components/ui/Modal";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 import {
@@ -48,6 +49,7 @@ export function UnidadesTab({
   options,
 }: ChildTabProps<ProductUnit> & { options?: AttendanceOptionsByCategory }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -104,8 +106,8 @@ export function UnidadesTab({
     });
   }
 
-  function remover(u: ProductUnit) {
-    if (!window.confirm(`Remover a unidade "${u.unitLabel ?? ""}"?`)) return;
+  async function remover(u: ProductUnit) {
+    if (!(await confirm({ message: `Remover a unidade "${u.unitLabel ?? ""}"?`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeProductUnit(u.id);
       if (res?.error) {

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Check, X, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/lib/store/confirm";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -29,6 +30,7 @@ export function EspecialidadesConfig({
   options: AttendanceOptionsByCategory;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
 
   // Formulário de adição.
@@ -86,10 +88,8 @@ export function EspecialidadesConfig({
     });
   }
 
-  function remover(id: string, label: string) {
-    if (!window.confirm(`Remover a especialidade "${label}"? Esta ação não pode ser desfeita.`)) {
-      return;
-    }
+  async function remover(id: string, label: string) {
+    if (!(await confirm({ message: `Remover a especialidade "${label}"? Esta ação não pode ser desfeita.`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeAttendanceOption(id);
       if (res.error) {

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { useConfirm } from "@/lib/store/confirm";
 import { Modal } from "@/components/ui/Modal";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 import {
@@ -39,6 +40,7 @@ export function MarcasTab({
   options,
 }: ChildTabProps<ProductBrand> & { options?: AttendanceOptionsByCategory }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -89,8 +91,8 @@ export function MarcasTab({
     });
   }
 
-  function remover(b: ProductBrand) {
-    if (!window.confirm(`Remover a marca "${b.brandLabel}"?`)) return;
+  async function remover(b: ProductBrand) {
+    if (!(await confirm({ message: `Remover a marca "${b.brandLabel}"?`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeProductBrand(b.id);
       if (res?.error) {

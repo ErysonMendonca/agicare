@@ -4,6 +4,7 @@ import { PageTransition } from "@/components/app/PageTransition";
 import { MotionProvider } from "@/components/app/MotionProvider";
 import { AutoRefresh } from "@/components/app/AutoRefresh";
 import { Toaster } from "@/components/ui/Toaster";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getCurrentUser } from "@/lib/auth";
 import { getMyPermissions } from "@/lib/permissions";
 import { getMenuCounters, getNotificacoes } from "@/lib/data/dashboard";
@@ -62,6 +63,8 @@ export default async function AppLayout({
         </div>
       </div>
       <Toaster />
+      {/* Confirmação global (substitui window.confirm por modal estilizado). */}
+      <ConfirmDialog />
       {/* Atualização automática (polling) — todas as telas do app sem F5. */}
       <AutoRefresh />
     </MotionProvider>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { useConfirm } from "@/lib/store/confirm";
 import { Modal } from "@/components/ui/Modal";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 import {
@@ -27,6 +28,7 @@ export function ViasAdministracaoTab({
   options?: AttendanceOptionsByCategory;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -69,8 +71,8 @@ export function ViasAdministracaoTab({
     });
   }
 
-  function remover(r: ProductAdminRoute) {
-    if (!window.confirm(`Remover a via "${r.routeLabel}"?`)) return;
+  async function remover(r: ProductAdminRoute) {
+    if (!(await confirm({ message: `Remover a via "${r.routeLabel}"?`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeProductAdminRoute(r.id);
       if (res?.error) {

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Check, X, ListChecks } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/lib/store/confirm";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -58,6 +59,7 @@ export function AtendimentoOpcoes({
   options: AttendanceOptionsByCategory;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [categoria, setCategoria] = useState<AttendanceOptionCategory>("origem");
   const [pending, startTransition] = useTransition();
 
@@ -122,10 +124,8 @@ export function AtendimentoOpcoes({
     });
   }
 
-  function remover(id: string, label: string) {
-    if (!window.confirm(`Remover a opção "${label}"? Esta ação não pode ser desfeita.`)) {
-      return;
-    }
+  async function remover(id: string, label: string) {
+    if (!(await confirm({ message: `Remover a opção "${label}"? Esta ação não pode ser desfeita.`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeAttendanceOption(id);
       if (res.error) {

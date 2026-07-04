@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { useConfirm } from "@/lib/store/confirm";
 import { Modal } from "@/components/ui/Modal";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 import {
@@ -27,6 +28,7 @@ export function PrincipiosAtivosTab({
   options?: AttendanceOptionsByCategory;
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -73,8 +75,8 @@ export function PrincipiosAtivosTab({
     });
   }
 
-  function remover(i: ProductActiveIngredient) {
-    if (!window.confirm(`Remover o princípio "${i.ingredientLabel}"?`)) return;
+  async function remover(i: ProductActiveIngredient) {
+    if (!(await confirm({ message: `Remover o princípio "${i.ingredientLabel}"?`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeProductActiveIngredient(i.id);
       if (res?.error) {
