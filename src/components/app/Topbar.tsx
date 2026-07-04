@@ -13,7 +13,6 @@ import {
   ReceiptText,
   BellOff,
 } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
 import { initials } from "@/lib/utils";
 import { NAV_GROUPS } from "./nav";
 import { useUIStore } from "@/lib/store/ui";
@@ -324,7 +323,12 @@ export function Topbar({
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2.5">
+        <Link
+          href="/conta"
+          title="Minha conta"
+          aria-label="Minha conta"
+          className="flex items-center gap-2.5 rounded-lg p-1 transition-colors hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        >
           <div className="text-right">
             <div className="text-sm font-medium text-ink">{user.name}</div>
             <div className="text-xs text-muted">{user.role}</div>
@@ -332,7 +336,7 @@ export function Topbar({
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white">
             {initials(user.name)}
           </span>
-        </div>
+        </Link>
       </div>
     </header>
   );

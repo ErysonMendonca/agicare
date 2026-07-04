@@ -1,9 +1,12 @@
 "use server";
 
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
+import { getActiveClinicId } from "@/lib/tenant";
 import { getSettings } from "@/lib/data/settings";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
 import { consume, retryLabel } from "@/lib/rate-limit";
@@ -101,5 +104,192 @@ export async function changePassword(
     return { error: "Não foi possível atualizar a senha. Tente novamente." };
   }
 
+  return { ok: true };
+}
+
+/** "" → null; string trim caso contrário. */
+function nn(v: string): string | null {
+  const t = v.trim();
+  return t === "" ? null : t;
+}
+
+/**
+ * Troca o nome de acesso (username) do PRÓPRIO usuário logado.
+ *
+ * - Fail-closed: exige sessão; nunca aceita id do cliente (usa userId da sessão).
+ * - Rate-limit: enumeração de usernames existentes é abuso → 10 tentativas/15min.
+ * - Grava via SERVICE-ROLE escopado a `.eq("id", userId)` para tratar duplicidade
+ *   de forma uniforme (o índice único parcial dispara 23505).
+ */
+export async function changeUsername(input: {
+  username: string;
+}): Promise<{ ok?: boolean; error?: string }> {
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada. Faça login novamente." };
+
+  // Login por username é exclusivo de staff (mesma política do fluxo admin em
+  // usuarios.ts). Paciente não define nome de acesso.
+  if (current.profile?.role === "paciente") {
+    return { error: "Este tipo de conta não usa nome de acesso." };
+  }
+
+  if (isDemoMode()) {
+    return { error: "Alteração indisponível no modo demonstração." };
+  }
+
+  const rl = consume(`change-username:${current.userId}`, 10, 15 * 60 * 1000);
+  if (!rl.ok) {
+    return {
+      error: `Muitas tentativas. Tente novamente em ${retryLabel(rl.retryAfterSec)}.`,
+    };
+  }
+
+  const schema = z.object({
+    username: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(
+        /^[a-z0-9._-]{3,40}$/,
+        "Usuário inválido (3-40: letras minúsculas, números, . _ -).",
+      ),
+  });
+
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+
+  const service = createServiceClient();
+  const { error } = await service
+    .from("profiles")
+    .update({ username: parsed.data.username })
+    .eq("id", current.userId);
+
+  if (error) {
+    const dup =
+      error.code === "23505" || /duplicate|unique/i.test(error.message ?? "");
+    if (dup) return { error: "Este nome de acesso já está em uso." };
+    return { error: "Não foi possível atualizar o nome de acesso." };
+  }
+
+  revalidatePath("/conta");
+  return { ok: true };
+}
+
+/**
+ * Atualiza dados pessoais/contato/endereço do PRÓPRIO usuário logado.
+ *
+ * - `profiles` (full_name, phone): via RLS own (createClient, id = auth.uid()).
+ * - `professionals` (dados pessoais/endereço): escrita é ADMIN-ONLY na RLS, então
+ *   usa SERVICE-ROLE escopado ESTRITAMENTE à própria linha
+ *   (`.eq("profile_id", userId).eq("clinic_id", clinicId)`). Só atualiza se a
+ *   linha já existir — nunca cria professionals aqui.
+ * - NUNCA toca em role, active, clinic_id, council*, credentials (anti-escalonamento).
+ */
+export async function updateMyAccount(input: {
+  full_name: string;
+  social_name?: string;
+  birth_date?: string;
+  sex?: string;
+  phone?: string;
+  contactEmail?: string;
+  cep?: string;
+  address?: string;
+  address_number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+}): Promise<{ ok?: boolean; error?: string }> {
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada. Faça login novamente." };
+
+  if (isDemoMode()) {
+    return { error: "Alteração indisponível no modo demonstração." };
+  }
+
+  const optStr = z.string().trim().optional();
+  const schema = z.object({
+    full_name: z.string().trim().min(2, "Informe o nome completo."),
+    social_name: optStr,
+    birth_date: z
+      .union([
+        z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data de nascimento inválida."),
+        z.literal(""),
+      ])
+      .optional(),
+    sex: optStr,
+    phone: optStr,
+    contactEmail: z
+      .union([z.string().trim().email("E-mail inválido."), z.literal("")])
+      .optional(),
+    cep: optStr,
+    address: optStr,
+    address_number: optStr,
+    complement: optStr,
+    neighborhood: optStr,
+    city: optStr,
+    state: optStr,
+  });
+
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+  const d = parsed.data;
+  const g = (v?: string) => (v ?? "").trim();
+
+  const userId = current.userId;
+
+  // 1) Identidade (profiles) — RLS own basta.
+  const supabase = await createClient();
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ full_name: d.full_name.trim(), phone: nn(g(d.phone)) })
+    .eq("id", userId);
+
+  if (profileError) {
+    return { error: "Não foi possível salvar os dados básicos." };
+  }
+
+  // 2) Dados pessoais/endereço (professionals) — só se houver linha própria na
+  //    clínica ativa. Escrita é admin-only na RLS → service-role escopado.
+  const clinicId = await getActiveClinicId();
+  if (clinicId) {
+    const service = createServiceClient();
+    const { data: prof } = await service
+      .from("professionals")
+      .select("id")
+      .eq("profile_id", userId)
+      .eq("clinic_id", clinicId)
+      .maybeSingle();
+
+    if (prof) {
+      const { error: profError } = await service
+        .from("professionals")
+        .update({
+          social_name: nn(g(d.social_name)),
+          birth_date: nn(g(d.birth_date)),
+          sex: nn(g(d.sex)),
+          email: nn(g(d.contactEmail)),
+          cep: nn(g(d.cep)),
+          address: nn(g(d.address)),
+          address_number: nn(g(d.address_number)),
+          complement: nn(g(d.complement)),
+          neighborhood: nn(g(d.neighborhood)),
+          city: nn(g(d.city)),
+          state: nn(g(d.state)),
+        })
+        .eq("profile_id", userId)
+        .eq("clinic_id", clinicId);
+
+      if (profError) {
+        return { error: "Não foi possível salvar os dados pessoais." };
+      }
+    }
+  }
+
+  revalidatePath("/conta");
   return { ok: true };
 }

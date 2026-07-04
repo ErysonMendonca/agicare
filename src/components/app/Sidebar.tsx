@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, UserCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn, initials } from "@/lib/utils";
 import { NAV_GROUPS } from "./nav";
@@ -133,16 +133,26 @@ export function Sidebar({
           <div className="truncate text-sm font-medium text-white">{user.name}</div>
           <div className="truncate text-xs text-white/70">{user.role}</div>
         </div>
-        <form action={signOut}>
-          <button
-            type="submit"
-            aria-label="Sair"
-            className="text-white/70 hover:text-white"
-            title="Sair"
+        <div className="flex items-center gap-1">
+          <Link
+            href="/conta"
+            aria-label="Minha conta"
+            title="Minha conta"
+            className="rounded-md p-1 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
           >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </form>
+            <UserCircle className="h-4 w-4" />
+          </Link>
+          <form action={signOut}>
+            <button
+              type="submit"
+              aria-label="Sair"
+              className="rounded-md p-1 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              title="Sair"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </form>
+        </div>
         </div>
       </motion.div>
     </motion.aside>
