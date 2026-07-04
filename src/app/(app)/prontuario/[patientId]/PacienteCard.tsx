@@ -1,9 +1,10 @@
+import { type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { type Identificacao } from "@/lib/data/prontuario";
 
 /** Cabeçalho de identificação do paciente, reutilizado nas seções clínicas. */
-export function PacienteCard({ id }: { id: Identificacao }) {
+export function PacienteCard({ id, extra }: { id: Identificacao; extra?: ReactNode }) {
   return (
     <Card className="mb-6 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -20,7 +21,11 @@ export function PacienteCard({ id }: { id: Identificacao }) {
             </p>
           </div>
         </div>
-        <Badge status="active">Atendimento em andamento</Badge>
+        {/* Coluna direita: badge de status e, abaixo, ações da seção (ex.: Finalizar). */}
+        <div className="flex flex-col items-end gap-2">
+          <Badge status="active">Atendimento em andamento</Badge>
+          {extra}
+        </div>
       </div>
     </Card>
   );

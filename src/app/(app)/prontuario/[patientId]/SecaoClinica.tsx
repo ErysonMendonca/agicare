@@ -45,11 +45,11 @@ export async function SecaoClinica({
         </Link>
       </div>
 
-      <PageHeader title={title} subtitle={subtitle} actions={actions} />
+      <PageHeader title={title} subtitle={subtitle} />
 
       {identificacao ? (
         <>
-          <PacienteCard id={identificacao} />
+          <PacienteCard id={identificacao} extra={actions} />
           <ClinicoNav patientId={patientId} />
           {children}
         </>
