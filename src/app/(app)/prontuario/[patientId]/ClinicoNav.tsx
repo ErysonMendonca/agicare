@@ -12,6 +12,7 @@ import {
   FileText,
   Bone,
   HeartPulse,
+  ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,7 @@ export function ClinicoNav({ patientId }: { patientId: string }) {
     { href: `${base}/procedimento`, label: "Procedimento", icon: Syringe },
     { href: `${base}/protetico`, label: "Protético", icon: Bone },
     { href: `${base}/prescricao`, label: "Prescrição", icon: Pill },
+    { href: `${base}/receituario`, label: "Receituário", icon: ScrollText },
     { href: `${base}/checagem`, label: "Checagem", icon: CheckSquare },
     { href: `${base}/enfermagem`, label: "Enfermagem", icon: HeartPulse },
     { href: `${base}/documentos`, label: "Documentos", icon: FileText },
