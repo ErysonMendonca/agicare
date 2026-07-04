@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ScrollText, Printer, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/lib/store/confirm";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -52,6 +53,7 @@ export function ReceituarioClient({
   receituarios: Receituario[];
 }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [tipo, setTipo] = useState<Tipo>("simples");
   const [texto, setTexto] = useState("");
@@ -102,8 +104,8 @@ export function ReceituarioClient({
     imprimir(tipo, conteudo);
   }
 
-  function remover(id: string) {
-    if (!window.confirm("Remover este receituário?")) return;
+  async function remover(id: string) {
+    if (!(await confirm({ message: "Remover este receituário?", danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removerReceituario(id);
       if (res?.ok) {

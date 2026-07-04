@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { useConfirm } from "@/lib/store/confirm";
 import { Modal } from "@/components/ui/Modal";
 import {
   addProductXyz,
@@ -58,6 +59,7 @@ export function ClassificacaoXyzTab({
   data,
 }: ChildTabProps<ProductXyz>) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -108,8 +110,8 @@ export function ClassificacaoXyzTab({
     });
   }
 
-  function remover(x: ProductXyz) {
-    if (!window.confirm(`Remover a classificação "${x.xyzClass}"?`)) return;
+  async function remover(x: ProductXyz) {
+    if (!(await confirm({ message: `Remover a classificação "${x.xyzClass}"?`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeProductXyz(x.id);
       if (res?.error) {

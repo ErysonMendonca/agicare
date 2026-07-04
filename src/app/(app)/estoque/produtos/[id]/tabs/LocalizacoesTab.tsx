@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { useConfirm } from "@/lib/store/confirm";
 import { Modal } from "@/components/ui/Modal";
 import {
   addProductRequisitionLocation,
@@ -23,6 +24,7 @@ export function LocalizacoesTab({
   data,
 }: ChildTabProps<ProductRequisitionLocation>) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -65,8 +67,8 @@ export function LocalizacoesTab({
     });
   }
 
-  function remover(l: ProductRequisitionLocation) {
-    if (!window.confirm(`Remover a localização "${l.locationLabel}"?`)) return;
+  async function remover(l: ProductRequisitionLocation) {
+    if (!(await confirm({ message: `Remover a localização "${l.locationLabel}"?`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeProductRequisitionLocation(l.id);
       if (res?.error) {

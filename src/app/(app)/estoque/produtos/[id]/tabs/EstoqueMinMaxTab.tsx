@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { useConfirm } from "@/lib/store/confirm";
 import { Modal } from "@/components/ui/Modal";
 import {
   addProductMinMax,
@@ -27,6 +28,7 @@ export function EstoqueMinMaxTab({
   data,
 }: ChildTabProps<ProductMinMax>) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -75,8 +77,8 @@ export function EstoqueMinMaxTab({
     });
   }
 
-  function remover(m: ProductMinMax) {
-    if (!window.confirm("Remover este limite de estoque?")) return;
+  async function remover(m: ProductMinMax) {
+    if (!(await confirm({ message: "Remover este limite de estoque?", danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeProductMinMax(m.id);
       if (res?.error) {

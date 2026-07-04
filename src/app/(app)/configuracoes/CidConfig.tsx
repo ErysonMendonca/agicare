@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, Check, X, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
+import { useConfirm } from "@/lib/store/confirm";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -17,6 +18,7 @@ import { addCid, updateCid, removeCid } from "@/lib/actions/cid";
  */
 export function CidConfig({ cids }: { cids: CidCode[] }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
 
   // Formulário de adição.
@@ -78,14 +80,8 @@ export function CidConfig({ cids }: { cids: CidCode[] }) {
     });
   }
 
-  function remover(cid: CidCode) {
-    if (
-      !window.confirm(
-        `Remover o CID "${cid.code}"? Esta ação não pode ser desfeita.`,
-      )
-    ) {
-      return;
-    }
+  async function remover(cid: CidCode) {
+    if (!(await confirm({ message: `Remover o CID "${cid.code}"? Esta ação não pode ser desfeita.`, danger: true, confirmLabel: "Remover" }))) return;
     startTransition(async () => {
       const res = await removeCid(cid.id);
       if (res.error) {
