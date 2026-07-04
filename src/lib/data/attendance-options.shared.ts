@@ -34,6 +34,11 @@ export type AttendanceOption = {
   id: string;
   label: string;
   value: string;
+  /** Campos opcionais — usados pela tela rica de Especialidades (0082).
+   *  Retrocompatível: selects que só usam id/label/value seguem funcionando. */
+  description?: string;
+  active?: boolean;
+  sortOrder?: number;
 };
 
 export type AttendanceOptionsByCategory = Record<string, AttendanceOption[]>;

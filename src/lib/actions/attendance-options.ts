@@ -15,11 +15,12 @@ import { logAction } from "@/lib/system-log";
 // camada. Validação Zod na borda; categoria restrita ao conjunto válido.
 // ════════════════════════════════════════════════════════════════
 
-export type ActionResult = { ok?: boolean; error?: string };
+export type ActionResult = { ok?: boolean; error?: string; id?: string };
 
 const categoria = z.enum(ATTENDANCE_OPTION_CATEGORIES);
 const label = z.string().trim().min(1, "Informe o rótulo.").max(120);
 const value = z.string().trim().min(1, "Informe o valor.").max(120);
+const description = z.string().trim().max(500).optional();
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -30,11 +31,18 @@ const parentId = z
   .regex(UUID, "Vínculo (motivo) inválido.")
   .optional();
 
-const addSchema = z.object({ category: categoria, label, value, parentId });
+const addSchema = z.object({
+  category: categoria,
+  label,
+  value,
+  description,
+  parentId,
+});
 const updateSchema = z
   .object({
     label: label.optional(),
     value: value.optional(),
+    description,
     active: z.boolean().optional(),
     sort_order: z.number().int().min(0).optional(),
     parentId,
@@ -81,6 +89,7 @@ export async function addAttendanceOption(input: {
   category: string;
   label: string;
   value: string;
+  description?: string;
   parentId?: string;
 }): Promise<ActionResult> {
   const g = await gate();
@@ -108,7 +117,7 @@ export async function addAttendanceOption(input: {
     .maybeSingle();
   const nextSort = ((last?.sort_order as number | undefined) ?? -1) + 1;
 
-  const { error } = await supabase.from("attendance_options").insert({
+  const insertPayload: Record<string, unknown> = {
     clinic_id: g.clinicId,
     category: parsed.data.category,
     label: parsed.data.label,
@@ -116,7 +125,17 @@ export async function addAttendanceOption(input: {
     parent_id: parsed.data.parentId ?? null,
     sort_order: nextSort,
     active: true,
-  });
+  };
+  // Só inclui a coluna description quando enviada (coluna adicionada em 0082).
+  if (parsed.data.description !== undefined) {
+    insertPayload.description = parsed.data.description;
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("attendance_options")
+    .insert(insertPayload)
+    .select("id")
+    .single();
 
   if (error) {
     // unique(clinic_id, category, value)
@@ -131,9 +150,10 @@ export async function addAttendanceOption(input: {
     module: "configuracoes",
     summary: `Adicionou a opção de atendimento "${parsed.data.label}"`,
     entity: "attendance_option",
+    entityId: inserted?.id as string | undefined,
   });
   revalidate();
-  return { ok: true };
+  return { ok: true, id: inserted?.id as string | undefined };
 }
 
 /** Atualiza rótulo/valor/ativo/ordem de uma opção. */
@@ -142,6 +162,7 @@ export async function updateAttendanceOption(
   patch: {
     label?: string;
     value?: string;
+    description?: string;
     active?: boolean;
     sort_order?: number;
     parentId?: string;
@@ -171,7 +192,8 @@ export async function updateAttendanceOption(
   const { error } = await supabase
     .from("attendance_options")
     .update(updatePayload)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("clinic_id", g.clinicId);
 
   if (error) {
     if (error.code === "23505") {
@@ -208,7 +230,8 @@ export async function removeAttendanceOption(
   const { error } = await supabase
     .from("attendance_options")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("clinic_id", g.clinicId);
 
   if (error) return { error: "Não foi possível remover a opção." };
 
@@ -220,5 +243,57 @@ export async function removeAttendanceOption(
     entityId: id,
   });
   revalidate();
+  return { ok: true };
+}
+
+const reorderSchema = z.object({
+  category: categoria,
+  orderedIds: z
+    .array(z.string().trim().regex(UUID, "Identificador inválido."))
+    .min(1, "Nada a reordenar.")
+    .max(500),
+});
+
+/**
+ * Reordena as opções de uma categoria: para cada id no índice i, grava
+ * sort_order = i. Escopo por clínica + categoria (o RLS é a 2ª camada). Os N
+ * updates rodam em paralelo. Retorna { ok } ou { error }.
+ */
+export async function reorderAttendanceOptions(
+  category: string,
+  orderedIds: string[],
+): Promise<ActionResult> {
+  const g = await gate();
+  if ("error" in g) return g;
+
+  const parsed = reorderSchema.safeParse({ category, orderedIds });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+
+  const supabase = await createClient();
+
+  const results = await Promise.all(
+    parsed.data.orderedIds.map((id, i) =>
+      supabase
+        .from("attendance_options")
+        .update({ sort_order: i })
+        .eq("id", id)
+        .eq("clinic_id", g.clinicId)
+        .eq("category", parsed.data.category),
+    ),
+  );
+
+  if (results.some((r) => r.error)) {
+    return { error: "Não foi possível reordenar as opções." };
+  }
+
+  await logAction({
+    action: "update",
+    module: "configuracoes",
+    summary: `Reordenou as opções de "${parsed.data.category}"`,
+    entity: "attendance_option",
+  });
+  revalidatePath("/configuracoes");
   return { ok: true };
 }

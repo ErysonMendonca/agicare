@@ -1,6 +1,7 @@
 import { getSettings } from "@/lib/data/settings";
 import { getAttendanceFlow } from "@/lib/data/attendance-flow";
 import { listAttendanceOptions } from "@/lib/data/attendance-options";
+import { listEspecialidades } from "@/lib/data/especialidades";
 import { listAnamneseTemplates } from "@/lib/data/anamnese-templates";
 import { listTriageTemplates } from "@/lib/data/triage-templates";
 import { listCidCodes } from "@/lib/data/cid";
@@ -17,6 +18,7 @@ export default async function ConfiguracoesPage() {
     anamneseTemplates,
     triageTemplates,
     attendanceOptions,
+    especialidades,
     cidCodes,
     altaCatalogos,
     gestor,
@@ -26,6 +28,7 @@ export default async function ConfiguracoesPage() {
     listAnamneseTemplates(),
     listTriageTemplates(),
     listAttendanceOptions(),
+    listEspecialidades(),
     listCidCodes(),
     listAltaCatalogos(),
     isGestor(),
@@ -37,6 +40,7 @@ export default async function ConfiguracoesPage() {
       anamneseTemplates={anamneseTemplates}
       triageTemplates={triageTemplates}
       attendanceOptions={attendanceOptions}
+      especialidades={especialidades}
       cidCodes={cidCodes}
       motivosAlta={altaCatalogos.motivos}
       detalhesAlta={altaCatalogos.detalhes}
