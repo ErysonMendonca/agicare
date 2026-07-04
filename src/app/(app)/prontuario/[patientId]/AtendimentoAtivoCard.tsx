@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Stethoscope, Plus, Trash2, CheckCircle2, Clock } from "lucide-react";
+import { Stethoscope, Plus, Trash2, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +10,6 @@ import { Select } from "@/components/ui/Select";
 import {
   registrarProcedimento,
   removerProcedimento,
-  finalizarAtendimento,
 } from "@/lib/actions/atendimento";
 import {
   type ProcedimentoCatalogo,
@@ -26,14 +25,12 @@ const brl = (n: number) =>
  * então vai para a recepção fazer o fechamento (recebimento + finalizar).
  */
 export function AtendimentoAtivoCard({
-  patientId,
   queueEntryId,
   statusRaw,
   catalogo,
   procedimentos,
   totalLabel,
 }: {
-  patientId: string;
   queueEntryId: string;
   statusRaw: string;
   catalogo: ProcedimentoCatalogo[];
@@ -70,18 +67,6 @@ export function AtendimentoAtivoCard({
     });
   }
 
-  function finalizar() {
-    startTransition(async () => {
-      const res = await finalizarAtendimento(queueEntryId);
-      if (res?.ok) {
-        toast.success("Atendimento finalizado. Encaminhado à recepção para pagamento.");
-        router.refresh();
-      } else {
-        toast.error(res?.error ?? "Não foi possível finalizar o atendimento.");
-      }
-    });
-  }
-
   return (
     <Card className="mb-6 border-brand-200 bg-brand-50/40 p-5">
       <div className="flex items-center justify-between gap-3">
@@ -98,16 +83,7 @@ export function AtendimentoAtivoCard({
             </p>
           </div>
         </div>
-        {emAtendimento ? (
-          <Button
-            onClick={finalizar}
-            disabled={pending}
-            data-patient={patientId}
-            className="shrink-0"
-          >
-            <CheckCircle2 className="h-4 w-4" /> Finalizar Atendimento
-          </Button>
-        ) : (
+        {!emAtendimento && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
             <Clock className="h-3.5 w-3.5" /> Aguardando pagamento
           </span>
