@@ -330,27 +330,39 @@ export async function getReceitaMensal(): Promise<ReceitaMensal> {
 export type MenuCounters = {
   /** Pacientes na fila com status "aguardando". */
   filaAguardando: number;
+  /** Atendimentos finalizados pelo médico aguardando pagamento na recepção. */
+  aguardandoPagamento: number;
   /** Itens de estoque críticos (saldo < mínimo/2). */
   estoqueCriticos: number;
 };
 
-const DEMO_COUNTERS: MenuCounters = { filaAguardando: 3, estoqueCriticos: 2 };
+const DEMO_COUNTERS: MenuCounters = {
+  filaAguardando: 3,
+  aguardandoPagamento: 1,
+  estoqueCriticos: 2,
+};
 
 export async function getMenuCounters(): Promise<MenuCounters> {
   if (isDemoMode()) return DEMO_COUNTERS;
 
   const supabase = await createClient();
 
-  const [fila, estoque] = await Promise.all([
+  const [fila, pagamento, estoque] = await Promise.all([
     supabase
       .from("queue_entries")
       .select("*", { count: "exact", head: true })
       .eq("status", "aguardando"),
+    // Prontos para pagamento na recepção (médico já finalizou o atendimento).
+    supabase
+      .from("queue_entries")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "aguardando_pagamento"),
     // Saldo/mínimo crus: o "crítico" é derivado (saldo < mínimo*0.5).
     supabase.from("stock_products").select("quantity, min_quantity"),
   ]);
 
   const filaAguardando = fila.count ?? 0;
+  const aguardandoPagamento = pagamento.count ?? 0;
 
   const produtos = (estoque.data ?? []) as {
     quantity: number | null;
@@ -362,7 +374,7 @@ export async function getMenuCounters(): Promise<MenuCounters> {
     return minimo > 0 && saldo < minimo * 0.5;
   }).length;
 
-  return { filaAguardando, estoqueCriticos };
+  return { filaAguardando, aguardandoPagamento, estoqueCriticos };
 }
 
 // ════════════════════════════════════════════════════════════════
