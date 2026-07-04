@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
+import { requireClinic } from "@/lib/tenant";
 import { type Status } from "@/components/ui/Badge";
 
 export type StatusEstoque = {
@@ -109,6 +110,210 @@ export async function listStockProducts(): Promise<ProdutoEstoque[]> {
       fornecedor: (sup?.name as string | null) ?? "—",
     };
   });
+}
+
+// ── Produto completo (editor multi-abas) ────────────────────────────
+/**
+ * Shape completo de um produto para o editor multi-abas (camelCase). Traz o
+ * cadastro-mestre inteiro + os campos da migration 0080. As COLEÇÕES-filhas
+ * (lotes, códigos de barras, etc.) NÃO vêm aqui — são carregadas à parte.
+ */
+export type ProdutoCompleto = {
+  id: string;
+  codigo: string;
+  // ── Dados gerais ──
+  name: string;
+  activeIngredient: string | null;
+  presentation: string | null;
+  barcode: string | null;
+  anvisaRegistration: string | null;
+  category: string | null;
+  therapeuticClass: string | null;
+  unit: string;
+  controlledClass: string | null;
+  requiresPrescription: boolean;
+  manufacturer: string | null;
+  supplierId: string | null;
+  active: boolean;
+  notes: string | null;
+  // ── Saldo / financeiro ──
+  quantity: number;
+  minQuantity: number;
+  maxQuantity: number;
+  location: string | null;
+  lot: string | null;
+  expiry: string | null; // ISO cru (para <input type="date">)
+  cost: number;
+  price: number;
+  // ── Classificação (0080) ──
+  productType: string | null;
+  productGroup: string | null;
+  classification: string | null;
+  subclassification: string | null;
+  port344: boolean;
+  cfop: string | null;
+  ncm: string | null;
+  cest: string | null;
+  // ── Controles (0080) ──
+  ctrlLoteValidade: boolean;
+  ctrlOpme: boolean;
+  ctrlNumeroSerie: boolean;
+  ctrlMarca: boolean;
+  // ── Prescrição (0080) ──
+  prescQualquerVia: boolean;
+  prescQualquerFrequencia: boolean;
+  prescSeNecessario: boolean;
+  solicitaSeNecessario: string | null;
+  salPrincipioAtivo: string | null;
+  // ── Informações adicionais (0080) ──
+  infoAltoCusto: boolean;
+  infoAltoRisco: boolean;
+  infoUrgencia: boolean;
+  infoOncologia: boolean;
+  infoAntimicrobianoRestrito: boolean;
+  infoDva: boolean;
+  infoUsoContinuo: boolean;
+  infoNaoPadrao: boolean;
+  // ── Solução / componentes (0080) ──
+  solComponenteDiluido: boolean;
+  solComponenteDiluente: boolean;
+};
+
+const MOCK_PRODUTO_COMPLETO: ProdutoCompleto = {
+  id: "1",
+  codigo: "000001",
+  name: "Dipirona 500mg (ampola)",
+  activeIngredient: "Dipirona sódica",
+  presentation: "Ampola 2ml",
+  barcode: "7891234560012",
+  anvisaRegistration: "1.0000.0000",
+  category: "Medicamento",
+  therapeuticClass: "Analgésico",
+  unit: "ampola",
+  controlledClass: null,
+  requiresPrescription: false,
+  manufacturer: "Cristália",
+  supplierId: null,
+  active: true,
+  notes: null,
+  quantity: 12,
+  minQuantity: 50,
+  maxQuantity: 0,
+  location: "Prateleira A3",
+  lot: "LT-8842",
+  expiry: null,
+  cost: 1.2,
+  price: 3.5,
+  productType: null,
+  productGroup: null,
+  classification: null,
+  subclassification: null,
+  port344: false,
+  cfop: null,
+  ncm: null,
+  cest: null,
+  ctrlLoteValidade: true,
+  ctrlOpme: false,
+  ctrlNumeroSerie: false,
+  ctrlMarca: false,
+  prescQualquerVia: false,
+  prescQualquerFrequencia: false,
+  prescSeNecessario: false,
+  solicitaSeNecessario: null,
+  salPrincipioAtivo: null,
+  infoAltoCusto: false,
+  infoAltoRisco: false,
+  infoUrgencia: false,
+  infoOncologia: false,
+  infoAntimicrobianoRestrito: false,
+  infoDva: false,
+  infoUsoContinuo: false,
+  infoNaoPadrao: false,
+  solComponenteDiluido: false,
+  solComponenteDiluente: false,
+};
+
+/**
+ * Carrega UM produto completo para o editor. Escopo por clínica ativa + RLS de
+ * staff. Retorna null quando não encontrado (ou fora do escopo). Só o produto —
+ * as coleções-filhas são carregadas separadamente. Em demo, devolve o mock.
+ */
+export async function getProdutoCompleto(
+  productId: string,
+): Promise<ProdutoCompleto | null> {
+  if (isDemoMode()) return MOCK_PRODUTO_COMPLETO;
+  if (!productId) return null;
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+  const { data: p, error } = await supabase
+    .from("stock_products")
+    .select("*")
+    .eq("id", productId)
+    .eq("clinic_id", clinicId)
+    .maybeSingle();
+
+  if (error || !p) return null;
+
+  const bool = (v: unknown) => v === true;
+  const text = (v: unknown) => (v as string | null) ?? null;
+
+  return {
+    id: p.id as string,
+    codigo:
+      p.code_number != null
+        ? String(p.code_number as number).padStart(6, "0")
+        : ((p.code as string | null) ?? "—"),
+    name: (p.name as string | null) ?? "",
+    activeIngredient: text(p.active_ingredient),
+    presentation: text(p.presentation),
+    barcode: text(p.barcode),
+    anvisaRegistration: text(p.anvisa_registration),
+    category: text(p.category),
+    therapeuticClass: text(p.therapeutic_class),
+    unit: (p.unit as string | null) ?? "un",
+    controlledClass: text(p.controlled_class),
+    requiresPrescription: bool(p.requires_prescription),
+    manufacturer: text(p.manufacturer),
+    supplierId: text(p.supplier_id),
+    active: !!p.active,
+    notes: text(p.notes),
+    quantity: Number(p.quantity ?? 0),
+    minQuantity: Number(p.min_quantity ?? 0),
+    maxQuantity: Number(p.max_quantity ?? 0),
+    location: text(p.location),
+    lot: text(p.lot),
+    expiry: text(p.expiry),
+    cost: Number(p.cost ?? 0),
+    price: Number(p.price ?? 0),
+    productType: text(p.product_type),
+    productGroup: text(p.product_group),
+    classification: text(p.classification),
+    subclassification: text(p.subclassification),
+    port344: bool(p.port_344),
+    cfop: text(p.cfop),
+    ncm: text(p.ncm),
+    cest: text(p.cest),
+    ctrlLoteValidade: bool(p.ctrl_lote_validade),
+    ctrlOpme: bool(p.ctrl_opme),
+    ctrlNumeroSerie: bool(p.ctrl_numero_serie),
+    ctrlMarca: bool(p.ctrl_marca),
+    prescQualquerVia: bool(p.presc_qualquer_via),
+    prescQualquerFrequencia: bool(p.presc_qualquer_frequencia),
+    prescSeNecessario: bool(p.presc_se_necessario),
+    solicitaSeNecessario: text(p.solicita_se_necessario),
+    salPrincipioAtivo: text(p.sal_principio_ativo),
+    infoAltoCusto: bool(p.info_alto_custo),
+    infoAltoRisco: bool(p.info_alto_risco),
+    infoUrgencia: bool(p.info_urgencia),
+    infoOncologia: bool(p.info_oncologia),
+    infoAntimicrobianoRestrito: bool(p.info_antimicrobiano_restrito),
+    infoDva: bool(p.info_dva),
+    infoUsoContinuo: bool(p.info_uso_continuo),
+    infoNaoPadrao: bool(p.info_nao_padrao),
+    solComponenteDiluido: bool(p.sol_componente_diluido),
+    solComponenteDiluente: bool(p.sol_componente_diluente),
+  };
 }
 
 // ── Fornecedores ───────────────────────────────────────────────────

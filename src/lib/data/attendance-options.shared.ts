@@ -19,6 +19,12 @@ export const ATTENDANCE_OPTION_CATEGORIES = [
   "parentesco",
   "motivo_alta",
   "detalhe_alta",
+  "tipo_produto",
+  "grupo_produto",
+  "unidade_medida",
+  "via_administracao",
+  "principio_ativo",
+  "marca",
 ] as const;
 
 export type AttendanceOptionCategory =
