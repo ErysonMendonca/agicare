@@ -98,7 +98,16 @@ export function AtendimentoAtivoCard({
             </p>
           </div>
         </div>
-        {!emAtendimento && (
+        {emAtendimento ? (
+          <Button
+            onClick={finalizar}
+            disabled={pending}
+            data-patient={patientId}
+            className="shrink-0"
+          >
+            <CheckCircle2 className="h-4 w-4" /> Finalizar Atendimento
+          </Button>
+        ) : (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
             <Clock className="h-3.5 w-3.5" /> Aguardando pagamento
           </span>
@@ -163,13 +172,6 @@ export function AtendimentoAtivoCard({
         )}
       </div>
 
-      {emAtendimento && (
-        <div className="mt-4 flex justify-end">
-          <Button onClick={finalizar} disabled={pending} data-patient={patientId}>
-            <CheckCircle2 className="h-4 w-4" /> Finalizar Atendimento
-          </Button>
-        </div>
-      )}
     </Card>
   );
 }
