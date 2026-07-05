@@ -8,6 +8,7 @@ import {
   useTransition,
   type ReactNode,
   type RefObject,
+  Component,
 } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, Trash2, Check as CheckIcon, AlertTriangle } from "lucide-react";
@@ -35,6 +36,30 @@ import type {
   ProdutoChildren,
   ProductXyzClass,
 } from "./types";
+
+class LocalErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 border border-red-500 bg-red-50 text-red-900 rounded-lg">
+          <h2 className="font-bold">Erro na renderização do formulário</h2>
+          <pre className="text-xs mt-2">{this.state.error?.message}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export function ProdutoEditor({
   novo,
@@ -165,32 +190,34 @@ export function ProdutoEditor({
 
   return (
     <div className="space-y-4">
-      <ProdutoForm
-        novo={novo}
-        empresa={empresa}
-        produto={produto}
-        options={options}
-        catalogos={catalogos}
-        gestor={gestor}
-        ativo={ativo}
-        setAtivo={setAtivo}
-        selUnidades={selUnidades}
-        setSelUnidades={setSelUnidades}
-        selVias={selVias}
-        setSelVias={setSelVias}
-        selPrincipios={selPrincipios}
-        setSelPrincipios={setSelPrincipios}
-        selMarcas={selMarcas}
-        setSelMarcas={setSelMarcas}
-        selLocais={selLocais}
-        setSelLocais={setSelLocais}
-        selXyz={selXyz}
-        setSelXyz={setSelXyz}
-        formAction={formAction}
-        pending={pending || savingSel}
-        intentRef={intentRef}
-        state={state}
-      />
+      <LocalErrorBoundary>
+        <ProdutoForm
+          novo={novo}
+          empresa={empresa}
+          produto={produto}
+          options={options}
+          catalogos={catalogos}
+          gestor={gestor}
+          ativo={ativo}
+          setAtivo={setAtivo}
+          selUnidades={selUnidades}
+          setSelUnidades={setSelUnidades}
+          selVias={selVias}
+          setSelVias={setSelVias}
+          selPrincipios={selPrincipios}
+          setSelPrincipios={setSelPrincipios}
+          selMarcas={selMarcas}
+          setSelMarcas={setSelMarcas}
+          selLocais={selLocais}
+          setSelLocais={setSelLocais}
+          selXyz={selXyz}
+          setSelXyz={setSelXyz}
+          formAction={formAction}
+          pending={pending || savingSel}
+          intentRef={intentRef}
+          state={state}
+        />
+      </LocalErrorBoundary>
     </div>
   );
 }
