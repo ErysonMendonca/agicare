@@ -93,6 +93,121 @@ const createSchema = z
 export type CreateAppointmentInput = z.input<typeof createSchema>;
 
 /** Cria um agendamento em `appointments`. Devolve o protocolo p/ o comprovante. */
+/**
+ * Valida se um dia/horário está disponível na escala e desocupado.
+ */
+async function validarDisponibilidadeHorario(
+  supabase: any,
+  dateISO: string,
+  timeHHMM: string,
+  professionalId: string | null,
+  specialty: string | null,
+  excludeAppointmentId?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const weekday = new Date(`${dateISO}T00:00:00`).getDay(); // 0=Dom..6=Sáb
+
+  // 1) Resolve especialidade do profissional se professionalId estiver preenchido e specialty não
+  let especialidade = specialty ?? "";
+  if (professionalId && !especialidade) {
+    const { data: prof } = await supabase
+      .from("professionals")
+      .select("specialty")
+      .eq("id", professionalId)
+      .maybeSingle();
+    especialidade = (prof?.specialty as string | null) ?? "";
+  }
+
+  // 2) Busca escalas ativas da clínica
+  const { data: escalas } = await supabase
+    .from("schedules")
+    .select(
+      "professional_id, specialty, slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks",
+    )
+    .eq("active", true);
+
+  // Encontra a escala que cobre o profissional ou a especialidade neste dia da semana e período
+  const escala = (escalas ?? []).find(
+    (e: any) =>
+      ((professionalId && e.professional_id === professionalId) ||
+        (especialidade && e.specialty === especialidade)) &&
+      (Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false) &&
+      naVigencia(dateISO, e.start_date, e.end_date),
+  );
+
+  if (!escala) {
+    return { ok: false, error: "Não há escala de atendimento ativa para este dia/especialidade." };
+  }
+
+  const slotMinutes = Number(escala.slot_minutes) || 30;
+  const faixa = faixaDoDia(
+    weekday,
+    {
+      start: String(escala.start_time).slice(0, 5),
+      end: String(escala.end_time).slice(0, 5),
+    },
+    escala.week_hours,
+  );
+
+  if (!faixa) {
+    return { ok: false, error: "Não há horário definido na escala para este dia." };
+  }
+
+  // 3) Verifica se o horário está contido na grade gerada
+  const horarios = gerarHorarios(faixa.start, faixa.end, slotMinutes);
+  if (!horarios.includes(timeHHMM)) {
+    return { ok: false, error: "O horário selecionado não existe na escala de atendimento." };
+  }
+
+  // 4) Verifica bloqueios manuais na agenda
+  const { data: blocks } = await supabase
+    .from("schedule_blocks")
+    .select("start_time")
+    .eq("block_date", dateISO)
+    .eq("start_time", `${timeHHMM}:00`);
+
+  if (blocks && blocks.length > 0) {
+    return { ok: false, error: "Este horário está bloqueado na agenda do profissional." };
+  }
+
+  // Verifica bloqueios recorrentes/específicos da escala
+  const bloqueados = new Set<string>();
+  for (const r of faixa.blocks ?? []) bloqueados.add(r.time);
+  for (const r of parseRecurringBlocks(escala.recurring_blocks)) bloqueados.add(r.time);
+
+  if (bloqueados.has(timeHHMM)) {
+    return { ok: false, error: "Este horário está bloqueado na escala de atendimento." };
+  }
+
+  // 5) Verifica se há agendamentos sobrepostos
+  const newStart = toIso(dateISO, timeHHMM);
+  const newEnd = addMinutes(newStart, slotMinutes);
+
+  let query = supabase
+    .from("appointments")
+    .select("id, starts_at, ends_at, status")
+    .neq("status", "cancelado")
+    .neq("status", "desistencia")
+    .lt("starts_at", newEnd)
+    .gt("ends_at", newStart);
+
+  if (excludeAppointmentId) {
+    query = query.neq("id", excludeAppointmentId);
+  }
+
+  if (professionalId) {
+    query = query.eq("professional_id", professionalId);
+  } else if (especialidade) {
+    query = query.eq("specialty", especialidade);
+  }
+
+  const { data: ags } = await query;
+  if (ags && ags.length > 0) {
+    return { ok: false, error: "Este horário já está ocupado por outro paciente agendado." };
+  }
+
+  return { ok: true };
+}
+
 export async function createAppointment(
   input: CreateAppointmentInput,
 ): Promise<AgendaActionState> {
@@ -114,6 +229,16 @@ export async function createAppointment(
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
+
+  const disp = await validarDisponibilidadeHorario(
+    supabase,
+    d.date,
+    d.time,
+    d.professional_id || null,
+    d.specialty || null,
+  );
+  if (!disp.ok) return { error: disp.error };
+
   const { error } = await supabase.from("appointments").insert({
     clinic_id: clinicId,
     patient_id: d.patient_id,
@@ -202,6 +327,38 @@ export async function remarcarAppointment(
   if (horarioNoPassado(d.date, d.time)) {
     return { error: "Não é possível remarcar para um horário que já passou." };
   }
+
+  if (isDemoMode()) {
+    return await updateAppointment(d.id, {
+      starts_at: startsAt,
+      ends_at: addMinutes(startsAt, d.slot_minutes),
+      status: "agendado",
+    });
+  }
+
+  const supabase = await createClient();
+  // Busca o profissional e especialidade atuais do agendamento
+  const { data: apt } = await supabase
+    .from("appointments")
+    .select("professional_id, specialty")
+    .eq("id", d.id)
+    .maybeSingle();
+
+  if (!apt) {
+    return { error: "Agendamento não encontrado." };
+  }
+
+  // Valida disponibilidade de horário/escala (excluindo este próprio agendamento da checagem de sobreposição)
+  const disp = await validarDisponibilidadeHorario(
+    supabase,
+    d.date,
+    d.time,
+    apt.professional_id,
+    apt.specialty,
+    d.id,
+  );
+  if (!disp.ok) return { error: disp.error };
+
   const res = await updateAppointment(d.id, {
     starts_at: startsAt,
     ends_at: addMinutes(startsAt, d.slot_minutes),
