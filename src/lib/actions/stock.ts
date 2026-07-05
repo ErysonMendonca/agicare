@@ -220,7 +220,6 @@ export async function createStockProduct(
       entity: "product",
       entityId: created?.id as string | undefined,
     });
-    revalidateEstoque();
     return { ok: true, id: created?.id as string | undefined };
   } catch (err: any) {
     console.error("Unhandled exception in createStockProduct:", err);
@@ -353,7 +352,6 @@ export async function updateStockProduct(
       entity: "product",
       entityId: d.id,
     });
-    revalidateEstoque();
     return { ok: true };
   } catch (err: any) {
     console.error("Unhandled exception in updateStockProduct:", err);

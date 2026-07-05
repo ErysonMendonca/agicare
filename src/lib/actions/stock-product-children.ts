@@ -100,7 +100,6 @@ async function insertChild(
     entity: table,
     entityId: productId,
   });
-  revalidateProduto(productId);
   return { ok: true };
 }
 
@@ -135,7 +134,6 @@ async function updateChild(
     entity: table,
     entityId: id,
   });
-  if (productId && UUID.test(productId)) revalidateProduto(productId);
   return { ok: true };
 }
 
@@ -168,7 +166,6 @@ async function removeChild(
     entity: table,
     entityId: id,
   });
-  if (productId && UUID.test(productId)) revalidateProduto(productId);
   return { ok: true };
 }
 
@@ -786,7 +783,6 @@ export async function setProdutoSelecoes(
       entity: "stock_product",
       entityId: productId,
     });
-    revalidateProduto(productId);
     return { ok: true };
   } catch (err: any) {
     console.error("Unhandled exception in setProdutoSelecoes:", err);
