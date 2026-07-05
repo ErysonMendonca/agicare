@@ -173,8 +173,6 @@ export async function createStockProduct(
     // editor novo não a envia, herda o Tipo de Produto para não nascer sem categoria.
     const categoria = d.category || (raw.product_type as string) || null;
     
-    // DEBUG: Mocking the insert to test if the database hangs!
-    /*
     const { data: created, error } = await supabase
       .from("stock_products")
       .insert({
