@@ -869,7 +869,7 @@ export async function criarSolicitacaoCompra(
 
 // ── Cotações (com anexo PDF no bucket privado 'cotacoes') ───────────
 /** Limite de tamanho do anexo de cotação (5MB), espelhado no client. */
-export const MAX_COTACAO_BYTES = 5 * 1024 * 1024;
+const MAX_COTACAO_BYTES = 5 * 1024 * 1024;
 
 const cotacaoSchema = z.object({
   purchase_request_id: idSchema,
