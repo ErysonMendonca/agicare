@@ -161,7 +161,7 @@ export function ProdutoEditor({
 
       if (res?.error) {
         toast.error(res.error);
-        setState({ error: res.error, errors: res.errors });
+        setState({ error: res.error });
         setPending(false);
         return;
       }
