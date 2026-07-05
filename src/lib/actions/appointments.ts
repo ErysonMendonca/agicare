@@ -135,7 +135,7 @@ async function validarDisponibilidadeHorario(
   );
 
   if (!escala) {
-    return { error: "Não há escala de atendimento ativa para este dia/especialidade." };
+    return { ok: false, error: "Não há escala de atendimento ativa para este dia/especialidade." };
   }
 
   const slotMinutes = Number(escala.slot_minutes) || 30;
@@ -149,13 +149,13 @@ async function validarDisponibilidadeHorario(
   );
 
   if (!faixa) {
-    return { error: "Não há horário definido na escala para este dia." };
+    return { ok: false, error: "Não há horário definido na escala para este dia." };
   }
 
   // 3) Verifica se o horário está contido na grade gerada
   const horarios = gerarHorarios(faixa.start, faixa.end, slotMinutes);
   if (!horarios.includes(timeHHMM)) {
-    return { error: "O horário selecionado não existe na escala de atendimento." };
+    return { ok: false, error: "O horário selecionado não existe na escala de atendimento." };
   }
 
   // 4) Verifica bloqueios manuais na agenda
@@ -166,7 +166,7 @@ async function validarDisponibilidadeHorario(
     .eq("start_time", `${timeHHMM}:00`);
 
   if (blocks && blocks.length > 0) {
-    return { error: "Este horário está bloqueado na agenda do profissional." };
+    return { ok: false, error: "Este horário está bloqueado na agenda do profissional." };
   }
 
   // Verifica bloqueios recorrentes/específicos da escala
@@ -175,7 +175,7 @@ async function validarDisponibilidadeHorario(
   for (const r of parseRecurringBlocks(escala.recurring_blocks)) bloqueados.add(r.time);
 
   if (bloqueados.has(timeHHMM)) {
-    return { error: "Este horário está bloqueado na escala de atendimento." };
+    return { ok: false, error: "Este horário está bloqueado na escala de atendimento." };
   }
 
   // 5) Verifica se há agendamentos sobrepostos
@@ -202,7 +202,7 @@ async function validarDisponibilidadeHorario(
 
   const { data: ags } = await query;
   if (ags && ags.length > 0) {
-    return { error: "Este horário já está ocupado por outro paciente agendado." };
+    return { ok: false, error: "Este horário já está ocupado por outro paciente agendado." };
   }
 
   return { ok: true };
