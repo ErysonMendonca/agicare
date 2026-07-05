@@ -146,6 +146,23 @@ export function ProdutoEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
+  // INJEÇÃO DE DEBUG PARA DESCOBRIR A CAUSA DO CRASH "ALGO DEU ERRADO"
+  useEffect(() => {
+    const handleErr = (e: ErrorEvent) => {
+      if (e.message.includes('ResizeObserver')) return; // ignora erros inofensivos
+      alert(`[DEBUG CLIENT CRASH]: ${e.message}\n${e.filename}:${e.lineno}`);
+    };
+    const handleRej = (e: PromiseRejectionEvent) => {
+      alert(`[DEBUG PROMISE REJECT]: ${e.reason?.message || String(e.reason)}`);
+    };
+    window.addEventListener("error", handleErr);
+    window.addEventListener("unhandledrejection", handleRej);
+    return () => {
+      window.removeEventListener("error", handleErr);
+      window.removeEventListener("unhandledrejection", handleRej);
+    };
+  }, []);
+
   return (
     <div className="space-y-4">
       <ProdutoForm
