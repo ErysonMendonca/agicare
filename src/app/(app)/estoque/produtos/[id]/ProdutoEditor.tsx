@@ -148,24 +148,29 @@ export function ProdutoEditor({
   }
 
   useEffect(() => {
+    alert(`[TRACE] useEffect triggered! state.ok=${state?.ok} state.error=${state?.error}`);
     if (state?.ok) {
       const id = novo ? state.id : produto.id;
       if (!id) {
         toast.error("Produto salvo, mas não foi possível obter o código.");
         return;
       }
+      alert(`[TRACE] Action ok! Starting persistSelecoes...`);
       startSaveSel(async () => {
         const ok = await persistSelecoes(id);
         toast.success(novo ? "Produto cadastrado!" : "Produto atualizado!");
         // Fluxo padrão: salvar produto → seleções → lista do estoque.
         // "Salvar" (fica) numa edição só recarrega para refletir os dados.
         if (novo || intentRef.current === "fechar" || !ok) {
+          alert(`[TRACE] Pushing router to /estoque...`);
           router.push("/estoque");
           return;
         }
+        alert(`[TRACE] Refreshing router...`);
         router.refresh();
       });
     } else if (state?.error) {
+      alert(`[TRACE] Action error: ${state.error}`);
       toast.error(state.error);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
