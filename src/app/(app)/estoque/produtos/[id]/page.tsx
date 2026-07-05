@@ -9,29 +9,6 @@ import { getProdutoCompleto, type ProdutoCompleto } from "@/lib/data/stock";
 import { getProdutoChildren } from "@/lib/data/stock-product-children";
 import { ProdutoEditor } from "./ProdutoEditor";
 import type { ProdutoChildren } from "./types";
-import { createClient } from "@/lib/supabase/server";
-
-// We monkey-patch console.error to catch the Next.js unredacted SSR error
-let patched = false;
-function patchConsole() {
-  if (patched) return;
-  patched = true;
-  if (!(global as any).myNextErrors) {
-    (global as any).myNextErrors = [];
-  }
-  const originalError = console.error;
-  console.error = function (...args: any[]) {
-    originalError.apply(console, args);
-    try {
-      const msg = args.map(a => (a && a.stack) ? a.stack : String(a)).join(" ");
-      if (msg.includes("Error:") || msg.includes("digest")) {
-        (global as any).myNextErrors.push(msg.substring(0, 1000));
-      }
-    } catch (e) {
-      // ignore
-    }
-  };
-}
 
 /** Produto vazio para o modo "novo" (defaults espelham a migration 0080). */
 function produtoVazio(): ProdutoCompleto {
@@ -96,7 +73,6 @@ export default async function ProdutoEditorPage({
   params: Promise<{ id: string }>;
 }) {
   try {
-    patchConsole();
     await requireView("estoque");
     const { id } = await params;
     const novo = id === "novo";
@@ -129,10 +105,6 @@ export default async function ProdutoEditorPage({
 
     return (
       <>
-        <div style={{ padding: 10, background: 'yellow', color: 'black' }}>
-          <strong>Captured SSR Errors (reload to update):</strong>
-          <pre>{JSON.stringify((global as any).myNextErrors || [], null, 2)}</pre>
-        </div>
         <PageHeader
           title={novo ? "Novo Produto" : `Produto ${produto.codigo || ""}`.trim()}
           subtitle="Cadastro completo do produto/medicamento no catálogo da clínica"
@@ -150,12 +122,6 @@ export default async function ProdutoEditorPage({
     );
   } catch (err: any) {
     if (err.message && err.message === 'NEXT_REDIRECT') throw err; // Allow Next.js redirects to bubble
-    return (
-      <div style={{ padding: 20, background: 'red', color: 'white' }}>
-        <h2>SSR CRASH IN ProdutoEditorPage</h2>
-        <pre>{err.message || String(err)}</pre>
-        <pre>{err.stack}</pre>
-      </div>
-    );
+    throw err;
   }
 }

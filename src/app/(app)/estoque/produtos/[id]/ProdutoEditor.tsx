@@ -82,10 +82,8 @@ export function ProdutoEditor({
 
   // Intenção do submit (Salvar fica; Salvar e Fechar volta à listagem).
   const intentRef = useRef<"salvar" | "fechar">("salvar");
-  const [state, formAction, pending] = useActionState(
-    novo ? createStockProduct : updateStockProduct,
-    undefined,
-  );
+  const [pending, setPending] = useState(false);
+  const [state, setState] = useState<{ error?: string; errors?: Record<string, string[]> } | undefined>(undefined);
 
   // Toggle "Ativo" controlado → grava valor explícito no hidden input.
   const [ativo, setAtivo] = useState(produto.active);
@@ -147,34 +145,57 @@ export function ProdutoEditor({
     return true;
   }
 
-  useEffect(() => {
-    alert(`[TRACE] useEffect triggered! state.ok=${state?.ok} state.error=${state?.error}`);
-    if (state?.ok) {
-      const id = novo ? state.id : produto.id;
-      if (!id) {
-        toast.error("Produto salvo, mas não foi possível obter o código.");
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setState(undefined);
+
+    try {
+      const formData = new FormData(e.currentTarget);
+      
+      // Envia os dados para o Server Action manualmente
+      const res = novo 
+        ? await createStockProduct(undefined, formData) 
+        : await updateStockProduct(undefined, formData);
+
+      if (res?.error) {
+        toast.error(res.error);
+        setState({ error: res.error, errors: res.errors });
+        setPending(false);
         return;
       }
-      alert(`[TRACE] Action ok! Starting persistSelecoes...`);
-      startSaveSel(async () => {
-        const ok = await persistSelecoes(id);
-        toast.success(novo ? "Produto cadastrado!" : "Produto atualizado!");
-        // Fluxo padrão: salvar produto → seleções → lista do estoque.
-        // "Salvar" (fica) numa edição só recarrega para refletir os dados.
-        if (novo || intentRef.current === "fechar" || !ok) {
-          alert(`[TRACE] Pushing router to /estoque...`);
-          router.push("/estoque");
-          return;
-        }
-        alert(`[TRACE] Refreshing router...`);
+
+      const id = novo ? res.id : produto.id;
+      if (!id) {
+        toast.error("Salvo com sucesso, mas o ID não foi retornado.");
+        setPending(false);
+        return;
+      }
+
+      // Sincroniza as seleções de forma independente
+      const selOk = await persistSelecoes(id);
+
+      toast.success(novo ? "Produto cadastrado!" : "Produto atualizado!");
+
+      // Controle de redirecionamento:
+      // Se não era "salvar e fechar" e for edição, não redireciona (a própria persistSelecoes faz revalidate)
+      if (intentRef.current === "fechar" || (novo && !selOk)) {
+        router.push("/estoque");
+      } else if (novo) {
+        // Redireciona para a página de edição do produto criado para continuar editando
+        router.push(`/estoque/produtos/${id}`);
+      } else {
         router.refresh();
-      });
-    } else if (state?.error) {
-      alert(`[TRACE] Action error: ${state.error}`);
-      toast.error(state.error);
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Ocorreu um erro ao salvar o produto.");
+      setState({ error: err.message || "Ocorreu um erro inesperado." });
+    } finally {
+      setPending(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
+  }
 
   // INJEÇÃO DE DEBUG PARA DESCOBRIR A CAUSA DO CRASH "ALGO DEU ERRADO"
   useEffect(() => {
@@ -217,10 +238,10 @@ export function ProdutoEditor({
           setSelLocais={setSelLocais}
           selXyz={selXyz}
           setSelXyz={setSelXyz}
-          formAction={formAction}
+          handleSubmit={handleSubmit}
           pending={pending || savingSel}
           intentRef={intentRef}
-          state={state}
+          state={state || {}}
         />
       </LocalErrorBoundary>
     </div>
@@ -251,7 +272,7 @@ function ProdutoForm({
   setSelLocais,
   selXyz,
   setSelXyz,
-  formAction,
+  handleSubmit,
   pending,
   intentRef,
   state,
@@ -276,7 +297,7 @@ function ProdutoForm({
   setSelLocais: (v: string[]) => void;
   selXyz: ProductXyzClass | "";
   setSelXyz: (v: ProductXyzClass | "") => void;
-  formAction: (fd: FormData) => void;
+  handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   pending: boolean;
   intentRef: RefObject<"salvar" | "fechar">;
   state: ActionState;
@@ -311,7 +332,7 @@ function ProdutoForm({
 
   return (
     <>
-      <form id="form-produto" action={formAction} className="space-y-4">
+      <form id="form-produto" onSubmit={handleSubmit} className="space-y-4">
         {!novo && <input type="hidden" name="id" value={produto.id} />}
         {/* Ativo: valor explícito (o toggle é controlado). */}
         <input type="hidden" name="active" value={ativo ? "true" : "false"} />

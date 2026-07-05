@@ -210,10 +210,10 @@ export async function createStockProduct(
       .select("id")
       .single();
 
-    if (error) return { error: error.message };
-    */
-    
-    const created = { id: "00000000-0000-0000-0000-000000000000" };
+    if (error) {
+      console.error("Supabase create error:", error);
+      return { error: error.message };
+    }
 
     await logAction({
       action: "create",
@@ -343,7 +343,10 @@ export async function updateStockProduct(
       .eq("id", d.id)
       .eq("clinic_id", clinicId);
 
-    if (error) return { error: error.message };
+    if (error) {
+      console.error("Supabase update error:", error);
+      return { error: error.message };
+    }
 
     await logAction({
       action: "update",
