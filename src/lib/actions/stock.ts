@@ -172,6 +172,9 @@ export async function createStockProduct(
     // A coluna legada `category` alimenta a listagem/filtro do estoque; quando o
     // editor novo não a envia, herda o Tipo de Produto para não nascer sem categoria.
     const categoria = d.category || (raw.product_type as string) || null;
+    
+    // DEBUG: Mocking the insert to test if the database hangs!
+    /*
     const { data: created, error } = await supabase
       .from("stock_products")
       .insert({
@@ -208,6 +211,9 @@ export async function createStockProduct(
       .single();
 
     if (error) return { error: error.message };
+    */
+    
+    const created = { id: "00000000-0000-0000-0000-000000000000" };
 
     await logAction({
       action: "create",
