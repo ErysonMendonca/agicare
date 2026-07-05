@@ -35,6 +35,10 @@ export default function GlobalError({
           <p style={{ fontSize: 14, color: "#64748b", marginBottom: 20 }}>
             Ocorreu um erro inesperado. Tente novamente.
           </p>
+          <div style={{ padding: 12, background: "#fee2e2", color: "#991b1b", borderRadius: 6, fontSize: 12, marginBottom: 20, textAlign: "left", overflowX: "auto" }}>
+            <strong>[DEBUG MSG]:</strong> {error.message}<br />
+            <strong>[DEBUG DIGEST]:</strong> {error.digest ?? "N/A"}
+          </div>
           <button
             onClick={() => reset()}
             style={{
