@@ -12,12 +12,9 @@
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 
 // Produto-mestre: tipo é FONTE DA VERDADE do backend (data/stock.ts), retornado
-// por getProdutoCompleto(). Reexportado aqui para uso do shell/editor.
 export type { ProdutoCompleto } from "@/lib/data/stock";
 
-// ── Dados das coleções de catálogos-filhos do produto ───────────────
 export type {
-  ProdutoCompleto,
   ProdutoChildren,
   ProductUnit,
   ProductMinMax,
@@ -26,59 +23,8 @@ export type {
   ProductBrand,
   ProductRequisitionLocation,
   ProductXyzClass,
-} from "@/lib/data/stock";
-
-export type ProductPayload = {
-  id?: string;
-  active: boolean;
-  name: string;
-  category: string;
-  productType: string;
-  productGroup: string;
-  unit: string;
-  manufacturer: string;
-  barcode: string;
-  activeIngredient: string;
-  presentation: string;
-  controlledClass: string;
-  requiresPrescription: boolean;
-  anvisaRegistration: string;
-  quantity: number;
-  minQuantity: number;
-  maxQuantity: number;
-  location: string;
-  lot: string;
-  expiry: string;
-  cost: number;
-  price: number;
-  ncm: string;
-  cest: string;
-  port344: boolean;
-  ctrlLoteValidade: boolean;
-  ctrlOpme: boolean;
-  ctrlNumeroSerie: boolean;
-  ctrlMarca: boolean;
-  prescQualquerVia: boolean;
-  prescQualquerFrequencia: boolean;
-  prescSeNecessario: boolean;
-  infoAltoCusto: boolean;
-  infoAltoRisco: boolean;
-  infoUrgencia: boolean;
-  infoOncologia: boolean;
-  infoAntimicrobianoRestrito: boolean;
-  infoDva: boolean;
-  infoUsoContinuo: boolean;
-  infoNaoPadrao: boolean;
-  solComponenteDiluido: boolean;
-  solComponenteDiluente: boolean;
-  // Children
-  units: string[];
-  routes: string[];
-  ingredients: string[];
-  brands: string[];
-  locations: string[];
-  xyzClass: string;
-};
+  ProductXyz,
+} from "@/lib/data/stock-product-children";
 
 /**
  * Props comuns de uma aba-filha do editor: o id do produto (já salvo) + a lista

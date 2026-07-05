@@ -3,7 +3,7 @@
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { SectionTitle } from "./ui";
-import type { ProdutoCompleto } from "../../types";
+import type { ProdutoCompleto } from "../types";
 import { Lock } from "lucide-react";
 
 export function EstoqueFinanceiro({

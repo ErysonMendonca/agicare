@@ -127,7 +127,7 @@ export function ProdutoEditor({
       if (selXyz) {
         const xyzClass = selXyz.trim().charAt(0).toUpperCase();
         if (xyzClass === "X" || xyzClass === "Y" || xyzClass === "Z") {
-          await addProductXyz(id, { xyzClass: xyzClass as ProductXyzClass, active: true });
+          await addProductXyz({ productId: id, xyzClass: xyzClass as ProductXyzClass });
         }
       }
     }
@@ -147,9 +147,9 @@ export function ProdutoEditor({
         ? await createStockProduct(undefined, formData)
         : await updateStockProduct(undefined, formData);
 
-      if (res?.error) {
-        toast.error(res.error);
-        setState({ error: res.error });
+      if (!res || res.error) {
+        toast.error(res?.error ?? "Erro desconhecido.");
+        setState({ error: res?.error ?? "Erro desconhecido." });
         setPending(false);
         return;
       }
@@ -282,10 +282,9 @@ export function ProdutoEditor({
 
           <Modal
             open={confirmDel}
-            onOpenChange={setConfirmDel}
+            onClose={() => setConfirmDel(false)}
             title="Excluir Produto"
-            description={`Tem certeza que deseja excluir "${produto.name}"? Esta ação não pode ser desfeita.`}
-            icon={<AlertTriangle className="h-6 w-6 text-status-danger" />}
+            subtitle={`Tem certeza que deseja excluir "${produto.name}"? Esta ação não pode ser desfeita.`}
           >
             <div className="mt-6 flex justify-end gap-3">
               <Button

@@ -3,7 +3,7 @@
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import { Checkbox, SectionTitle } from "./ui";
-import type { ProdutoCompleto } from "../../types";
+import type { ProdutoCompleto } from "../types";
 
 export function ControlePrescricao({
   produto,

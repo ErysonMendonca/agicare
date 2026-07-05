@@ -4,7 +4,7 @@ import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import { CheckboxGroup, SectionTitle } from "./ui";
 import type { ProdutoCatalogos } from "@/lib/data/produto-catalogos";
-import type { ProductXyzClass } from "../../types";
+import type { ProductXyzClass } from "../types";
 
 export function Selecoes({
   catalogos,
