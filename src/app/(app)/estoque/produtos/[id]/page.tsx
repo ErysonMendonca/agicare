@@ -72,51 +72,62 @@ export default async function ProdutoEditorPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireView("estoque");
-  const { id } = await params;
-  const novo = id === "novo";
+  try {
+    await requireView("estoque");
+    const { id } = await params;
+    const novo = id === "novo";
 
-  const [gestor, options, catalogos, clinicId, clinicas] = await Promise.all([
-    isGestor(),
-    listAttendanceOptions(),
-    listProdutoCatalogos(),
-    getActiveClinicId(),
-    getMyClinics(),
-  ]);
-
-  const empresa =
-    clinicas.find((c) => c.id === clinicId)?.name ?? clinicas[0]?.name ?? "—";
-
-  let produto: ProdutoCompleto;
-  let children: ProdutoChildren | null = null;
-
-  if (novo) {
-    produto = produtoVazio();
-  } else {
-    const [p, ch] = await Promise.all([
-      getProdutoCompleto(id),
-      getProdutoChildren(id),
+    const [gestor, options, catalogos, clinicId, clinicas] = await Promise.all([
+      isGestor(),
+      listAttendanceOptions(),
+      listProdutoCatalogos(),
+      getActiveClinicId(),
+      getMyClinics(),
     ]);
-    if (!p) notFound();
-    produto = p;
-    children = ch;
-  }
 
-  return (
-    <>
-      <PageHeader
-        title={novo ? "Novo Produto" : `Produto ${produto.codigo || ""}`.trim()}
-        subtitle="Cadastro completo do produto/medicamento no catálogo da clínica"
-      />
-      <ProdutoEditor
-        novo={novo}
-        empresa={empresa}
-        produto={produto}
-        childrenData={children}
-        options={options}
-        catalogos={catalogos}
-        gestor={gestor}
-      />
-    </>
-  );
+    const empresa =
+      clinicas.find((c) => c.id === clinicId)?.name ?? clinicas[0]?.name ?? "—";
+
+    let produto: ProdutoCompleto;
+    let children: ProdutoChildren | null = null;
+
+    if (novo) {
+      produto = produtoVazio();
+    } else {
+      const [p, ch] = await Promise.all([
+        getProdutoCompleto(id),
+        getProdutoChildren(id),
+      ]);
+      if (!p) notFound();
+      produto = p;
+      children = ch;
+    }
+
+    return (
+      <>
+        <PageHeader
+          title={novo ? "Novo Produto" : `Produto ${produto.codigo || ""}`.trim()}
+          subtitle="Cadastro completo do produto/medicamento no catálogo da clínica"
+        />
+        <ProdutoEditor
+          novo={novo}
+          empresa={empresa}
+          produto={produto}
+          childrenData={children}
+          options={options}
+          catalogos={catalogos}
+          gestor={gestor}
+        />
+      </>
+    );
+  } catch (err: any) {
+    if (err.message && err.message === 'NEXT_REDIRECT') throw err; // Allow Next.js redirects to bubble
+    return (
+      <div style={{ padding: 20, background: 'red', color: 'white' }}>
+        <h2>SSR CRASH IN ProdutoEditorPage</h2>
+        <pre>{err.message || String(err)}</pre>
+        <pre>{err.stack}</pre>
+      </div>
+    );
+  }
 }
