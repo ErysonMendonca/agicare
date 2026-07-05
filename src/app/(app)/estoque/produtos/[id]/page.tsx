@@ -16,22 +16,16 @@ let patched = false;
 function patchConsole() {
   if (patched) return;
   patched = true;
+  if (!(global as any).myNextErrors) {
+    (global as any).myNextErrors = [];
+  }
   const originalError = console.error;
   console.error = function (...args: any[]) {
     originalError.apply(console, args);
     try {
       const msg = args.map(a => (a && a.stack) ? a.stack : String(a)).join(" ");
       if (msg.includes("Error:") || msg.includes("digest")) {
-        // Fire and forget insert to system_logs
-        createClient().then(supabase => {
-          supabase.from("system_logs").insert({
-            action: "error",
-            module: "system",
-            summary: "Next.js Console Error: " + msg.substring(0, 500),
-            details: { full_error: msg },
-            created_at: new Date().toISOString()
-          }).then(() => {});
-        });
+        (global as any).myNextErrors.push(msg.substring(0, 1000));
       }
     } catch (e) {
       // ignore
@@ -135,6 +129,10 @@ export default async function ProdutoEditorPage({
 
     return (
       <>
+        <div style={{ padding: 10, background: 'yellow', color: 'black' }}>
+          <strong>Captured SSR Errors (reload to update):</strong>
+          <pre>{JSON.stringify((global as any).myNextErrors || [], null, 2)}</pre>
+        </div>
         <PageHeader
           title={novo ? "Novo Produto" : `Produto ${produto.codigo || ""}`.trim()}
           subtitle="Cadastro completo do produto/medicamento no catálogo da clínica"
