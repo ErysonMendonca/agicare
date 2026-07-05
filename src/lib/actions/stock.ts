@@ -153,60 +153,61 @@ export async function createStockProduct(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const raw = Object.fromEntries(formData) as RawForm;
-  const parsed = produtoSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
+  try {
+    const raw = Object.fromEntries(formData) as RawForm;
+    const parsed = produtoSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+    }
 
-  if (isDemoMode()) return { ok: true };
+    if (isDemoMode()) return { ok: true };
 
-  const d = parsed.data;
-  // Clínica ausente → erro amigável retornado (NÃO deixar `requireClinic()`
-  // fazer redirect e cair no global-error).
-  const clinicId = await getActiveClinicId();
-  if (!clinicId) return { error: SEM_CLINICA_ERR };
-  const gestor = await isGestor();
-  const supabase = await createClient();
-  // A coluna legada `category` alimenta a listagem/filtro do estoque; quando o
-  // editor novo não a envia, herda o Tipo de Produto para não nascer sem categoria.
-  const categoria = d.category || (raw.product_type as string) || null;
-  const { data: created, error } = await supabase
-    .from("stock_products")
-    .insert({
-      clinic_id: clinicId,
-      // code/code_number são atribuídos automaticamente pelo trigger 0058.
-      name: d.name,
-      active_ingredient: d.active_ingredient || null,
-      presentation: d.presentation || null,
-      barcode: d.barcode || null,
-      anvisa_registration: d.anvisa_registration || null,
-      category: categoria,
-      therapeutic_class: d.therapeutic_class || null,
-      unit: d.unit || "un",
-      controlled_class: d.controlled_class || null,
-      requires_prescription: d.requires_prescription === "true",
-      lot: d.lot || null,
-      expiry: d.expiry || null,
-      ncm: d.ncm || null,
-      cest: d.cest || null,
-      quantity: d.quantity,
-      min_quantity: d.min_quantity,
-      max_quantity: d.max_quantity,
-      location: d.location || null,
-      // Financeiro só quando gestor (evita não-gestor definir custo/preço).
-      cost: gestor ? d.cost : 0,
-      price: gestor ? d.price : 0,
-      manufacturer: d.manufacturer || null,
-      supplier_id: d.supplier_id || null,
-      active: d.active !== "false",
-      notes: d.notes || null,
-      ...novosCamposPatch(d as unknown as RawForm, raw, false),
-    })
-    .select("id")
-    .single();
+    const d = parsed.data;
+    // Clínica ausente → erro amigável retornado (NÃO deixar `requireClinic()`
+    // fazer redirect e cair no global-error).
+    const clinicId = await getActiveClinicId();
+    if (!clinicId) return { error: SEM_CLINICA_ERR };
+    const gestor = await isGestor();
+    const supabase = await createClient();
+    // A coluna legada `category` alimenta a listagem/filtro do estoque; quando o
+    // editor novo não a envia, herda o Tipo de Produto para não nascer sem categoria.
+    const categoria = d.category || (raw.product_type as string) || null;
+    const { data: created, error } = await supabase
+      .from("stock_products")
+      .insert({
+        clinic_id: clinicId,
+        // code/code_number são atribuídos automaticamente pelo trigger 0058.
+        name: d.name,
+        active_ingredient: d.active_ingredient || null,
+        presentation: d.presentation || null,
+        barcode: d.barcode || null,
+        anvisa_registration: d.anvisa_registration || null,
+        category: categoria,
+        therapeutic_class: d.therapeutic_class || null,
+        unit: d.unit || "un",
+        controlled_class: d.controlled_class || null,
+        requires_prescription: d.requires_prescription === "true",
+        lot: d.lot || null,
+        expiry: d.expiry || null,
+        ncm: d.ncm || null,
+        cest: d.cest || null,
+        quantity: d.quantity,
+        min_quantity: d.min_quantity,
+        max_quantity: d.max_quantity,
+        location: d.location || null,
+        // Financeiro só quando gestor (evita não-gestor definir custo/preço).
+        cost: gestor ? d.cost : 0,
+        price: gestor ? d.price : 0,
+        manufacturer: d.manufacturer || null,
+        supplier_id: d.supplier_id || null,
+        active: d.active !== "false",
+        notes: d.notes || null,
+        ...novosCamposPatch(d as unknown as RawForm, raw, false),
+      })
+      .select("id")
+      .single();
 
-  if (error) return { error: error.message };
+    if (error) return { error: error.message };
 
     await logAction({
       action: "create",
@@ -267,75 +268,76 @@ export async function updateStockProduct(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const raw = Object.fromEntries(formData) as RawForm;
-  const parsed = produtoUpdateSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
+  try {
+    const raw = Object.fromEntries(formData) as RawForm;
+    const parsed = produtoUpdateSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+    }
 
-  if (isDemoMode()) return { ok: true };
+    if (isDemoMode()) return { ok: true };
 
-  const d = parsed.data;
-  const clinicId = await getActiveClinicId();
-  if (!clinicId) return { error: SEM_CLINICA_ERR };
-  const gestor = await isGestor();
-  const supabase = await createClient();
+    const d = parsed.data;
+    const clinicId = await getActiveClinicId();
+    if (!clinicId) return { error: SEM_CLINICA_ERR };
+    const gestor = await isGestor();
+    const supabase = await createClient();
 
-  // SÓ `name` e `active` são sempre enviados pela aba Produto do editor.
-  const patch: Record<string, unknown> = {
-    name: d.name,
-    active: d.active !== "false",
-  };
+    // SÓ `name` e `active` são sempre enviados pela aba Produto do editor.
+    const patch: Record<string, unknown> = {
+      name: d.name,
+      active: d.active !== "false",
+    };
 
-  // Demais campos-mestre: só sobrescreve quando a chave veio no form (evita
-  // zerar colunas que a aba correspondente não renderizou). CRÍTICO para
-  // quantity/unit/category/lot/location — que agora vivem em abas-filhas e
-  // NÃO estão na aba Produto: incluí-los incondicionalmente zerava o saldo e
-  // apagava a categoria a cada Salvar.
-  const optText: Array<keyof typeof d> = [
-    "category",
-    "unit",
-    "lot",
-    "location",
-    "active_ingredient",
-    "presentation",
-    "barcode",
-    "anvisa_registration",
-    "therapeutic_class",
-    "controlled_class",
-    "expiry",
-    "ncm",
-    "cest",
-    "manufacturer",
-    "supplier_id",
-    "notes",
-  ];
-  for (const k of optText) {
-    if (k in raw) patch[k] = d[k] ? d[k] : null;
-  }
-  if ("requires_prescription" in raw) {
-    patch.requires_prescription = d.requires_prescription === "true";
-  }
-  if ("quantity" in raw) patch.quantity = d.quantity;
-  if ("min_quantity" in raw) patch.min_quantity = d.min_quantity;
-  if ("max_quantity" in raw) patch.max_quantity = d.max_quantity;
+    // Demais campos-mestre: só sobrescreve quando a chave veio no form (evita
+    // zerar colunas que a aba correspondente não renderizou). CRÍTICO para
+    // quantity/unit/category/lot/location — que agora vivem em abas-filhas e
+    // NÃO estão na aba Produto: incluí-los incondicionalmente zerava o saldo e
+    // apagava a categoria a cada Salvar.
+    const optText: Array<keyof typeof d> = [
+      "category",
+      "unit",
+      "lot",
+      "location",
+      "active_ingredient",
+      "presentation",
+      "barcode",
+      "anvisa_registration",
+      "therapeutic_class",
+      "controlled_class",
+      "expiry",
+      "ncm",
+      "cest",
+      "manufacturer",
+      "supplier_id",
+      "notes",
+    ];
+    for (const k of optText) {
+      if (k in raw) patch[k] = d[k] ? d[k] : null;
+    }
+    if ("requires_prescription" in raw) {
+      patch.requires_prescription = d.requires_prescription === "true";
+    }
+    if ("quantity" in raw) patch.quantity = d.quantity;
+    if ("min_quantity" in raw) patch.min_quantity = d.min_quantity;
+    if ("max_quantity" in raw) patch.max_quantity = d.max_quantity;
 
-  // Campos novos (0080): só as chaves presentes.
-  Object.assign(patch, novosCamposPatch(d as unknown as RawForm, raw, true));
+    // Campos novos (0080): só as chaves presentes.
+    Object.assign(patch, novosCamposPatch(d as unknown as RawForm, raw, true));
 
-  // Financeiro só quando gestor (não-gestor nem vê os campos no form).
-  if (gestor) {
-    patch.cost = d.cost;
-    patch.price = d.price;
-  }
+    // Financeiro só quando gestor (não-gestor nem vê os campos no form).
+    if (gestor) {
+      patch.cost = d.cost;
+      patch.price = d.price;
+    }
 
-  const { error } = await supabase
-    .from("stock_products")
-    .update(patch)
-    .eq("id", d.id)
-    .eq("clinic_id", clinicId);
+    const { error } = await supabase
+      .from("stock_products")
+      .update(patch)
+      .eq("id", d.id)
+      .eq("clinic_id", clinicId);
 
-  if (error) return { error: error.message };
+    if (error) return { error: error.message };
 
     await logAction({
       action: "update",
