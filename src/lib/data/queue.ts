@@ -361,6 +361,73 @@ export async function listQueue(opts?: {
   });
 }
 
+/**
+ * Busca uma única entrada da fila pelo ID: do banco quando configurado, mock no modo demo.
+ */
+export async function getQueueItem(id: string): Promise<FilaItem | null> {
+  if (isDemoMode()) {
+    const item = MOCK.find((m) => m.id === id) || MOCK_AGENDADOS.find((m) => m.id === id);
+    return item ?? null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("queue_entries")
+    .select(
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, reason), patients(convenio), professionals(profiles(full_name))",
+    )
+    .eq("id", id)
+    .single();
+
+  if (error || !data) return null;
+
+  const r = data;
+  const professional = Array.isArray(r.professionals)
+    ? r.professionals[0]
+    : r.professionals;
+  const profile = Array.isArray(professional?.profiles)
+    ? professional?.profiles[0]
+    : professional?.profiles;
+
+  const statusRaw = r.status ?? "aguardando";
+  const priorityRaw = r.priority ?? "normal";
+
+  const agendamento = Array.isArray(r.appointments)
+    ? r.appointments[0]
+    : r.appointments;
+  const startsAt = (agendamento?.starts_at as string | null) ?? null;
+  const tipoAtendimento = (agendamento?.reason as string | null) ?? null;
+  const pacienteRow = Array.isArray(r.patients) ? r.patients[0] : r.patients;
+  const convenioCadastro = (pacienteRow?.convenio as string | null) ?? null;
+
+  return {
+    id: r.id as string,
+    patientId: (r.patient_id as string | null) ?? null,
+    codigo: r.ticket_code ?? "—",
+    atendimentoCodigo: (r.attendance_code as string | null) ?? null,
+    paciente: r.patient_name ?? "",
+    hora: startsAt
+      ? formatHoraAgendada(startsAt)
+      : formatHora(r.created_at as string | null),
+    agendamentoEm: formatDataHoraAgendada(startsAt),
+    entradaEm: formatDataHora(
+      (r.arrived_at as string | null) ?? (r.created_at as string | null),
+    ),
+    especialidade: r.specialty ?? "—",
+    medico: profile?.full_name ?? "—",
+    convenio: r.insurance ?? "—",
+    convenioCadastro,
+    tipoAtendimento,
+    status: mapStatus(statusRaw),
+    statusRaw,
+    priorityRaw,
+    tags: mapPriority(priorityRaw),
+    appointmentId: (r.appointment_id as string | null) ?? null,
+    agendado: false,
+  };
+}
+
+
 /** Mocks de agendados (modo demo): pacientes da agenda ainda sem check-in. */
 const MOCK_AGENDADOS: FilaItem[] = [
   {

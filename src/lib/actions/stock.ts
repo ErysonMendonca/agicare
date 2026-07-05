@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isDemoMode } from "@/lib/supabase/config";
-import { requireClinic } from "@/lib/tenant";
+import { requireClinic, getActiveClinicId } from "@/lib/tenant";
 import { requireClinico, isGestor } from "@/lib/auth";
 import { logAction } from "@/lib/system-log";
 import {
@@ -19,6 +19,16 @@ export type ActionState =
 function revalidateEstoque() {
   revalidatePath("/estoque");
 }
+
+// Mensagem única de "sessão sem clínica ativa" — usada pelo editor de produto,
+// que roda dentro de um form/useActionState e exibe `state.error` como toast.
+// Nas ACTIONS do editor (create/update/delete) resolvemos a clínica com
+// `getActiveClinicId()` + checagem de null e RETORNAMOS este erro amigável, em
+// vez de deixar o `redirect('/')` de `requireClinic()` escapar para o
+// global-error ("Algo deu errado"). Não muda a semântica de segurança: quem
+// autoriza continua sendo o servidor (RLS + escopo por clinic_id).
+const SEM_CLINICA_ERR =
+  "Sessão sem clínica ativa. Saia e entre novamente.";
 
 // ── Cadastro de produto ─────────────────────────────────────────────
 const numeroOpcional = z
@@ -152,7 +162,10 @@ export async function createStockProduct(
   if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
-  const clinicId = await requireClinic();
+  // Clínica ausente → erro amigável retornado (NÃO deixar `requireClinic()`
+  // fazer redirect e cair no global-error).
+  const clinicId = await getActiveClinicId();
+  if (!clinicId) return { error: SEM_CLINICA_ERR };
   const gestor = await isGestor();
   const supabase = await createClient();
   // A coluna legada `category` alimenta a listagem/filtro do estoque; quando o
@@ -259,7 +272,8 @@ export async function updateStockProduct(
   if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
-  const clinicId = await requireClinic();
+  const clinicId = await getActiveClinicId();
+  if (!clinicId) return { error: SEM_CLINICA_ERR };
   const gestor = await isGestor();
   const supabase = await createClient();
 
@@ -342,7 +356,8 @@ export async function deleteStockProduct(id: string): Promise<ActionState> {
 
   if (isDemoMode()) return { ok: true };
 
-  const clinicId = await requireClinic();
+  const clinicId = await getActiveClinicId();
+  if (!clinicId) return { error: SEM_CLINICA_ERR };
   const supabase = await createClient();
   const { error } = await supabase
     .from("stock_products")
