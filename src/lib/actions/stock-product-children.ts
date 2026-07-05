@@ -734,7 +734,8 @@ export async function setProdutoSelecoes(
   productId: string,
   selecoes: ProdutoSelecoes,
 ): Promise<ActionResult> {
-  const g = await gate();
+  try {
+    const g = await gate();
   if ("error" in g) return g;
   if (!UUID.test(productId)) return { error: "Produto inválido." };
 
@@ -778,13 +779,17 @@ export async function setProdutoSelecoes(
     if (err) return { error: err };
   }
 
-  await logAction({
-    action: "update",
-    module: "estoque",
-    summary: "Atualizou as seleções de catálogo do produto",
-    entity: "stock_product",
-    entityId: productId,
-  });
-  revalidateProduto(productId);
-  return { ok: true };
+    await logAction({
+      action: "update",
+      module: "estoque",
+      summary: "Atualizou as seleções de catálogo do produto",
+      entity: "stock_product",
+      entityId: productId,
+    });
+    revalidateProduto(productId);
+    return { ok: true };
+  } catch (err: any) {
+    console.error("Unhandled exception in setProdutoSelecoes:", err);
+    return { error: `Erro inesperado no servidor: ${err.message || String(err)}` };
+  }
 }

@@ -208,15 +208,19 @@ export async function createStockProduct(
 
   if (error) return { error: error.message };
 
-  await logAction({
-    action: "create",
-    module: "estoque",
-    summary: `Cadastrou o produto ${d.name}`,
-    entity: "product",
-    entityId: created?.id as string | undefined,
-  });
-  revalidateEstoque();
-  return { ok: true, id: created?.id as string | undefined };
+    await logAction({
+      action: "create",
+      module: "estoque",
+      summary: `Cadastrou o produto ${d.name}`,
+      entity: "product",
+      entityId: created?.id as string | undefined,
+    });
+    revalidateEstoque();
+    return { ok: true, id: created?.id as string | undefined };
+  } catch (err: any) {
+    console.error("Unhandled exception in createStockProduct:", err);
+    return { error: `Erro inesperado no servidor: ${err.message || String(err)}` };
+  }
 }
 
 // ── Edição de produto ───────────────────────────────────────────────
@@ -333,15 +337,19 @@ export async function updateStockProduct(
 
   if (error) return { error: error.message };
 
-  await logAction({
-    action: "update",
-    module: "estoque",
-    summary: `Editou o produto ${d.name}`,
-    entity: "product",
-    entityId: d.id,
-  });
-  revalidateEstoque();
-  return { ok: true };
+    await logAction({
+      action: "update",
+      module: "estoque",
+      summary: `Editou o produto ${d.name}`,
+      entity: "product",
+      entityId: d.id,
+    });
+    revalidateEstoque();
+    return { ok: true };
+  } catch (err: any) {
+    console.error("Unhandled exception in updateStockProduct:", err);
+    return { error: `Erro inesperado no servidor: ${err.message || String(err)}` };
+  }
 }
 
 // ── Exclusão de produto ─────────────────────────────────────────────
