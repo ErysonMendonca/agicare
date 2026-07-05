@@ -165,8 +165,7 @@ export function ProdutoEditor({
         setPending(false);
         return;
       }
-
-      const id = novo ? res.id : produto.id;
+      const id = novo ? res?.id : produto.id;
       if (!id) {
         toast.error("Salvo com sucesso, mas o ID não foi retornado.");
         setPending(false);
