@@ -9,6 +9,35 @@ import { getProdutoCompleto, type ProdutoCompleto } from "@/lib/data/stock";
 import { getProdutoChildren } from "@/lib/data/stock-product-children";
 import { ProdutoEditor } from "./ProdutoEditor";
 import type { ProdutoChildren } from "./types";
+import { createClient } from "@/lib/supabase/server";
+
+// We monkey-patch console.error to catch the Next.js unredacted SSR error
+let patched = false;
+function patchConsole() {
+  if (patched) return;
+  patched = true;
+  const originalError = console.error;
+  console.error = function (...args: any[]) {
+    originalError.apply(console, args);
+    try {
+      const msg = args.map(a => (a && a.stack) ? a.stack : String(a)).join(" ");
+      if (msg.includes("Error:") || msg.includes("digest")) {
+        // Fire and forget insert to system_logs
+        createClient().then(supabase => {
+          supabase.from("system_logs").insert({
+            action: "error",
+            module: "system",
+            summary: "Next.js Console Error: " + msg.substring(0, 500),
+            details: { full_error: msg },
+            created_at: new Date().toISOString()
+          }).then(() => {});
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+}
 
 /** Produto vazio para o modo "novo" (defaults espelham a migration 0080). */
 function produtoVazio(): ProdutoCompleto {
@@ -73,6 +102,7 @@ export default async function ProdutoEditorPage({
   params: Promise<{ id: string }>;
 }) {
   try {
+    patchConsole();
     await requireView("estoque");
     const { id } = await params;
     const novo = id === "novo";
