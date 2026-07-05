@@ -258,7 +258,7 @@ const escalaSchema = z.object({
   // Escala é por ESPECIALIDADE (não por profissional). professional_id mantido
   // no schema por compatibilidade, mas ignorado (gravado null).
   professional_id: z.string().trim().optional().or(z.literal("")),
-  specialty: z.string().trim().min(2, "Selecione a especialidade."),
+  specialty: z.string().trim().optional().or(z.literal("")),
   service_type: z.string().trim().optional().or(z.literal("")),
   slot_minutes: z.coerce.number().int().positive().default(30),
   overbook_limit: z.coerce.number().int().min(0).default(0),
@@ -492,6 +492,9 @@ export async function createSchedule(
   }
 
   const d = parsed.data;
+  if (d.service_type !== "Procedimento" && (!d.specialty || d.specialty.trim().length < 2)) {
+    return { error: "Selecione a especialidade da escala." };
+  }
   if (periodoInvalido(d)) {
     return { error: "A data final deve ser igual ou posterior à inicial." };
   }
@@ -540,7 +543,7 @@ export async function createSchedule(
   await logAction({
     action: "create",
     module: "agenda",
-    summary: `Criou a escala ${code} (${d.specialty})`,
+    summary: `Criou a escala ${code} (${d.specialty || d.service_type || "Sem Especialidade"})`,
     entity: "schedule",
     metadata: { code },
   });
@@ -569,6 +572,9 @@ export async function updateSchedule(
   }
 
   const d = parsed.data;
+  if (d.service_type !== "Procedimento" && (!d.specialty || d.specialty.trim().length < 2)) {
+    return { error: "Selecione a especialidade da escala." };
+  }
   if (periodoInvalido(d)) {
     return { error: "A data final deve ser igual ou posterior à inicial." };
   }
@@ -637,7 +643,7 @@ export async function updateSchedule(
   await logAction({
     action: "update",
     module: "agenda",
-    summary: `Editou a escala (${d.specialty})`,
+    summary: `Editou a escala (${d.specialty || d.service_type || "Sem Especialidade"})`,
     entity: "schedule",
     entityId: idParsed.data,
   });

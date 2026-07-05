@@ -296,7 +296,7 @@ export function EscalaHorariosModal({
       setAba("dados");
       return;
     }
-    if (especialidade.trim().length < 2) {
+    if (tipo !== "Procedimento" && especialidade.trim().length < 2) {
       toast.error("Selecione a especialidade da escala.");
       setAba("dados");
       return;
@@ -468,7 +468,7 @@ export function EscalaHorariosModal({
             onChange={(e) => setEncaixe(Number(e.target.value))}
           />
           <Select
-            label="Especialidade *"
+            label={tipo === "Procedimento" ? "Especialidade" : "Especialidade *"}
             value={especialidade}
             onChange={(e) => setEspecialidade(e.target.value)}
           >
@@ -489,8 +489,9 @@ export function EscalaHorariosModal({
             ))}
           </Select>
           <p className="text-xs text-muted sm:col-span-2">
-            A escala é definida por <strong>especialidade</strong> e vale para
-            todos os profissionais dela.
+            {tipo === "Procedimento"
+              ? "A escala define o horário para os procedimentos selecionados."
+              : "A escala é definida por especialidade e vale para todos os profissionais dela."}
           </p>
 
           {/* Itens da escala: aparece conforme o Tipo de Escala. */}
