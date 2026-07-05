@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { toast } from "sonner";
 import { Save, AlertTriangle, Trash2, ShieldAlert } from "lucide-react";
-import { Dialog } from "@/components/ui/Dialog";
+import { Modal } from "@/components/ui/Modal";
 import {
   createStockProduct,
   updateStockProduct,
@@ -280,7 +280,7 @@ export function ProdutoEditor({
             </div>
           </div>
 
-          <Dialog
+          <Modal
             open={confirmDel}
             onOpenChange={setConfirmDel}
             title="Excluir Produto"
@@ -305,7 +305,7 @@ export function ProdutoEditor({
                 {deleting ? "Excluindo..." : "Sim, Excluir"}
               </Button>
             </div>
-          </Dialog>
+          </Modal>
         </form>
       </LocalErrorBoundary>
     </div>
