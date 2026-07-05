@@ -37,7 +37,6 @@ import {
 import { chaveEspecialidade } from "@/lib/clinico/anamnese-config";
 import { AcoesPacienteModal } from "./AcoesPacienteModal";
 import { TriagemModal } from "./TriagemModal";
-import { DadosAtendimentoModal } from "./DadosAtendimentoModal";
 import { FechamentoModal } from "./FechamentoModal";
 import { DesistenciaModal } from "./DesistenciaModal";
 import { CheckInModal } from "./CheckInModal";
@@ -577,7 +576,10 @@ export function FilaClient({
             onClose={fechar}
             onStatusChange={onStatusChange}
             onTriar={() => setModal("triagem")}
-            onAtender={() => setModal("atendimento")}
+            onAtender={() => {
+              fechar();
+              router.push(`/fila/atendimento/${selected.id}`);
+            }}
             onDesistir={() => setModal("desistencia")}
             onFechar={() => setModal("fechamento")}
             isMedico={isMedico}
@@ -589,14 +591,6 @@ export function FilaClient({
             open={modal === "triagem"}
             onClose={fechar}
             onStatusChange={onStatusChange}
-          />
-          <DadosAtendimentoModal
-            item={selected}
-            open={modal === "atendimento"}
-            onClose={fechar}
-            onVoltar={() => setModal("acoes")}
-            options={attendanceOptions}
-            profissionais={profissionais}
           />
           <DesistenciaModal
             item={selected}
