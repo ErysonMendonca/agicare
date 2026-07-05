@@ -238,6 +238,30 @@ export async function checkInTotem(
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
+
+  if (data.appointmentId) {
+    const { data: ap } = await supabase
+      .from("appointments")
+      .select("starts_at")
+      .eq("id", data.appointmentId)
+      .maybeSingle();
+
+    if (ap && ap.starts_at) {
+      const dataAgendamento = new Date(ap.starts_at).toISOString().slice(0, 10);
+      const hojeClinica = new Date().toLocaleDateString("sv-SE", {
+        timeZone: "America/Sao_Paulo",
+      });
+
+      if (dataAgendamento !== hojeClinica) {
+        const [y, m, d] = dataAgendamento.split("-");
+        const dataFormatada = `${d}/${m}/${y}`;
+        return {
+          error: `Este agendamento é para o dia ${dataFormatada}. O check-in só é permitido no dia do agendamento.`,
+        };
+      }
+    }
+  }
+
   const { startISO, endISO } = todayRangeISO();
 
   // Sequencial do dia = nº de senhas já emitidas hoje + 1.
