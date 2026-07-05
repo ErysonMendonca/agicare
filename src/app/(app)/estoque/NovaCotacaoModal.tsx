@@ -7,7 +7,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { criarCotacao, MAX_COTACAO_BYTES } from "@/lib/actions/stock";
+import { criarCotacao } from "@/lib/actions/stock";
+
+const MAX_COTACAO_BYTES = 5 * 1024 * 1024;
 
 /**
  * Adiciona uma cotação a uma solicitação de compra, com anexo opcional de PDF
