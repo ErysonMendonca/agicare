@@ -224,7 +224,7 @@ export function NovoAgendamentoModal({
     } else if (!pacienteId) {
       return toast.error("Selecione o paciente.");
     }
-    if (!profissionalId && !especialidade)
+    if (!profissionalId && !especialidade && tipo !== "Procedimento" && tipo !== "Exame")
       return toast.error("Selecione o profissional ou ao menos a especialidade.");
     if (!data) return toast.error("Informe a data do atendimento.");
     setHora("");

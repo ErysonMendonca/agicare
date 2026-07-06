@@ -649,7 +649,7 @@ export async function createSchedule(
   }
 
   const d = parsed.data;
-  if (d.service_type !== "Procedimento" && (!d.specialty || d.specialty.trim().length < 2)) {
+  if (d.service_type !== "Procedimento" && d.service_type !== "Exame" && (!d.specialty || d.specialty.trim().length < 2)) {
     return { error: "Selecione a especialidade da escala." };
   }
   if (periodoInvalido(d)) {
@@ -729,7 +729,7 @@ export async function updateSchedule(
   }
 
   const d = parsed.data;
-  if (d.service_type !== "Procedimento" && (!d.specialty || d.specialty.trim().length < 2)) {
+  if (d.service_type !== "Procedimento" && d.service_type !== "Exame" && (!d.specialty || d.specialty.trim().length < 2)) {
     return { error: "Selecione a especialidade da escala." };
   }
   if (periodoInvalido(d)) {
@@ -1277,7 +1277,7 @@ export async function listSlotsBySpecialty(
   specialty: string,
   dateISO: string,
 ): Promise<SlotGrid> {
-  if (!specialty || !dateISO) return { slots: [], slotMinutes: 30 };
+  if (typeof specialty !== "string" || !dateISO) return { slots: [], slotMinutes: 30 };
 
   if (isDemoMode()) {
     const ocupados = new Set(["09:00", "11:00", "15:00"]);
@@ -1290,13 +1290,20 @@ export async function listSlotsBySpecialty(
   const supabase = await createClient();
   const weekday = new Date(`${dateISO}T00:00:00`).getDay();
 
-  const { data: escalas } = await supabase
+  let query = supabase
     .from("schedules")
     .select(
       "slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks",
     )
-    .eq("specialty", specialty)
     .eq("active", true);
+
+  if (!specialty) {
+    query = query.is("specialty", null);
+  } else {
+    query = query.eq("specialty", specialty);
+  }
+
+  const { data: escalas } = await query;
 
   // Escalas ativas da especialidade válidas nesse dia/data.
   const doDia = (escalas ?? []).filter(
