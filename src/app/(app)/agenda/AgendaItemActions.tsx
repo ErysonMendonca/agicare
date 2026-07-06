@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, X, Save, Ban } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +14,8 @@ import {
   remarcarAppointment,
   trocarProfissional,
   cancelAppointment,
+  listSlots,
+  listSlotsBySpecialty,
 } from "@/lib/actions/appointments";
 
 type Aberto = "editar" | "cancelar" | null;
@@ -55,6 +57,20 @@ export function AgendaItemActions({
 
   const encerrado = ENCERRADOS.has(atendimento.status);
   const profEscolhido = profissionais.find((p) => p.id === profissionalId) ?? null;
+  const especialidadeEscolhida = profEscolhido?.especialidade ?? atendimento.especialidade;
+
+  const [slots, setSlots] = useState<{ hora: string; ocupado: boolean }[]>([]);
+  const [slotPending, startSlotTransition] = useTransition();
+
+  useEffect(() => {
+    if (aberto !== "editar" || !data) return;
+    startSlotTransition(async () => {
+      const grid = profissionalId
+        ? await listSlots(profissionalId, data)
+        : await listSlotsBySpecialty(especialidadeEscolhida, data);
+      setSlots(grid.slots);
+    });
+  }, [aberto, data, profissionalId, especialidadeEscolhida]);
 
   function resetEditar() {
     setData(atendimento.dataISO);
@@ -166,28 +182,65 @@ export function AgendaItemActions({
               value={data}
               onChange={(e) => setData(e.target.value)}
             />
-            <Input
-              label="Novo Horário"
-              type="time"
-              value={hora}
-              onChange={(e) => setHora(e.target.value)}
-            />
+            <Select
+              label="Profissional"
+              value={profissionalId}
+              onChange={(e) => setProfissionalId(e.target.value)}
+            >
+              <option value="">Manter profissional atual</option>
+              {profissionais.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                  {p.especialidade && p.especialidade !== "—"
+                    ? ` · ${p.especialidade}`
+                    : ""}
+                </option>
+              ))}
+            </Select>
           </div>
-          <Select
-            label="Profissional"
-            value={profissionalId}
-            onChange={(e) => setProfissionalId(e.target.value)}
-          >
-            <option value="">Manter profissional atual</option>
-            {profissionais.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-                {p.especialidade && p.especialidade !== "—"
-                  ? ` · ${p.especialidade}`
-                  : ""}
-              </option>
-            ))}
-          </Select>
+
+          {/* Horários disponíveis */}
+          <div>
+            <span className="mb-2 block text-sm font-medium text-ink">
+              Horário do Atendimento
+            </span>
+            {slotPending ? (
+              <p className="py-4 text-center text-sm text-muted border border-dashed border-line rounded-xl">
+                Carregando horários da escala...
+              </p>
+            ) : slots.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted rounded-xl border border-dashed border-line">
+                Nenhum horário configurado para esta data.
+              </p>
+            ) : (
+              <div className="grid max-h-48 grid-cols-4 gap-2 overflow-y-auto p-1">
+                {slots.map((s) => {
+                  const sel = hora === s.hora;
+                  const isOriginal =
+                    data === atendimento.dataISO &&
+                    s.hora === (atendimento.hora === "—" ? "" : atendimento.hora);
+                  const desabilitado = s.ocupado && !isOriginal && !sel;
+                  return (
+                    <button
+                      key={s.hora}
+                      type="button"
+                      disabled={desabilitado}
+                      onClick={() => setHora(s.hora)}
+                      className={`h-9 rounded border text-sm font-medium transition-colors ${
+                        desabilitado
+                          ? "cursor-not-allowed border-line bg-muted-surface text-muted"
+                          : sel
+                            ? "border-brand-500 bg-brand-500 text-white"
+                            : "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+                      }`}
+                    >
+                      {s.hora}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           {especialidades.length > 0 && profEscolhido && (
             <p className="text-xs text-muted">
               Especialidade:{" "}
