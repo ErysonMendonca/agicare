@@ -471,10 +471,11 @@ export function AtendimentoClient({
                   />
                 </div>
                 <Select
-                  name="especialidade"
+                  name={item.especialidade ? undefined : "especialidade"}
                   label="Especialidade"
                   value={especSel}
                   onChange={(e) => trocarEspecialidade(e.target.value)}
+                  disabled={!!item.especialidade}
                 >
                   {espec.options.map((o) => (
                     <option key={o.id} value={o.value}>
@@ -482,14 +483,16 @@ export function AtendimentoClient({
                     </option>
                   ))}
                 </Select>
+                {!!item.especialidade && <input type="hidden" name="especialidade" value={especSel} />}
                 <Select
-                  name="medico"
+                  name={item.medico ? undefined : "medico"}
                   label="Profissional"
                   value={profSel}
                   onChange={(e) => {
                     setProfSel(e.target.value);
                     markDirty();
                   }}
+                  disabled={!!item.medico}
                 >
                   {profOptions.length === 0 ? (
                     <option value="" disabled>
@@ -503,10 +506,12 @@ export function AtendimentoClient({
                     ))
                   )}
                 </Select>
+                {!!item.medico && <input type="hidden" name="medico" value={profSel} />}
                 <Select
-                  name="encaminhamento"
+                  name={item.tipoAtendimento ? undefined : "encaminhamento"}
                   label="Tipo de Atendimento *"
                   defaultValue={tipoDefault}
+                  disabled={!!item.tipoAtendimento}
                 >
                   {!tipoAgendado && (
                     <option value="" disabled>
@@ -519,6 +524,7 @@ export function AtendimentoClient({
                     </option>
                   ))}
                 </Select>
+                {!!item.tipoAtendimento && <input type="hidden" name="encaminhamento" value={tipoDefault} />}
                 <Select
                   name="carater"
                   label="Caráter de Atendimento"
@@ -565,9 +571,10 @@ export function AtendimentoClient({
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <Select
-                  name="convenio"
+                  name={item.convenio ? undefined : "convenio"}
                   label="Convênio *"
                   value={convenio}
+                  disabled={!!item.convenio}
                   onChange={(e) => {
                     const v = e.target.value;
                     setConvenio(v);
@@ -581,6 +588,7 @@ export function AtendimentoClient({
                     </option>
                   ))}
                 </Select>
+                {!!item.convenio && <input type="hidden" name="convenio" value={convenio} />}
                 <Select
                   label={isParticular ? "Plano" : "Plano *"}
                   value={isParticular ? "" : plano}
