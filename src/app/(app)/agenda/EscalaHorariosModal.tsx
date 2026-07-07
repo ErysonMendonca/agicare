@@ -189,7 +189,9 @@ export function EscalaHorariosModal({
   // Opções do Select vêm do catálogo. Em edição, preserva o valor atual mesmo
   // que não esteja (mais) no catálogo, para não perder o dado da escala.
   const listaEspecialidades = useMemo(() => {
-    const opts = especialidades.map((e) => ({ value: e.value, label: e.label }));
+    const opts = especialidades
+      .map((e) => ({ value: e.value, label: e.label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
     const atual = esc?.specialty ?? "";
     if (atual && !opts.some((o) => o.value === atual)) {
       return [{ value: atual, label: atual }, ...opts];
