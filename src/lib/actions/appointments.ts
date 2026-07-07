@@ -83,10 +83,16 @@ const createSchema = z
   // Profissional é opcional (agendamento por especialidade). Sem profissional,
   // a especialidade passa a ser obrigatória para classificar o atendimento.
   .refine(
-    (d) => Boolean(d.professional_id?.trim()) || Boolean(d.specialty?.trim()),
+    (d) => {
+      const type = d.service_type || "Consulta";
+      if (type === "Consulta" || type === "Retorno") {
+        return Boolean(d.specialty?.trim());
+      }
+      return true;
+    },
     {
-      message: "Selecione o profissional ou ao menos a especialidade.",
-      path: ["professional_id"],
+      message: "Selecione a especialidade.",
+      path: ["specialty"],
     },
   );
 
@@ -244,6 +250,7 @@ export async function createAppointment(
     patient_id: d.patient_id,
     professional_id: d.professional_id?.trim() || null,
     specialty: d.specialty?.trim() || null,
+    service_type: d.service_type?.trim() || null,
     starts_at: startsAt,
     ends_at: endsAt,
     status: "agendado",

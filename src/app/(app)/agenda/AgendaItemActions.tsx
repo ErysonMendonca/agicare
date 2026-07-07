@@ -182,21 +182,32 @@ export function AgendaItemActions({
               value={data}
               onChange={(e) => setData(e.target.value)}
             />
-            <Select
-              label="Profissional"
-              value={profissionalId}
-              onChange={(e) => setProfissionalId(e.target.value)}
-            >
-              <option value="">Manter profissional atual</option>
-              {profissionais.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome}
-                  {p.especialidade && p.especialidade !== "—"
-                    ? ` · ${p.especialidade}`
-                    : ""}
-                </option>
-              ))}
-            </Select>
+            {(atendimento.serviceType === "Consulta" || atendimento.serviceType === "Retorno") ? (
+              <Select
+                label="Profissional"
+                value={profissionalId}
+                onChange={(e) => setProfissionalId(e.target.value)}
+              >
+                <option value="">Manter profissional atual</option>
+                {profissionais.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nome}
+                    {p.especialidade && p.especialidade !== "—"
+                      ? ` · ${p.especialidade}`
+                      : ""}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <div className="flex flex-col justify-end pb-1">
+                <span className="block text-xs font-semibold text-muted uppercase tracking-wider">
+                  Procedimento/Exame
+                </span>
+                <span className="text-sm font-bold text-ink mt-1">
+                  {atendimento.serviceType} — {atendimento.motivo}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Horários disponíveis */}

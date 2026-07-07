@@ -30,6 +30,8 @@ import { Select } from "@/components/ui/Select";
 import { type Paciente } from "@/lib/data/patients";
 import { type Profissional } from "@/lib/data/professionals";
 import { type AttendanceOption } from "@/lib/data/attendance-options.shared";
+import { type Procedimento } from "@/lib/data/procedures";
+import { EXAMES_TUSS } from "@/lib/clinico/exames-shared";
 import {
   createAppointment,
   listSlots,
@@ -62,6 +64,7 @@ export function NovoAgendamentoModal({
   pacientes,
   profissionais,
   especialidades: catalogoEspecialidades,
+  procedimentos,
 }: {
   open: boolean;
   onClose: () => void;
@@ -69,6 +72,7 @@ export function NovoAgendamentoModal({
   profissionais: Profissional[];
   /** Catálogo de especialidades (attendance_options), fonte única do sistema. */
   especialidades: AttendanceOption[];
+  procedimentos: Procedimento[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -81,6 +85,7 @@ export function NovoAgendamentoModal({
   const [especialidade, setEspecialidade] = useState("");
   const [profissionalId, setProfissionalId] = useState("");
   const [tipo, setTipo] = useState(TIPOS[0]);
+  const [itemId, setItemId] = useState("");
   // Data de hoje (YYYY-MM-DD) em horário LOCAL — usada como mínimo do date
   // picker e para filtrar horários que já passaram quando o agendamento é para
   // hoje. NÃO usar toISOString() (data UTC): perto da meia-noite em fuso
@@ -208,6 +213,7 @@ export function NovoAgendamentoModal({
     setAvulsoTel("");
     setAvulsoCpf("");
     setPacienteExistente(null);
+    setItemId("");
   }
 
   function fechar() {
@@ -224,8 +230,14 @@ export function NovoAgendamentoModal({
     } else if (!pacienteId) {
       return toast.error("Selecione o paciente.");
     }
-    if (!profissionalId && !especialidade && tipo !== "Procedimento" && tipo !== "Exame")
-      return toast.error("Selecione o profissional ou ao menos a especialidade.");
+
+    if (tipo === "Consulta" || tipo === "Retorno") {
+      if (!especialidade) return toast.error("Selecione a especialidade.");
+    } else if (tipo === "Exame") {
+      if (!itemId) return toast.error("Selecione o exame.");
+    } else if (tipo === "Procedimento") {
+      if (!itemId) return toast.error("Selecione o procedimento.");
+    }
     if (!data) return toast.error("Informe a data do atendimento.");
     setHora("");
     startSlots(async () => {
@@ -267,6 +279,13 @@ export function NovoAgendamentoModal({
         }
       }
 
+      let reasonSelected = "";
+      if (tipo === "Exame") {
+        reasonSelected = EXAMES_TUSS.find((e) => e.tuss === itemId)?.nome || "";
+      } else if (tipo === "Procedimento") {
+        reasonSelected = procedimentos.find((p) => p.codigo === itemId)?.nome || "";
+      }
+
       const res = await createAppointment({
         patient_id: patientId,
         professional_id: profissionalId,
@@ -275,6 +294,7 @@ export function NovoAgendamentoModal({
         date: data,
         time: hora,
         slot_minutes: duracao,
+        reason: reasonSelected || undefined,
       });
       if (res?.ok) {
         setProtocolo(res.protocol ?? "—");
@@ -478,41 +498,78 @@ export function NovoAgendamentoModal({
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Select
-              label="Especialidade"
-              value={especialidade}
-              onChange={(e) => {
-                setEspecialidade(e.target.value);
-                setProfissionalId("");
-              }}
-            >
-              <option value="">Todas as especialidades</option>
-              {especialidades.map((e) => (
-                <option key={e.value} value={e.value}>
-                  {e.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              label="Profissional (opcional)"
-              value={profissionalId}
-              onChange={(e) => setProfissionalId(e.target.value)}
-            >
-              <option value="">A definir (por especialidade)</option>
-              {profFiltrados.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome}
-                </option>
-              ))}
-            </Select>
-            <Select
               label="Tipo de Atendimento"
               value={tipo}
-              onChange={(e) => setTipo(e.target.value)}
+              onChange={(e) => {
+                setTipo(e.target.value);
+                setEspecialidade("");
+                setProfissionalId("");
+                setItemId("");
+              }}
             >
               {TIPOS.map((t) => (
                 <option key={t}>{t}</option>
               ))}
             </Select>
+
+            {(tipo === "Consulta" || tipo === "Retorno") ? (
+              <>
+                <Select
+                  label="Especialidade"
+                  value={especialidade}
+                  onChange={(e) => {
+                    setEspecialidade(e.target.value);
+                    setProfissionalId("");
+                  }}
+                >
+                  <option value="">Selecione a especialidade</option>
+                  {especialidades.map((e) => (
+                    <option key={e.value} value={e.value}>
+                      {e.label}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  label="Profissional (opcional)"
+                  value={profissionalId}
+                  onChange={(e) => setProfissionalId(e.target.value)}
+                >
+                  <option value="">A definir (por especialidade)</option>
+                  {profFiltrados.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome}
+                    </option>
+                  ))}
+                </Select>
+              </>
+            ) : tipo === "Exame" ? (
+              <Select
+                label="Qual Exame?"
+                value={itemId}
+                onChange={(e) => setItemId(e.target.value)}
+              >
+                <option value="">Selecione o exame</option>
+                {EXAMES_TUSS.map((ex) => (
+                  <option key={ex.tuss} value={ex.tuss}>
+                    {ex.nome} ({ex.tuss})
+                  </option>
+                ))}
+              </Select>
+            ) : tipo === "Procedimento" ? (
+              <Select
+                label="Qual Procedimento?"
+                value={itemId}
+                onChange={(e) => setItemId(e.target.value)}
+              >
+                <option value="">Selecione o procedimento</option>
+                {procedimentos.map((pr) => (
+                  <option key={pr.codigo} value={pr.codigo}>
+                    {pr.nome}
+                  </option>
+                ))}
+              </Select>
+            ) : null}
+
             <Input
               label="Data do Atendimento"
               type="date"

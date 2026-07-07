@@ -33,6 +33,7 @@ export type Atendimento = {
   statusLabel: string;
   /** Variante do Badge. */
   badge: Status;
+  serviceType: string;
 };
 
 export type AppointmentKpis = {
@@ -138,6 +139,7 @@ const MOCK: Atendimento[] = (
     status: m.status,
     statusLabel: STATUS_LABEL[m.status],
     badge: STATUS_BADGE[m.status],
+    serviceType: "Consulta",
   };
 });
 
@@ -149,7 +151,7 @@ export async function listAppointments(): Promise<Atendimento[]> {
   let query = supabase
     .from("appointments")
     .select(
-      "id, starts_at, reason, status, professional_id, specialty, patients(full_name, cpf), professionals(specialty, profiles(full_name))",
+      "id, starts_at, reason, status, professional_id, specialty, service_type, patients(full_name, cpf), professionals(specialty, profiles(full_name))",
     )
     .order("starts_at", { ascending: true });
 
@@ -208,6 +210,7 @@ export async function listAppointments(): Promise<Atendimento[]> {
       status,
       statusLabel: STATUS_LABEL[status] ?? status,
       badge: STATUS_BADGE[status] ?? "wait",
+      serviceType: (r.service_type as string | null) ?? "",
     };
   });
 }

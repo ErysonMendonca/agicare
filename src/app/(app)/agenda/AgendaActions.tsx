@@ -64,6 +64,7 @@ export function AgendaActions({
         pacientes={pacientes}
         profissionais={profissionais}
         especialidades={especialidades}
+        procedimentos={procedimentos}
       />
 
       <EscalaListaModal
