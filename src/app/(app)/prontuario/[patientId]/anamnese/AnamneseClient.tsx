@@ -50,7 +50,6 @@ export function AnamneseClient({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [form, setForm] = useState(false);
   const [ver, setVer] = useState<AnamneseRegistro | null>(null);
 
   const especialidadeInicial = useMemo(() => {
@@ -143,7 +142,6 @@ export function AnamneseClient({
       });
       if (res?.ok) {
         toast.success("Anamnese gerada.");
-        setForm(false);
         reset();
         router.refresh();
       } else {
@@ -154,22 +152,164 @@ export function AnamneseClient({
 
   return (
     <>
-      <div className="mb-4 flex justify-end">
-        <Button onClick={() => setForm(true)}>
-          <Plus className="h-4 w-4" /> Nova Anamnese
-        </Button>
-      </div>
+      {/* Formulário de Anamnese (Sempre visível para preenchimento) */}
+      <Card className="mb-6 border-brand-200 bg-brand-50/40 p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-white">
+              <ClipboardList className="h-5 w-5" />
+            </span>
+            <div>
+              <h3 className="font-semibold text-ink">Nova Anamnese</h3>
+              <p className="text-xs text-muted">Preencha a ficha modelo para o paciente.</p>
+            </div>
+          </div>
+          <div className="w-64">
+            <Select
+              aria-label="Especialidade"
+              value={specialty}
+              onChange={(e) => {
+                setSpecialty(e.target.value);
+                setValues({});
+              }}
+            >
+              {ESPECIALIDADES_ANAMNESE.map((e) => (
+                <option key={e.value} value={e.value}>
+                  {e.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
 
+        {!podeGerar && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-600">
+            <Lock className="mt-0.5 h-4 w-4 flex-none" />
+            Sua especialidade ({minhaEspecialidade}) não corresponde à da ficha.
+            Você pode visualizar, mas não gerar esta anamnese.
+          </div>
+        )}
+
+        <div className="space-y-6">
+          {blocos.map((bloco) => (
+            <fieldset key={bloco.titulo} className="rounded-xl border border-line bg-white p-4">
+              <legend className="px-1 text-sm font-semibold text-ink">
+                {bloco.titulo}
+              </legend>
+              <div className="space-y-4">
+                {bloco.campos.map((campo) => (
+                  <CampoView
+                    key={campo.id}
+                    campo={campo}
+                    valorTexto={getStr(campo.id)}
+                    valorArray={getArr(campo.id)}
+                    valorBool={getBool(campo.id)}
+                    onTexto={(v) => setValue(campo.id, v)}
+                    onToggle={(opt) => toggleOpcao(campo.id, opt)}
+                    onBool={(v) => setValue(campo.id, v)}
+                  />
+                ))}
+              </div>
+            </fieldset>
+          ))}
+        </div>
+
+        {/* Lousa / rascunho clínico (desenho sobre imagem) */}
+        <div className="mt-6">
+          <LousaRascunho
+            patientId={patientId}
+            lousas={lousas}
+            // Fundo pela especialidade da FICHA (estável) — não segue o Select do
+            // form nem a signed URL (que muda a cada refresh) → sem perda do desenho.
+            backgroundKey={especialidadeInicial}
+            backgroundUrl={lousaBgBySpecialty.get(especialidadeInicial)}
+            onSaved={() => router.refresh()}
+          />
+        </div>
+
+        {/* Consentimentos */}
+        <div className="mt-6 rounded-xl border border-line bg-white p-4">
+          <h3 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-ink">
+            <ShieldCheck className="h-4 w-4 text-green-600" /> Consentimentos
+          </h3>
+
+          <div className="space-y-3">
+            <label className="flex items-start gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-brand-500"
+              />
+              <span>
+                <span className="font-medium">Consentimento LGPD</span>
+                <span className="text-red-500"> *</span> — Declaro que o paciente foi
+                informado e consente com o tratamento dos dados de saúde conforme a LGPD.
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={consentAtendimento}
+                onChange={(e) => setConsentAtendimento(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-brand-500"
+              />
+              <span>
+                <span className="font-medium">Consentimento para Atendimento</span>
+                <span className="text-red-500"> *</span> — O paciente está ciente e
+                concorda com a realização do atendimento e dos procedimentos propostos.
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={consentImagem}
+                onChange={(e) => setConsentImagem(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-brand-500"
+              />
+              <span>
+                <span className="font-medium">Registro de Imagens</span>
+                <span className="text-muted"> (opcional)</span> — O paciente autoriza o
+                registro de fotos para acompanhamento clínico da evolução.
+              </span>
+            </label>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-line bg-muted-surface p-3 text-xs leading-relaxed text-muted">
+            <span className="font-semibold text-ink">Aviso Legal:</span> os dados de saúde
+            são considerados dados pessoais sensíveis (Lei nº 13.709/2018 — LGPD) e o seu
+            tratamento ocorre exclusivamente para fins de assistência à saúde, sob sigilo
+            profissional. O acesso é restrito à equipe clínica autorizada, e o registro de
+            imagens depende de autorização específica do paciente, que pode ser revogada a
+            qualquer momento.
+          </div>
+
+          <div className="mt-3">
+            <SignaturePad
+              label="Assinatura digital do profissional"
+              value={signature}
+              onChange={setSignature}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <Button onClick={gerar} disabled={pending || !podeGerar || !consentimentosOk}>
+            {pending ? "Salvando…" : "Salvar Anamnese"}
+          </Button>
+        </div>
+      </Card>
+
+      <h3 className="mb-3 mt-8 font-semibold text-ink">Anamneses Anteriores</h3>
       {anamneses.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center px-5 py-16 text-center">
-          <span className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-muted-surface text-muted">
-            <ClipboardList className="h-7 w-7" />
+        <Card className="flex flex-col items-center justify-center px-5 py-10 text-center">
+          <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted-surface text-muted">
+            <ClipboardList className="h-5 w-5" />
           </span>
-          <p className="font-medium text-ink">Nenhuma anamnese registrada</p>
-          <p className="mt-1 max-w-md text-sm text-muted">
-            Gere a anamnese da especialidade da ficha. Você pode visualizar
-            anamneses de outras especialidades.
-          </p>
+          <p className="font-medium text-ink">Nenhuma anamnese anterior</p>
         </Card>
       ) : (
         <Stagger className="flex flex-col gap-3">
@@ -202,158 +342,6 @@ export function AnamneseClient({
           ))}
         </Stagger>
       )}
-
-      {/* Lousa / rascunho clínico (desenho sobre imagem) */}
-      <div className="mt-6">
-        <LousaRascunho
-          patientId={patientId}
-          lousas={lousas}
-          // Fundo pela especialidade da FICHA (estável) — não segue o Select do
-          // modal nem a signed URL (que muda a cada refresh) → sem perda do desenho.
-          backgroundKey={especialidadeInicial}
-          backgroundUrl={lousaBgBySpecialty.get(especialidadeInicial)}
-          onSaved={() => router.refresh()}
-        />
-      </div>
-
-      {/* Modal de geração */}
-      <Modal
-        open={form}
-        onClose={() => setForm(false)}
-        title="Nova Anamnese"
-        subtitle="Histórico Geral obrigatório + módulo da especialidade."
-        className="max-w-2xl"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setForm(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={gerar} disabled={pending || !podeGerar || !consentimentosOk}>
-              {pending ? "Gerando…" : "Gerar Anamnese"}
-            </Button>
-          </>
-        }
-      >
-        <Select
-          label="Especialidade da ficha"
-          value={specialty}
-          onChange={(e) => {
-            setSpecialty(e.target.value);
-            setValues({});
-          }}
-        >
-          {ESPECIALIDADES_ANAMNESE.map((e) => (
-            <option key={e.value} value={e.value}>
-              {e.label}
-            </option>
-          ))}
-        </Select>
-
-        {!podeGerar && (
-          <div className="mt-3 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-600">
-            <Lock className="mt-0.5 h-4 w-4 flex-none" />
-            Sua especialidade ({minhaEspecialidade}) não corresponde à da ficha.
-            Você pode visualizar, mas não gerar esta anamnese.
-          </div>
-        )}
-
-        <div className="mt-5 space-y-6">
-          {blocos.map((bloco) => (
-            <fieldset key={bloco.titulo} className="rounded-xl border border-line p-4">
-              <legend className="px-1 text-sm font-semibold text-ink">
-                {bloco.titulo}
-              </legend>
-              <div className="space-y-4">
-                {bloco.campos.map((campo) => (
-                  <CampoView
-                    key={campo.id}
-                    campo={campo}
-                    valorTexto={getStr(campo.id)}
-                    valorArray={getArr(campo.id)}
-                    valorBool={getBool(campo.id)}
-                    onTexto={(v) => setValue(campo.id, v)}
-                    onToggle={(opt) => toggleOpcao(campo.id, opt)}
-                    onBool={(v) => setValue(campo.id, v)}
-                  />
-                ))}
-              </div>
-            </fieldset>
-          ))}
-        </div>
-
-        {/* Consentimentos */}
-        <div className="mt-6 rounded-xl border border-line p-4">
-          <h3 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-ink">
-            <ShieldCheck className="h-4 w-4 text-green-600" /> Consentimentos
-          </h3>
-
-          <div className="space-y-3">
-            {/* LGPD — obrigatório */}
-            <label className="flex items-start gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-brand-500"
-              />
-              <span>
-                <span className="font-medium">Consentimento LGPD</span>
-                <span className="text-red-500"> *</span> — Declaro que o paciente foi
-                informado e consente com o tratamento dos dados de saúde conforme a LGPD.
-              </span>
-            </label>
-
-            {/* Atendimento — obrigatório */}
-            <label className="flex items-start gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={consentAtendimento}
-                onChange={(e) => setConsentAtendimento(e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-brand-500"
-              />
-              <span>
-                <span className="font-medium">Consentimento para Atendimento</span>
-                <span className="text-red-500"> *</span> — O paciente está ciente e
-                concorda com a realização do atendimento e dos procedimentos propostos.
-              </span>
-            </label>
-
-            {/* Registro de Imagens — opcional */}
-            <label className="flex items-start gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={consentImagem}
-                onChange={(e) => setConsentImagem(e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-brand-500"
-              />
-              <span>
-                <span className="font-medium">Registro de Imagens</span>
-                <span className="text-muted"> (opcional)</span> — O paciente autoriza o
-                registro de fotos para acompanhamento clínico da evolução.
-              </span>
-            </label>
-          </div>
-
-          {/* Aviso Legal */}
-          <div className="mt-4 rounded-lg border border-line bg-muted-surface p-3 text-xs leading-relaxed text-muted">
-            <span className="font-semibold text-ink">Aviso Legal:</span> os dados de saúde
-            são considerados dados pessoais sensíveis (Lei nº 13.709/2018 — LGPD) e o seu
-            tratamento ocorre exclusivamente para fins de assistência à saúde, sob sigilo
-            profissional. O acesso é restrito à equipe clínica autorizada, e o registro de
-            imagens depende de autorização específica do paciente, que pode ser revogada a
-            qualquer momento.
-          </div>
-
-          <div className="mt-3">
-            <SignaturePad
-              label="Assinatura digital do profissional"
-              value={signature}
-              onChange={setSignature}
-              required
-            />
-          </div>
-        </div>
-      </Modal>
 
       {/* Modal Ver */}
       <Modal

@@ -1204,7 +1204,7 @@ export async function listSlots(
     : null;
   const horarios = faixa
     ? gerarHorarios(faixa.start, faixa.end, slotMinutes)
-    : gradePadrao();
+    : [];
 
   // Ocupação: agendamentos do dia (considerando a DURAÇÃO real) + bloqueios.
   const dayStart = toIso(dateISO, "00:00");
@@ -1393,7 +1393,7 @@ export async function listSlotsBySpecialty(
           }),
         ),
       ).sort((a, b) => a.localeCompare(b))
-    : gradePadrao();
+    : [];
 
   // Capacidade = profissionais ativos da especialidade (mín. 1).
   let capacity = 1;

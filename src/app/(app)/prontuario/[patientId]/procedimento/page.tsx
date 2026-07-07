@@ -60,7 +60,6 @@ export default async function ProcedimentoPage({
           statusRaw={atendimento.statusRaw}
           catalogo={catalogo}
           procedimentos={procedimentos}
-          totalLabel={totalLabel}
         />
       ) : (
         <Card className="p-10 text-center text-sm text-muted">

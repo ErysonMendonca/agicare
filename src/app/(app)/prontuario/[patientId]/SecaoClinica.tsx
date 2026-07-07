@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { type Identificacao } from "@/lib/data/prontuario";
 import { logAccess } from "@/lib/audit";
+import { getRole } from "@/lib/auth";
 import { PacienteCard } from "./PacienteCard";
 import { ClinicoNav } from "./ClinicoNav";
 
@@ -34,6 +35,8 @@ export async function SecaoClinica({
     });
   }
 
+  const role = await getRole();
+
   return (
     <>
       <div className="mb-4">
@@ -50,7 +53,7 @@ export async function SecaoClinica({
       {identificacao ? (
         <>
           <PacienteCard id={identificacao} extra={actions} />
-          <ClinicoNav patientId={patientId} />
+          <ClinicoNav patientId={patientId} userRole={role} />
           {children}
         </>
       ) : (

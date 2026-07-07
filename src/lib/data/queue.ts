@@ -358,7 +358,7 @@ export async function listQueue(opts?: {
       appointmentId: (r.appointment_id as string | null) ?? null,
       agendado: false,
     };
-  });
+  }).sort((a, b) => a.hora.localeCompare(b.hora));
 }
 
 /**

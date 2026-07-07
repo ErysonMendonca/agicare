@@ -6,18 +6,17 @@ import {
   Activity,
   Stethoscope,
   Syringe,
-  Pill,
-  CheckSquare,
   ClipboardList,
   FileText,
   Bone,
   HeartPulse,
   ScrollText,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** Sub-navegação do prontuário clínico de um paciente. */
-export function ClinicoNav({ patientId }: { patientId: string }) {
+export function ClinicoNav({ patientId, userRole }: { patientId: string; userRole?: string | null }) {
   const pathname = usePathname();
   const base = `/prontuario/${patientId}`;
 
@@ -27,12 +26,14 @@ export function ClinicoNav({ patientId }: { patientId: string }) {
     { href: `${base}/evolucao`, label: "Evolução", icon: Stethoscope },
     { href: `${base}/procedimento`, label: "Procedimento", icon: Syringe },
     { href: `${base}/protetico`, label: "Protético", icon: Bone },
-    { href: `${base}/prescricao`, label: "Prescrição", icon: Pill },
     { href: `${base}/receituario`, label: "Receituário", icon: ScrollText },
-    { href: `${base}/checagem`, label: "Checagem", icon: CheckSquare },
-    { href: `${base}/enfermagem`, label: "Enfermagem", icon: HeartPulse },
-    { href: `${base}/documentos`, label: "Documentos", icon: FileText },
+    { href: `${base}/documentos`, label: "Alta / Atestado", icon: FileText },
+    { href: `${base}/historico`, label: "Histórico", icon: History },
   ];
+
+  if (userRole === "enfermeiro" || userRole === "tecnico_enfermagem") {
+    tabs.splice(5, 0, { href: `${base}/enfermagem`, label: "Enfermagem", icon: HeartPulse });
+  }
 
   return (
     <nav className="mb-6 flex flex-wrap gap-2">

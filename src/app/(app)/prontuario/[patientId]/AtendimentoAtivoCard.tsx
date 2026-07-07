@@ -29,13 +29,11 @@ export function AtendimentoAtivoCard({
   statusRaw,
   catalogo,
   procedimentos,
-  totalLabel,
 }: {
   queueEntryId: string;
   statusRaw: string;
   catalogo: ProcedimentoCatalogo[];
   procedimentos: ProcedimentoExecutado[];
-  totalLabel: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -102,7 +100,7 @@ export function AtendimentoAtivoCard({
               <option value="">Selecione o procedimento</option>
               {catalogo.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.nome} — {brl(p.preco)}
+                  {p.nome}
                 </option>
               ))}
             </Select>
@@ -125,7 +123,6 @@ export function AtendimentoAtivoCard({
               <li key={p.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
                 <span className="text-ink">{p.nome}</span>
                 <span className="flex items-center gap-3">
-                  <span className="font-medium text-ink">{brl(p.valor)}</span>
                   {emAtendimento && (
                     <button
                       type="button"
@@ -140,10 +137,6 @@ export function AtendimentoAtivoCard({
                 </span>
               </li>
             ))}
-            <li className="flex items-center justify-between bg-muted-surface px-4 py-2.5 text-sm font-semibold">
-              <span className="text-ink">Total</span>
-              <span className="text-brand-700">{totalLabel}</span>
-            </li>
           </ul>
         )}
       </div>

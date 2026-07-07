@@ -38,6 +38,7 @@ import {
   criarPedidoProtetico,
   registrarArquivoProtetico,
 } from "@/lib/actions/protetico";
+import { Odontograma } from "@/components/clinico/Odontograma";
 
 type Anexo = { file: File; kind: KindArquivo };
 
@@ -420,22 +421,18 @@ export function ProteticoClient({
         {/* Etapa 1 — Dados Básicos */}
         {step === 0 && (
           <div className="space-y-5">
-            <label className="block">
-              <span className="mb-1.5 block text-sm font-medium text-ink">
+            <div>
+              <span className="mb-2 block text-sm font-medium text-ink">
                 Dentes do trabalho <span className="text-red-500">*</span>
               </span>
-              <textarea
-                rows={3}
-                value={teeth}
-                onChange={(e) => setTeeth(e.target.value)}
-                placeholder="Ex.: 11, 12, 21, 22 — notação FDI. Indique cada elemento do trabalho."
-                className="w-full resize-y rounded-lg border border-line bg-white px-3 py-2.5 text-base text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              <Odontograma 
+                selectedTeeth={teeth.split(",").map(t => t.trim()).filter(Boolean)} 
+                onChange={(arr) => setTeeth(arr.join(", "))} 
               />
-              <span className="mt-1 block text-xs text-muted">
-                Use a notação dos elementos (FDI). Separe múltiplos dentes por
-                vírgula.
+              <span className="mt-1.5 block text-xs text-muted">
+                Dentes selecionados: {teeth || "Nenhum"}
               </span>
-            </label>
+            </div>
 
             <div>
               <span className="mb-1.5 block text-sm font-medium text-ink">
