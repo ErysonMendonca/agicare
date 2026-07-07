@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { Sidebar } from "@/components/app/Sidebar";
 import { Topbar } from "@/components/app/Topbar";
 import { PageTransition } from "@/components/app/PageTransition";

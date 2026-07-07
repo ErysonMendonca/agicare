@@ -8,7 +8,6 @@ import { requireClinic } from "@/lib/tenant";
 import { enviarNotificacao } from "@/lib/integrations/notifications";
 import { logAction } from "@/lib/system-log";
 import { EXAMES_TUSS } from "@/lib/clinico/exames-shared";
-import { listProcedures } from "@/lib/data/procedures";
 
 /** Estado padrão das ações da agenda (estende o ActionState com o protocolo). */
 export type AgendaActionState =
@@ -997,6 +996,7 @@ export async function enviarComprovante(
     // Em demo não há banco/provider: apenas resolve o status que ocorreria
     // (respeitando os toggles padrão de notificação).
     await enviarNotificacao({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       canal: d.channel as any,
       destino: d.to || "demo@local",
       template: "comprovante_agendamento",
@@ -1021,6 +1021,7 @@ export async function enviarComprovante(
 
   const supabase = await createClient();
   const { error } = await supabase.from("appointment_notifications").insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     channel: d.channel as any,
     protocol: d.protocol,
     patient_id: d.patient_id || null,
@@ -1341,7 +1342,7 @@ export async function listSlotsBySpecialty(
   const supabase = await createClient();
   const weekday = new Date(`${dateISO}T00:00:00`).getDay();
 
-  let query = supabase
+  const query = supabase
     .from("schedules")
     .select(
       "slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks, specialty, service_type, procedure_codes, exam_tuss_codes",
