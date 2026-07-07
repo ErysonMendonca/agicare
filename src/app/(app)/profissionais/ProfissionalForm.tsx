@@ -386,7 +386,7 @@ function CamposProfissional({
               id={`${prefixo}-complemento`}
               name="address_complement"
               label="Complemento"
-              defaultValue={defaults.address_complement ?? ""}
+              defaultValue={defaults.complement ?? ""}
             />
             <Input
               id={`${prefixo}-bairro`}

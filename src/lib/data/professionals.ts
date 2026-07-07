@@ -19,6 +19,7 @@ export type CredencialEdit = {
 
 /** Valores brutos (sem fallback "—") para pré-preencher o modal de edição. */
 export type ProfissionalEdit = {
+  id: string;
   profileId: string;
   full_name: string;
   specialty: string;
@@ -132,6 +133,7 @@ const MOCK: Profissional[] = [
     consultasHoje: 8,
     proximaConsulta: "Hoje 14:30",
     edit: {
+      id: "1",
       profileId: "1",
       full_name: "Dr. João Pedro Oliveira",
       specialty: "Cardiologia",
@@ -156,6 +158,7 @@ const MOCK: Profissional[] = [
     consultasHoje: 5,
     proximaConsulta: "Hoje 16:00",
     edit: {
+      id: "2",
       profileId: "2",
       full_name: "Dra. Ana Paula Costa",
       specialty: "Ortopedia",
@@ -382,6 +385,7 @@ export async function listProfessionals(): Promise<Profissional[]> {
       consultasHoje: ind?.consultasHoje ?? 0,
       proximaConsulta: ind?.proxima ?? null,
       edit: {
+        id: r.id,
         profileId: r.profile_id ?? "",
         full_name: perfil?.full_name ?? "",
         specialty: r.specialty ?? "",

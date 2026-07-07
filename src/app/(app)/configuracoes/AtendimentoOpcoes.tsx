@@ -44,6 +44,7 @@ const CATEGORY_LABELS: Record<AttendanceOptionCategory, string> = {
   marca: "Marca",
   localizacao: "Localização",
   classificacao_xyz: "Classificação XYZ",
+  tipo_profissional: "Tipo de Profissional",
 };
 
 /**
@@ -62,7 +63,9 @@ const EDITABLE_CATEGORIES = ATTENDANCE_OPTION_CATEGORIES.filter(
     c !== "principio_ativo" &&
     c !== "marca" &&
     c !== "localizacao" &&
-    c !== "classificacao_xyz",
+    c !== "classificacao_xyz" &&
+    // Tipo de profissional possui aba própria.
+    c !== "tipo_profissional",
 );
 
 export function AtendimentoOpcoes({

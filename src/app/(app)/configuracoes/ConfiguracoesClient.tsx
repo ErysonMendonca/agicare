@@ -615,7 +615,10 @@ export function ConfiguracoesClient({
           descricao="Gerencie as opções disponíveis no cadastro do profissional."
           substantivo="tipo de profissional"
           icon={<Building2 className="h-4 w-4" />}
-          itens={attendanceOptions["tipo_profissional"] || []}
+          itens={(attendanceOptions["tipo_profissional"] || []).map(opt => ({
+            ...opt,
+            active: true
+          }))}
           placeholder="Ex.: Nutricionista"
         />
       )}
