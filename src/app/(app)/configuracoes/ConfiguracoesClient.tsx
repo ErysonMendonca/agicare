@@ -57,6 +57,7 @@ import type { CidCode } from "@/lib/data/cid";
 import type { MotivoAltaCfg, DetalheAltaCfg } from "@/lib/data/alta";
 import type { Especialidade } from "@/lib/data/especialidades";
 import type { ProdutoCatalogos } from "@/lib/data/produto-catalogos";
+import { CatalogoTabela } from "./CatalogoTabela";
 
 const BASE_TABS = [
   "Geral",
@@ -71,6 +72,7 @@ const BASE_TABS = [
 const TRIAGEM_TAB = "Triagem";
 const ATENDIMENTO_TAB = "Dados de Atendimento";
 const ESPECIALIDADES_TAB = "Especialidades";
+const TIPO_PROFISSIONAL_TAB = "Tipos de Profissional";
 const CID_TAB = "Catálogo CID";
 const ALTA_CATALOGO_TAB = "Motivos e Detalhes de Alta";
 const PRODUTO_TAB = "Produto";
@@ -80,6 +82,7 @@ type Tab =
   | typeof TRIAGEM_TAB
   | typeof ATENDIMENTO_TAB
   | typeof ESPECIALIDADES_TAB
+  | typeof TIPO_PROFISSIONAL_TAB
   | typeof CID_TAB
   | typeof ALTA_CATALOGO_TAB
   | typeof PRODUTO_TAB;
@@ -117,6 +120,7 @@ export function ConfiguracoesClient({
         TRIAGEM_TAB,
         ATENDIMENTO_TAB,
         ESPECIALIDADES_TAB,
+        TIPO_PROFISSIONAL_TAB,
         CID_TAB,
         ALTA_CATALOGO_TAB,
         PRODUTO_TAB,
@@ -601,6 +605,19 @@ export function ConfiguracoesClient({
           (gestor-only), fora do form de configurações. */}
       {isGestor && tabAtiva === ESPECIALIDADES_TAB && (
         <EspecialidadesConfig especialidades={especialidades} />
+      )}
+
+      {/* Catálogo de Tipos de Profissional (gestor-only) */}
+      {isGestor && tabAtiva === TIPO_PROFISSIONAL_TAB && (
+        <CatalogoTabela
+          categoria="tipo_profissional"
+          titulo="Tipos de Profissional"
+          descricao="Gerencie as opções disponíveis no cadastro do profissional."
+          substantivo="tipo de profissional"
+          icon={<Building2 className="h-4 w-4" />}
+          itens={attendanceOptions["tipo_profissional"] || []}
+          placeholder="Ex.: Nutricionista"
+        />
       )}
 
       {/* Catálogo global de CIDs (gestor-only), fora do form de configurações. */}

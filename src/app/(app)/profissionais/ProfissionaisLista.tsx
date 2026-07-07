@@ -15,6 +15,8 @@ import {
   Stethoscope,
   Briefcase,
   CircleCheck,
+  Plus,
+  SquarePen,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -24,7 +26,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatCard } from "@/components/ui/StatCard";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
-import { NovoProfissionalModal, EditarProfissionalModal } from "./NovoProfissionalModal";
 import type { Profissional } from "@/lib/data/professionals";
 import type { AttendanceOption } from "@/lib/data/attendance-options.shared";
 
@@ -252,11 +253,9 @@ export function ProfissionaisLista({
                         </span>
                       )}
                     </Button>
-                    <NovoProfissionalModal
-                      triggerLabel="Novo Cadastro"
-                      size="md"
-                      especialidades={especialidades}
-                    />
+                    <Link href="/profissionais/novo" className={LINK_BTN_MD}>
+                      <Plus className="h-4 w-4" /> Novo Cadastro
+                    </Link>
                   </>
                 )}
               </div>
@@ -386,11 +385,9 @@ export function ProfissionaisLista({
                       </div>
                     ) : (
                       <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
-                        <EditarProfissionalModal
-                          id={p.id}
-                          edit={p.edit}
-                          especialidades={especialidades}
-                        />
+                        <Link href={`/profissionais/${p.id}`} className={LINK_BTN_SM}>
+                          <SquarePen className="h-3.5 w-3.5" /> Editar
+                        </Link>
                         <Link
                           href={`/profissionais/${p.id}/agenda`}
                           className={LINK_BTN_SM}

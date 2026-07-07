@@ -436,6 +436,12 @@ export async function listProfessionals(): Promise<Profissional[]> {
   });
 }
 
+export async function getProfessionalById(id: string): Promise<ProfissionalEdit | null> {
+  const all = await listProfessionals();
+  const prof = all.find((p) => p.id === id);
+  return prof ? prof.edit : null;
+}
+
 /**
  * Vínculo leve de profissional para filtros no modal de atendimento.
  * Diferente de {@link Profissional}, NÃO calcula indicadores de agenda —
