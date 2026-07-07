@@ -10,11 +10,13 @@ import {
   Lock,
   Loader2,
   QrCode,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/utils";
 import { EmBreve } from "@/components/ui/EmBreve";
 import { qrToSvg } from "@/lib/integrations/qrcode";
@@ -46,11 +48,13 @@ const pagamentos: { id: Pagamento; label: string }[] = [
 export function ConferenciaModal({
   evento,
   gestor,
+  procedimentos,
   open,
   onClose,
 }: {
   evento: Evento;
   gestor: boolean;
+  procedimentos: any[];
   open: boolean;
   onClose: () => void;
 }) {
@@ -73,6 +77,9 @@ export function ConferenciaModal({
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
+  const [novoItemProcedimento, setNovoItemProcedimento] = useState("");
+  const [novoItemValor, setNovoItemValor] = useState("");
+
   // Carrega os itens REAIS conferidos do atendimento ao abrir o modal.
   useEffect(() => {
     let ativo = true;
@@ -92,6 +99,27 @@ export function ConferenciaModal({
   const descontoNum = Math.max(0, Number(desconto.replace(",", ".")) || 0);
   const acrescimoNum = Math.max(0, Number(acrescimo.replace(",", ".")) || 0);
   const totalFinal = Math.max(0, subtotal - descontoNum + acrescimoNum);
+
+  function adicionarItem() {
+    const p = procedimentos.find((x) => x.codigo === novoItemProcedimento);
+    if (!p) return;
+    const val = Number(novoItemValor.replace(",", ".")) || 0;
+    setItens((prev) => [
+      ...prev,
+      {
+        source: "procedimento",
+        tipo: "TUSS",
+        codigo: p.codigo,
+        descricao: p.nome,
+        qtd: 1,
+        valor: val,
+      },
+    ]);
+    setNovoItemProcedimento("");
+    setNovoItemValor("");
+  }
+
+  const [sucesso, setSucesso] = useState(false);
 
   function handleConfirmar() {
     startTransition(async () => {
@@ -115,11 +143,99 @@ export function ConferenciaModal({
       if (res?.ok) {
         toast.success("Check-out conferido e faturado.");
         router.refresh();
-        onClose();
+        setSucesso(true);
       } else {
         toast.error(res?.error ?? "Não foi possível concluir o check-out.");
       }
     });
+  }
+
+  if (sucesso) {
+    return (
+      <Modal
+        open={open}
+        onClose={onClose}
+        title="Recibo de Pagamento"
+        subtitle={`${evento.paciente} · ${evento.codigo}`}
+        className="max-w-xl"
+        footer={
+          <>
+            <Button variant="ghost" onClick={onClose}>
+              Fechar
+            </Button>
+            <Button
+              onClick={() => {
+                const printContent = document.getElementById("recibo-print");
+                if (printContent) {
+                  const originalContent = document.body.innerHTML;
+                  document.body.innerHTML = printContent.innerHTML;
+                  window.print();
+                  document.body.innerHTML = originalContent;
+                  window.location.reload();
+                }
+              }}
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir Recibo
+            </Button>
+          </>
+        }
+      >
+        <div id="recibo-print" className="p-6 bg-white text-ink print:p-0">
+          <div className="text-center border-b border-line pb-4 mb-4">
+            <h2 className="text-lg font-bold">RECIBO DE PAGAMENTO</h2>
+            <p className="text-sm">AgiCare - Clínica Médica</p>
+          </div>
+          <div className="space-y-2 text-sm mb-6">
+            <p><strong>Paciente:</strong> {evento.paciente}</p>
+            <p><strong>Atendimento:</strong> {evento.codigo}</p>
+            <p><strong>Data:</strong> {new Date().toLocaleDateString("pt-BR")}</p>
+          </div>
+          <table className="w-full text-sm mb-6 border-collapse">
+            <thead>
+              <tr className="border-b border-line">
+                <th className="text-left py-2 font-medium">Descrição</th>
+                <th className="text-right py-2 font-medium">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itens.map((i, idx) => (
+                <tr key={idx} className="border-b border-line">
+                  <td className="py-2">{i.descricao}</td>
+                  <td className="text-right py-2">{formatBRL(i.valor)}</td>
+                </tr>
+              ))}
+              {descontoNum > 0 && (
+                <tr className="border-b border-line">
+                  <td className="py-2 text-red-600">Desconto</td>
+                  <td className="text-right py-2 text-red-600">-{formatBRL(descontoNum)}</td>
+                </tr>
+              )}
+              {acrescimoNum > 0 && (
+                <tr className="border-b border-line">
+                  <td className="py-2 text-brand-600">Acréscimo</td>
+                  <td className="text-right py-2 text-brand-600">{formatBRL(acrescimoNum)}</td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td className="font-bold py-2">TOTAL PAGO</td>
+                <td className="text-right font-bold py-2">{formatBRL(totalFinal)}</td>
+              </tr>
+            </tfoot>
+          </table>
+          <div className="text-sm">
+            <p>
+              <strong>Forma de Pagamento:</strong>{" "}
+              <span className="uppercase">{forma === "particular" ? pagamento : forma}</span>
+            </p>
+            <p className="mt-12 text-center text-xs text-muted">Assinatura / Carimbo</p>
+            <div className="mt-4 border-b border-ink w-64 mx-auto"></div>
+          </div>
+        </div>
+      </Modal>
+    );
   }
 
   return (
@@ -195,6 +311,49 @@ export function ConferenciaModal({
                 ))}
               </tbody>
             </table>
+          )}
+          
+          {/* Adicionar Item Manual */}
+          {gestor && !carregando && (
+            <div className="mt-4 border-t border-line pt-4">
+              <h4 className="text-xs font-semibold uppercase text-muted mb-2">
+                Adicionar Item Manual
+              </h4>
+              <div className="flex flex-wrap items-end gap-2">
+                <Select
+                  value={novoItemProcedimento}
+                  onChange={(e) => {
+                    const p = procedimentos.find((x) => x.codigo === e.target.value);
+                    setNovoItemProcedimento(e.target.value);
+                    if (p) setNovoItemValor(p.precoNum.toString());
+                  }}
+                  className="flex-1"
+                >
+                  <option value="">Selecione um procedimento...</option>
+                  {procedimentos.map((p) => (
+                    <option key={p.codigo} value={p.codigo}>
+                      {p.codigo} - {p.nome}
+                    </option>
+                  ))}
+                </Select>
+                <div className="w-24">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Valor"
+                    value={novoItemValor}
+                    onChange={(e) => setNovoItemValor(e.target.value)}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={adicionarItem}
+                  disabled={!novoItemProcedimento}
+                >
+                  Adicionar
+                </Button>
+              </div>
+            </div>
           )}
         </div>
       </div>

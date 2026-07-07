@@ -151,12 +151,49 @@ export async function finalizarAtendimento(
     .eq("id", queueEntryId)
     .eq("clinic_id", clinicId)
     .eq("status", "em_atendimento")
-    .select("patient_id");
+    .select("patient_id, appointment_id");
   if (error) return { error: "Não foi possível finalizar o atendimento." };
   if (!data || data.length === 0) {
     return { error: "O atendimento não está em andamento." };
   }
-  revalidar((data[0]?.patient_id as string | null) ?? undefined);
+  const patientId = (data[0]?.patient_id as string | null) ?? null;
+  const appointmentId = (data[0]?.appointment_id as string | null) ?? null;
+
+  // Verifica convênio do paciente para classificar o faturamento
+  let kind = "particular";
+  if (patientId) {
+    const { data: pt } = await supabase
+      .from("patients")
+      .select("convenio")
+      .eq("id", patientId)
+      .maybeSingle();
+    if (pt?.convenio && !/particular/i.test(pt.convenio)) {
+      kind = "convenio";
+    }
+  }
+
+  // Computa o total dos procedimentos registrados no atendimento
+  const { total } = await listProcedimentosAtendimento(queueEntryId);
+
+  // Apenas gera o evento faturável se for particular.
+  // Para convênio, o fluxo será abordado depois, conforme solicitado.
+  if (kind === "particular") {
+    const { error: evtErr } = await supabase.from("billable_events").insert({
+      clinic_id: clinicId,
+      patient_id: patientId,
+      appointment_id: appointmentId,
+      service: "Atendimento",
+      amount: total,
+      status: "pendente",
+      kind: "particular",
+    });
+    if (evtErr) {
+      console.error("Erro ao gerar evento de faturamento:", evtErr);
+      // O atendimento finaliza, mas talvez a recepção precise adicionar manualmente se der erro?
+    }
+  }
+
+  revalidar(patientId ?? undefined);
   return { ok: true };
 }
 

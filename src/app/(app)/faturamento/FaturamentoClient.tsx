@@ -51,6 +51,7 @@ export function FaturamentoClient({
   guias,
   lotes,
   gestor,
+  procedimentos,
   kpis,
   valorTotalLabel,
 }: {
@@ -58,6 +59,7 @@ export function FaturamentoClient({
   guias: GuiaTISS[];
   lotes: LoteTISS[];
   gestor: boolean;
+  procedimentos: any[];
   kpis: { total: number; pendentes: number; faturados: number; glosados: number };
   valorTotalLabel: string;
 }) {
@@ -342,6 +344,7 @@ export function FaturamentoClient({
         <ConferenciaModal
           evento={selected}
           gestor={gestor}
+          procedimentos={procedimentos}
           open={!!selected}
           onClose={() => setSelected(null)}
         />

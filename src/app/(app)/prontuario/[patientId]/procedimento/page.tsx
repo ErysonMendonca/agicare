@@ -10,7 +10,6 @@ import {
 } from "@/lib/data/atendimento";
 import { SecaoClinica } from "../SecaoClinica";
 import { AtendimentoAtivoCard } from "../AtendimentoAtivoCard";
-import { FinalizarAtendimentoButton } from "../FinalizarAtendimentoButton";
 
 export default async function ProcedimentoPage({
   params,
@@ -45,14 +44,6 @@ export default async function ProcedimentoPage({
       identificacao={resumo?.identificacao ?? null}
       title="Procedimentos"
       subtitle="Registre os procedimentos realizados no atendimento"
-      actions={
-        atendimento && isMedico ? (
-          <FinalizarAtendimentoButton
-            queueEntryId={atendimento.queueEntryId}
-            statusRaw={atendimento.statusRaw}
-          />
-        ) : undefined
-      }
     >
       {atendimento && isMedico ? (
         <AtendimentoAtivoCard

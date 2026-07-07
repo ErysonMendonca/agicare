@@ -203,7 +203,7 @@ export function AcoesPacienteModal({
             }}
             disabled={pending}
             icon={<Wallet className="h-5 w-5" />}
-            label="Fechamento"
+            label="Faturamento"
             className="bg-brand-500 text-white hover:bg-brand-600 disabled:hover:bg-brand-500"
           />
         )}

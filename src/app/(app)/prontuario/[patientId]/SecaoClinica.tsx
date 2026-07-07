@@ -4,10 +4,12 @@ import { ChevronLeft } from "lucide-react";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { type Identificacao } from "@/lib/data/prontuario";
+import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 import { logAccess } from "@/lib/audit";
 import { getRole } from "@/lib/auth";
 import { PacienteCard } from "./PacienteCard";
 import { ClinicoNav } from "./ClinicoNav";
+import { FinalizarAtendimentoButton } from "./FinalizarAtendimentoButton";
 
 /** Chrome compartilhado das seções clínicas: voltar + cabeçalho + paciente + nav. */
 export async function SecaoClinica({
@@ -36,6 +38,20 @@ export async function SecaoClinica({
   }
 
   const role = await getRole();
+  const isMedico = role === "medico" || role === "admin";
+  const atendimento = await getAtendimentoAtivo(patientId);
+
+  const finalActions = (
+    <div className="flex items-center gap-2">
+      {actions}
+      {atendimento && isMedico && (
+        <FinalizarAtendimentoButton
+          queueEntryId={atendimento.queueEntryId}
+          statusRaw={atendimento.statusRaw}
+        />
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -52,7 +68,7 @@ export async function SecaoClinica({
 
       {identificacao ? (
         <>
-          <PacienteCard id={identificacao} extra={actions} />
+          <PacienteCard id={identificacao} extra={finalActions} />
           <ClinicoNav patientId={patientId} userRole={role} />
           {children}
         </>

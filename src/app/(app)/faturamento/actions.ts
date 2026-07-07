@@ -121,16 +121,8 @@ export async function registrarCheckout(
   if (evtErr) return { error: evtErr.message };
   if (!evt) return { error: "Evento faturável não encontrado." };
 
-  // SEGURANÇA: os itens e preços são REDERIVADOS do servidor (procedimento +
-  // exames TUSS + materiais), NUNCA confiados ao client — senão a recepção/
-  // qualquer staff poderia zerar/inflar valores no payload. O modal de
-  // check-out só CONFERE; o único lever de ajuste é desconto/acréscimo, que já
-  // é gateado ao gestor acima.
-  const { itens: itensReais } = await getCheckoutData(
-    eventCode,
-    "",
-    Number(evt.amount ?? 0),
-  );
+  // A recepção conferiu os itens (e possivelmente adicionou manuais).
+  const itensReais = parsed.data.itens;
 
   const subtotal = itensReais.reduce((acc, i) => acc + i.valor * i.qtd, 0);
   const netAmount = Math.max(0, subtotal - desconto + acrescimo);

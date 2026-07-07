@@ -8,6 +8,8 @@ import { isGestor } from "@/lib/auth";
 import { requireView } from "@/lib/permissions";
 import { FaturamentoClient } from "./FaturamentoClient";
 
+import { listProcedures } from "@/lib/data/procedures";
+
 /** Formata um número em moeda R$ pt-BR. */
 function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -18,11 +20,12 @@ function formatBRL(value: number): string {
 
 export default async function FaturamentoPage() {
   await requireView("faturamento");
-  const [eventos, guias, lotes, gestor] = await Promise.all([
+  const [eventos, guias, lotes, gestor, procedimentos] = await Promise.all([
     listBillableEvents(),
     listTissGuides(),
     listTissBatches(),
     isGestor(),
+    listProcedures(),
   ]);
 
   const total = eventos.length;
@@ -43,6 +46,7 @@ export default async function FaturamentoPage() {
         guias={guias}
         lotes={lotes}
         gestor={gestor}
+        procedimentos={procedimentos}
         kpis={{ total, pendentes, faturados, glosados }}
         valorTotalLabel={formatBRL(valorTotal)}
       />
