@@ -346,7 +346,7 @@ export function ConferenciaModal({
                   />
                 </div>
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   onClick={adicionarItem}
                   disabled={!novoItemProcedimento}
                 >
