@@ -617,7 +617,8 @@ export function ConfiguracoesClient({
           icon={<Building2 className="h-4 w-4" />}
           itens={(attendanceOptions["tipo_profissional"] || []).map(opt => ({
             ...opt,
-            active: true
+            active: true,
+            sortOrder: 0
           }))}
           placeholder="Ex.: Nutricionista"
         />

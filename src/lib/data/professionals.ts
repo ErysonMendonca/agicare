@@ -183,6 +183,7 @@ const MOCK: Profissional[] = [
     consultasHoje: 0,
     proximaConsulta: "12/06 09:00",
     edit: {
+      id: "3",
       profileId: "3",
       full_name: "Dr. Carlos Eduardo Mendes",
       specialty: "Dermatologia",
@@ -207,6 +208,7 @@ const MOCK: Profissional[] = [
     consultasHoje: 3,
     proximaConsulta: null,
     edit: {
+      id: "4",
       profileId: "4",
       full_name: "Enf. Mariana Souza Lima",
       specialty: "Enfermagem",
