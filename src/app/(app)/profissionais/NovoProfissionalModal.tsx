@@ -39,6 +39,14 @@ const credVazia = (): CredencialEdit => ({
 
 const SEXOS = ["Masculino", "Feminino", "Intersexo", "Não informado"];
 const RACAS = ["Branca", "Preta", "Parda", "Amarela", "Indígena", "Não informado"];
+const TIPO_PROFISSIONAL_OPCOES = [
+  "Médico",
+  "Enfermeiro",
+  "Técnico de Enfermagem",
+  "Fisioterapeuta",
+  "Dentista",
+  "Outros",
+];
 
 /** Valores padrão dos campos do formulário (vazios = novo cadastro). */
 type FormDefaults = Partial<ProfissionalEdit>;
@@ -290,7 +298,20 @@ function CamposProfissional({
 
       {/* ── Tipo de profissional ──────────────────────────────────── */}
       <Secao titulo="Tipo de profissional">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          <Select
+            id={`${prefixo}-tipo-profissional`}
+            name="professional_type"
+            label="Tipo de profissional"
+            defaultValue={defaults.professional_type ?? ""}
+          >
+            <option value="">Selecione...</option>
+            {TIPO_PROFISSIONAL_OPCOES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
           <Select
             id={`${prefixo}-especialidade`}
             name="specialty"

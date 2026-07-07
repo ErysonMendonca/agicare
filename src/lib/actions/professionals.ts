@@ -76,6 +76,7 @@ const baseSchema = z.object({
   birthplace: opt,
   nationality: opt,
   // Tipo de profissional
+  professional_type: opt,
   specialty: opt,
   cns: opt,
   cnes: opt,
@@ -149,6 +150,7 @@ function professionalPayload(d: z.infer<typeof baseSchema>) {
     nationality: d.nationality || null,
     cns: d.cns || null,
     cnes: d.cnes || null,
+    professional_type: d.professional_type || null,
     council_number: d.council_number || null,
     council_name: d.council_name || null,
     council_uf: d.council_uf || null,

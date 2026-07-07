@@ -55,6 +55,7 @@ export type ProfissionalEdit = {
   council_name?: string;
   council_uf?: string;
   council_expiry?: string;
+  professional_type?: string;
   /** Credenciamentos de convênio (só admin lê — RLS 0070). */
   credentials?: CredencialEdit[];
 };
@@ -138,6 +139,7 @@ const MOCK: Profissional[] = [
       phone: "(11) 98765-4321",
       role: "medico",
       active: true,
+      professional_type: "Médico",
       ...ENDERECO_VAZIO,
     },
   },
@@ -161,6 +163,7 @@ const MOCK: Profissional[] = [
       phone: "(11) 98765-4322",
       role: "medico",
       active: true,
+      professional_type: "Médico",
       ...ENDERECO_VAZIO,
     },
   },
@@ -184,6 +187,7 @@ const MOCK: Profissional[] = [
       phone: "(11) 98765-4323",
       role: "medico",
       active: true,
+      professional_type: "Médico",
       ...ENDERECO_VAZIO,
     },
   },
@@ -207,6 +211,7 @@ const MOCK: Profissional[] = [
       phone: "(11) 98765-4324",
       role: "medico",
       active: true,
+      professional_type: "Enfermeiro",
       ...ENDERECO_VAZIO,
     },
   },
@@ -305,7 +310,7 @@ export async function listProfessionals(): Promise<Profissional[]> {
     .select(
       "id, profile_id, specialty, council_reg, active, email, cep, address, address_number, complement, neighborhood, city, state, notes, " +
         "person_type, document, social_name, birth_date, sex, gender, mother_name, race, birthplace, nationality, cns, cnes, " +
-        "council_number, council_name, council_uf, council_expiry, " +
+        "council_number, council_name, council_uf, council_expiry, professional_type, " +
         "professional_insurance_credentials(convenio, vigencia, convenio_code, lab_code, tiss_login, tiss_password, recebe_eletivo, recebe_urgencia, recebe_internacao, xml_tag, cpf_or_convenio_code), " +
         "profiles(full_name, phone, role)",
     )
@@ -347,6 +352,7 @@ export async function listProfessionals(): Promise<Profissional[]> {
     council_name: S;
     council_uf: S;
     council_expiry: S;
+    professional_type: S;
     professional_insurance_credentials: Array<Record<string, unknown>> | null;
     profiles: unknown;
   };
@@ -408,6 +414,7 @@ export async function listProfessionals(): Promise<Profissional[]> {
         council_name: (r.council_name as string | null) ?? "",
         council_uf: (r.council_uf as string | null) ?? "",
         council_expiry: (r.council_expiry as string | null) ?? "",
+        professional_type: (r.professional_type as string | null) ?? "",
         credentials: (Array.isArray(r.professional_insurance_credentials)
           ? r.professional_insurance_credentials
           : []
