@@ -115,6 +115,29 @@ export function FichaAtendimento({
             </Secao>
           )}
 
+          {/* Termo de Consentimento e Responsabilidade */}
+          <div className="mt-8 border-t border-line pt-4 text-[10px] leading-relaxed text-muted text-justify">
+            <p className="font-semibold text-ink uppercase mb-1">Termo de Consentimento e Responsabilidade</p>
+            <p>
+              Declaro sob as penas da lei que as informações cadastrais prestadas acima são verdadeiras. 
+              Autorizo a realização de consultas, exames e procedimentos indicados, consentindo com o tratamento
+              médico necessário. Declaro também estar ciente de que as despesas não cobertas pelo meu convênio 
+              são de minha inteira responsabilidade, comprometendo-me a quitá-las diretamente com esta instituição.
+            </p>
+          </div>
+
+          {/* Assinaturas */}
+          <div className="mt-12 grid grid-cols-2 gap-8 text-center text-[11px]">
+            <div className="border-t border-ink pt-2">
+              <p className="font-semibold text-ink">{item.paciente}</p>
+              <p className="text-muted">Assinatura do Paciente / Responsável</p>
+            </div>
+            <div className="border-t border-ink pt-2">
+              <p className="font-semibold text-ink">Recepção</p>
+              <p className="text-muted">Assinatura do Atendente</p>
+            </div>
+          </div>
+
           <footer className="mt-6 border-t border-line pt-4 text-center text-xs text-muted">
             Emitido em {dataHora}
           </footer>
