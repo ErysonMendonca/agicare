@@ -33,6 +33,8 @@ export type Escala = {
   examTussCodes: string[];
   /** Bloqueios fixos/recorrentes: horários sempre indisponíveis nessa escala. */
   recurringBlocks: { time: string; reason: string }[];
+  lateralidade?: string;
+  obs?: string;
 };
 
 /** Bloqueio fixo de um horário (indisponível). */
@@ -65,6 +67,8 @@ const MOCK: Escala[] = [
     procedureCodes: [],
     examTussCodes: [],
     recurringBlocks: [],
+    lateralidade: "",
+    obs: "",
   },
   {
     id: "esc-2",
@@ -86,6 +90,8 @@ const MOCK: Escala[] = [
     procedureCodes: [],
     examTussCodes: [],
     recurringBlocks: [],
+    lateralidade: "",
+    obs: "",
   },
 ];
 
@@ -164,7 +170,7 @@ export async function listSchedules(filtro?: EscalaFiltro): Promise<Escala[]> {
   let query = supabase
     .from("schedules")
     .select(
-      "id, code, description, professional_id, specialty, service_type, slot_minutes, overbook_limit, weekdays, start_time, end_time, week_hours, active, start_date, end_date, procedure_codes, exam_tuss_codes, recurring_blocks, professionals(profiles(full_name))",
+      "id, code, description, professional_id, specialty, service_type, slot_minutes, overbook_limit, weekdays, start_time, end_time, week_hours, active, start_date, end_date, procedure_codes, exam_tuss_codes, recurring_blocks, lateralidade, obs, professionals(profiles(full_name))",
     )
     .order("specialty", { ascending: true })
     .order("description", { ascending: true });
@@ -210,6 +216,8 @@ export async function listSchedules(filtro?: EscalaFiltro): Promise<Escala[]> {
         ? (r.exam_tuss_codes as string[])
         : [],
       recurringBlocks: parseRecurringBlocks(r.recurring_blocks),
+      lateralidade: (r.lateralidade as string | null) ?? "",
+      obs: (r.obs as string | null) ?? "",
     };
   });
 }

@@ -20,6 +20,7 @@ import { Select } from "@/components/ui/Select";
 import { type Escala } from "@/lib/data/schedules";
 import { type AttendanceOption } from "@/lib/data/attendance-options.shared";
 import { type Procedimento } from "@/lib/data/procedures";
+import { type Profissional } from "@/lib/data/professionals";
 import { EXAMES_TUSS } from "@/lib/clinico/exames-shared";
 import { createSchedule, updateSchedule } from "@/lib/actions/appointments";
 
@@ -75,6 +76,7 @@ export function EscalaHorariosModal({
   onClose,
   especialidades,
   procedimentos,
+  profissionais,
   escalas = [],
   escalaParaEditar,
 }: {
@@ -83,6 +85,7 @@ export function EscalaHorariosModal({
   /** Catálogo de especialidades (attendance_options), fonte única do sistema. */
   especialidades: AttendanceOption[];
   procedimentos: Procedimento[];
+  profissionais: Profissional[];
   /** Escalas existentes — usadas p/ avisar de conflito (escala única por especialidade). */
   escalas?: Escala[];
   /** Quando presente, o modal abre em modo edição (pré-preenche + updateSchedule). */
@@ -101,6 +104,9 @@ export function EscalaHorariosModal({
   const [aba, setAba] = useState<Aba>("dados");
   const [descricao, setDescricao] = useState(esc?.description ?? "");
   const [especialidade, setEspecialidade] = useState(esc?.specialty ?? "");
+  const [profissionalId, setProfissionalId] = useState(esc?.professionalId ?? "");
+  const [lateralidade, setLateralidade] = useState(esc?.lateralidade ?? "");
+  const [obs, setObs] = useState(esc?.obs ?? "");
   const [tipo, setTipo] = useState(esc?.serviceType || TIPOS[0]);
   const [slotMin, setSlotMin] = useState(esc?.slotMinutes ?? 30);
   const [encaixe, setEncaixe] = useState(esc?.overbookLimit ?? 0);
@@ -243,6 +249,40 @@ export function EscalaHorariosModal({
     if (p && p.duracaoNum > 0) setSlotMin(p.duracaoNum);
   }
 
+  const EXAME_DURACOES: Record<string, number> = {
+    "40304361": 15,
+    "40301630": 15,
+    "40301826": 15,
+    "40301842": 15,
+    "40316105": 15,
+    "40302350": 15,
+    "40302679": 15,
+    "40311070": 15,
+    "40901114": 20,
+    "40901157": 30,
+    "40808017": 20,
+    "40901041": 45,
+  };
+
+  function selecionarExame(code: string) {
+    const jaTem = examCodes.includes(code);
+    toggleItem(setExamCodes, code);
+    if (!jaTem) {
+      const duration = EXAME_DURACOES[code];
+      if (duration) setSlotMin(duration);
+    }
+  }
+
+  function aplicarVigenciaRapida(dias: number) {
+    const base = dataInicio ? new Date(dataInicio + "T00:00:00") : new Date();
+    if (!dataInicio) {
+      setDataInicio(base.toISOString().slice(0, 10));
+    }
+    const fim = new Date(base.getTime());
+    fim.setDate(fim.getDate() + dias);
+    setDataFim(fim.toISOString().slice(0, 10));
+  }
+
   // Dias selecionados na ordem de exibição (Seg→Dom).
   const diasOrdenados = useMemo(
     () => DIAS.filter((d) => dias.includes(d.n)),
@@ -296,8 +336,18 @@ export function EscalaHorariosModal({
       setAba("dados");
       return;
     }
-    if (!especialidade && tipo !== "Procedimento" && tipo !== "Exame") {
+    if ((tipo === "Consulta" || tipo === "Retorno") && !especialidade) {
       toast.error("Selecione a especialidade da escala.");
+      setAba("dados");
+      return;
+    }
+    if (tipo === "Procedimento" && procedureCodes.length === 0) {
+      toast.error("Selecione ao menos um procedimento para a escala.");
+      setAba("dados");
+      return;
+    }
+    if (tipo === "Exame" && examCodes.length === 0) {
+      toast.error("Selecione ao menos um exame para a escala.");
       setAba("dados");
       return;
     }
@@ -358,8 +408,7 @@ export function EscalaHorariosModal({
     startTransition(async () => {
       const payload = {
         description: descricao,
-        // Escala é por especialidade — sem profissional fixo.
-        professional_id: "",
+        professional_id: profissionalId || "",
         specialty: especialidade,
         service_type: tipo,
         slot_minutes: slotMin,
@@ -376,6 +425,8 @@ export function EscalaHorariosModal({
         exam_tuss_codes: tipo === "Exame" ? examCodes : [],
         // Bloqueios agora são por dia (em week_hours[dia].blocks); global vazio.
         recurring_blocks: [],
+        lateralidade: tipo === "Exame" ? lateralidade : "",
+        obs: tipo === "Exame" ? obs : "",
       };
       const res = escalaParaEditar
         ? await updateSchedule(escalaParaEditar.id, { ...payload, active: ativo })
@@ -459,6 +510,7 @@ export function EscalaHorariosModal({
             step={5}
             value={slotMin}
             onChange={(e) => setSlotMin(Number(e.target.value))}
+            disabled={tipo === "Procedimento" || tipo === "Exame"}
           />
           <Input
             label="Limite de Encaixe"
@@ -480,6 +532,18 @@ export function EscalaHorariosModal({
             ))}
           </Select>
           <Select
+            label="Profissional"
+            value={profissionalId}
+            onChange={(e) => setProfissionalId(e.target.value)}
+          >
+            <option value="">Selecione o profissional (opcional)</option>
+            {profissionais.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </Select>
+          <Select
             label="Tipo de Escala"
             value={tipo}
             onChange={(e) => setTipo(e.target.value)}
@@ -493,8 +557,31 @@ export function EscalaHorariosModal({
               ? "A escala define o horário para os procedimentos selecionados."
               : tipo === "Exame"
                 ? "A escala define o horário para os exames selecionados."
-                : "A escala é definida por especialidade e vale para todos os profissionais dela."}
+                : "A escala é definida por especialidade/profissional e vale para os atendimentos vinculados."}
           </p>
+
+          {/* Lateralidade e Observações de Exame */}
+          {tipo === "Exame" && (
+            <>
+              <Select
+                label="Lateralidade"
+                value={lateralidade}
+                onChange={(e) => setLateralidade(e.target.value)}
+              >
+                <option value="">Não informado / Não se aplica</option>
+                <option value="Direita">Direita</option>
+                <option value="Esquerda">Esquerda</option>
+                <option value="Bilateral">Bilateral</option>
+                <option value="Não se aplica">Não se aplica</option>
+              </Select>
+              <Input
+                label="Observações do Exame"
+                placeholder="Ex.: Requer jejum de 8h"
+                value={obs}
+                onChange={(e) => setObs(e.target.value)}
+              />
+            </>
+          )}
 
           {/* Itens da escala: aparece conforme o Tipo de Escala. */}
           {tipo === "Procedimento" && (
@@ -525,7 +612,7 @@ export function EscalaHorariosModal({
               )}
               <p className="mt-1 text-xs text-muted">
                 O tempo de atendimento é preenchido com a duração do
-                procedimento (editável).
+                procedimento (respeitado o cadastro).
               </p>
             </div>
           )}
@@ -542,8 +629,8 @@ export function EscalaHorariosModal({
                   sub: ex.categoria,
                 }))}
                 selected={examCodes}
-                onPick={(code) => toggleItem(setExamCodes, code)}
-                onRemove={(code) => toggleItem(setExamCodes, code)}
+                onPick={selecionarExame}
+                onRemove={selecionarExame}
                 placeholder="Buscar exame..."
                 vazio="Nenhum exame encontrado."
               />
@@ -622,6 +709,37 @@ export function EscalaHorariosModal({
                 min={dataInicio || undefined}
                 onChange={(e) => setDataFim(e.target.value)}
               />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <span className="text-xs text-muted self-center mr-1">Atalho de vigência:</span>
+              <button
+                type="button"
+                className="rounded bg-brand-50 hover:bg-brand-100 text-brand-700 px-2 py-1 text-xs font-semibold"
+                onClick={() => aplicarVigenciaRapida(30)}
+              >
+                1 Mês
+              </button>
+              <button
+                type="button"
+                className="rounded bg-brand-50 hover:bg-brand-100 text-brand-700 px-2 py-1 text-xs font-semibold"
+                onClick={() => aplicarVigenciaRapida(90)}
+              >
+                1 Trimestre
+              </button>
+              <button
+                type="button"
+                className="rounded bg-brand-50 hover:bg-brand-100 text-brand-700 px-2 py-1 text-xs font-semibold"
+                onClick={() => aplicarVigenciaRapida(180)}
+              >
+                1 Semestre
+              </button>
+              <button
+                type="button"
+                className="rounded bg-brand-50 hover:bg-brand-100 text-brand-700 px-2 py-1 text-xs font-semibold"
+                onClick={() => aplicarVigenciaRapida(365)}
+              >
+                1 Ano
+              </button>
             </div>
             <p className="mt-1 text-xs text-muted">
               A escala só vale (gera horários na agenda) dentro deste período.

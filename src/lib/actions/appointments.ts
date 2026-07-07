@@ -464,6 +464,8 @@ const escalaSchema = z.object({
       }),
     )
     .default([]),
+  lateralidade: z.string().trim().optional().or(z.literal("")),
+  obs: z.string().trim().optional().or(z.literal("")),
 });
 
 /** Valida o período: data final não pode ser anterior à inicial (datas ISO). */
@@ -531,14 +533,17 @@ function msgConflitoEscala(c: { code: string; start: string; end: string }): str
 async function agendamentoDependenteDaEscala(
   supabase: Awaited<ReturnType<typeof createClient>>,
   escala: {
+    id: string;
     specialty: string | null;
+    professional_id: string | null;
+    service_type: string | null;
+    procedure_codes: string[] | null;
+    exam_tuss_codes: string[] | null;
     start_date: unknown;
     end_date: unknown;
     weekdays: unknown;
   },
 ): Promise<{ paciente: string; quando: string } | null> {
-  if (!escala.specialty) return null;
-
   const s = escala.start_date ? String(escala.start_date).slice(0, 10) : "";
   const e = escala.end_date ? String(escala.end_date).slice(0, 10) : "";
   const dias: number[] = Array.isArray(escala.weekdays)
@@ -547,31 +552,58 @@ async function agendamentoDependenteDaEscala(
 
   let q = supabase
     .from("appointments")
-    .select("starts_at, status, patients(full_name)")
-    .eq("specialty", escala.specialty)
+    .select("starts_at, status, reason, service_type, specialty, professional_id, patients(full_name)")
     .neq("status", "cancelado")
     .order("starts_at", { ascending: true });
-  // Vigência: limites nulos = sem fronteira (escala aberta cobre tudo).
+
   if (s) q = q.gte("starts_at", `${s}T00:00:00`);
   if (e) q = q.lte("starts_at", `${e}T23:59:59`);
 
   const { data } = await q;
+
   for (const a of data ?? []) {
     const iso = String((a as { starts_at?: unknown }).starts_at ?? "");
     if (!iso) continue;
-    // Filtra pelos dias da semana da escala (0=Dom..6=Sáb). Vazio = todos os dias.
     if (dias.length > 0) {
       const wd = new Date(iso).getDay();
       if (!dias.includes(wd)) continue;
     }
-    const prof = (a as { patients?: { full_name?: string } | { full_name?: string }[] })
-      .patients;
-    const nome = Array.isArray(prof) ? prof[0]?.full_name : prof?.full_name;
-    const dt = new Date(iso);
-    const quando = Number.isNaN(dt.getTime())
-      ? iso
-      : `${dt.toLocaleDateString("pt-BR")} ${dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
-    return { paciente: nome ?? "paciente", quando };
+
+    let matches = false;
+    const sType = a.service_type;
+
+    if (escala.service_type === "Procedimento") {
+      if (sType === "Procedimento" && escala.procedure_codes && escala.procedure_codes.length > 0) {
+        const reasonText = String(a.reason || "").toLowerCase();
+        matches = escala.procedure_codes.some((code) => {
+          return reasonText.includes(code.toLowerCase());
+        });
+      }
+    } else if (escala.service_type === "Exame") {
+      if (sType === "Exame" && escala.exam_tuss_codes && escala.exam_tuss_codes.length > 0) {
+        const reasonText = String(a.reason || "").toLowerCase();
+        matches = escala.exam_tuss_codes.some((code) => {
+          return reasonText.includes(code.toLowerCase());
+        });
+      }
+    } else {
+      if (escala.specialty && a.specialty === escala.specialty) {
+        matches = true;
+      }
+      if (escala.professional_id && a.professional_id === escala.professional_id) {
+        matches = true;
+      }
+    }
+
+    if (matches) {
+      const prof = (a as { patients?: { full_name?: string } | { full_name?: string }[] }).patients;
+      const nome = Array.isArray(prof) ? prof[0]?.full_name : prof?.full_name;
+      const dt = new Date(iso);
+      const quando = Number.isNaN(dt.getTime())
+        ? iso
+        : `${dt.toLocaleDateString("pt-BR")} ${dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+      return { paciente: nome ?? "paciente", quando };
+    }
   }
   return null;
 }
@@ -686,7 +718,7 @@ export async function createSchedule(
     code,
     description: d.description,
     // Escala por especialidade: sem profissional fixo.
-    professional_id: null,
+    professional_id: d.professional_id?.trim() || null,
     specialty: d.specialty || null,
     service_type: d.service_type || null,
     slot_minutes: d.slot_minutes,
@@ -700,6 +732,8 @@ export async function createSchedule(
     procedure_codes: d.procedure_codes,
     exam_tuss_codes: d.exam_tuss_codes,
     recurring_blocks: d.recurring_blocks,
+    lateralidade: d.lateralidade?.trim() || null,
+    obs: d.obs?.trim() || null,
   });
 
   if (error) return { error: error.message };
@@ -752,7 +786,7 @@ export async function updateSchedule(
   // depende dela (verifica pelo ESCOPO ATUAL da escala, antes das mudanças).
   const { data: atual } = await supabase
     .from("schedules")
-    .select("specialty, start_date, end_date, weekdays")
+    .select("id, specialty, professional_id, service_type, procedure_codes, exam_tuss_codes, start_date, end_date, weekdays")
     .eq("id", idParsed.data)
     .eq("clinic_id", clinicId)
     .maybeSingle();
@@ -784,7 +818,7 @@ export async function updateSchedule(
       description: d.description,
       // Escala por especialidade: zera qualquer profissional fixo (inclusive
       // ao editar uma escala antiga que tinha profissional).
-      professional_id: null,
+      professional_id: d.professional_id?.trim() || null,
       specialty: d.specialty || null,
       service_type: d.service_type || null,
       slot_minutes: d.slot_minutes,
@@ -798,6 +832,8 @@ export async function updateSchedule(
       procedure_codes: d.procedure_codes,
       exam_tuss_codes: d.exam_tuss_codes,
       recurring_blocks: d.recurring_blocks,
+      lateralidade: d.lateralidade?.trim() || null,
+      obs: d.obs?.trim() || null,
       active: d.active,
     })
     .eq("id", idParsed.data);
