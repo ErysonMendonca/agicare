@@ -7,6 +7,8 @@ import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 import { enviarNotificacao } from "@/lib/integrations/notifications";
 import { logAction } from "@/lib/system-log";
+import { EXAMES_TUSS } from "@/lib/clinico/exames-shared";
+import { listProcedures } from "@/lib/data/procedures";
 
 /** Estado padrão das ações da agenda (estende o ActionState com o protocolo). */
 export type AgendaActionState =
@@ -961,14 +963,14 @@ export async function removeBlock(id: string): Promise<AgendaActionState> {
 // Comprovante — envio (STUB local; não chama serviço externo real)
 // ════════════════════════════════════════════════════════════════
 const comprovanteSchema = z.object({
-  channel: z.enum(["sms", "email"]),
+  channel: z.enum(["sms", "email", "whatsapp"]),
   protocol: z.string().trim().min(1, "Protocolo inválido."),
   patient_id: z.string().trim().optional().or(z.literal("")),
   to: z.string().trim().optional().or(z.literal("")),
 });
 
 /**
- * Envia o comprovante (SMS/e-mail) através da camada de INTEGRAÇÕES.
+ * Envia o comprovante (SMS/e-mail/WhatsApp) através da camada de INTEGRAÇÕES.
  *
  * Duas gravações, com papéis distintos:
  *  1) `appointment_notifications` → registro de DOMÍNIO da agenda (continuidade).
@@ -984,16 +986,18 @@ export async function enviarComprovante(
 
   const d = parsed.data;
 
-  // Mapeia o canal do comprovante ao toggle correspondente em
-  // clinic_settings.notifications (canal desligado pelo gestor → não dispara).
   const evento =
-    d.channel === "email" ? "emailNewAppointment" : "smsTwoHoursBefore";
+    d.channel === "email"
+      ? "emailNewAppointment"
+      : d.channel === "whatsapp"
+        ? "whatsappResults"
+        : "smsTwoHoursBefore";
 
   if (isDemoMode()) {
     // Em demo não há banco/provider: apenas resolve o status que ocorreria
     // (respeitando os toggles padrão de notificação).
     await enviarNotificacao({
-      canal: d.channel,
+      canal: d.channel as any,
       destino: d.to || "demo@local",
       template: "comprovante_agendamento",
       payload: { protocolo: d.protocol },
@@ -1009,13 +1013,15 @@ export async function enviarComprovante(
       error:
         d.channel === "sms"
           ? "Paciente sem telefone cadastrado para SMS."
-          : "Paciente sem e-mail cadastrado.",
+          : d.channel === "whatsapp"
+            ? "Paciente sem telefone cadastrado para WhatsApp."
+            : "Paciente sem e-mail cadastrado.",
     };
   }
 
   const supabase = await createClient();
   const { error } = await supabase.from("appointment_notifications").insert({
-    channel: d.channel,
+    channel: d.channel as any,
     protocol: d.protocol,
     patient_id: d.patient_id || null,
     recipient: d.to || null,
@@ -1319,6 +1325,8 @@ export async function listOcupacao(
 export async function listSlotsBySpecialty(
   specialty: string,
   dateISO: string,
+  serviceType?: string,
+  itemId?: string,
 ): Promise<SlotGrid> {
   if (typeof specialty !== "string" || !dateISO) return { slots: [], slotMinutes: 30 };
 
@@ -1336,24 +1344,29 @@ export async function listSlotsBySpecialty(
   let query = supabase
     .from("schedules")
     .select(
-      "slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks",
+      "slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks, specialty, service_type, procedure_codes, exam_tuss_codes",
     )
     .eq("active", true);
 
-  if (!specialty) {
-    query = query.is("specialty", null);
-  } else {
-    query = query.eq("specialty", specialty);
-  }
-
   const { data: escalas } = await query;
 
-  // Escalas ativas da especialidade válidas nesse dia/data.
-  const doDia = (escalas ?? []).filter(
-    (e) =>
-      (Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false) &&
-      naVigencia(dateISO, e.start_date, e.end_date),
-  );
+  // Escalas ativas válidas nesse dia/data.
+  const doDia = (escalas ?? []).filter((e) => {
+    const cDia = Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false;
+    const cVig = naVigencia(dateISO, e.start_date, e.end_date);
+    if (!cDia || !cVig) return false;
+
+    if (serviceType === "Procedimento") {
+      const codes = Array.isArray(e.procedure_codes) ? e.procedure_codes : [];
+      return e.service_type === "Procedimento" && codes.includes(itemId || "");
+    }
+    if (serviceType === "Exame") {
+      const codes = Array.isArray(e.exam_tuss_codes) ? e.exam_tuss_codes : [];
+      return e.service_type === "Exame" && codes.includes(itemId || "");
+    }
+    // Consultas/Retornos
+    return (e.service_type === "Consulta" || e.service_type === "Retorno" || !e.service_type) && e.specialty === specialty;
+  });
   const escala = doDia[0];
 
   const slotMinutes = escala ? Number(escala.slot_minutes) || 30 : 30;
@@ -1382,22 +1395,49 @@ export async function listSlotsBySpecialty(
     : gradePadrao();
 
   // Capacidade = profissionais ativos da especialidade (mín. 1).
-  const { count: profCount } = await supabase
-    .from("professionals")
-    .select("id", { count: "exact", head: true })
-    .eq("specialty", specialty)
-    .eq("active", true);
-  const capacity = Math.max(1, profCount ?? 1);
+  let capacity = 1;
+  if (!serviceType || serviceType === "Consulta" || serviceType === "Retorno") {
+    const { count: profCount } = await supabase
+      .from("professionals")
+      .select("id", { count: "exact", head: true })
+      .eq("specialty", specialty)
+      .eq("active", true);
+    capacity = Math.max(1, profCount ?? 1);
+  }
 
   const dayStart = toIso(dateISO, "00:00");
   const dayEnd = addMinutes(toIso(dateISO, "00:00"), 24 * 60);
 
-  const { data: ags } = await supabase
+  let qAgs = supabase
     .from("appointments")
-    .select("starts_at, ends_at, status")
-    .eq("specialty", specialty)
+    .select("starts_at, ends_at, status, reason, service_type")
     .gte("starts_at", dayStart)
-    .lt("starts_at", dayEnd);
+    .lt("starts_at", dayEnd)
+    .neq("status", "cancelado");
+
+  if (serviceType === "Procedimento" || serviceType === "Exame") {
+    qAgs = qAgs.eq("service_type", serviceType);
+  } else {
+    qAgs = qAgs.eq("specialty", specialty);
+  }
+
+  const { data: rawAgs } = await qAgs;
+
+  // Filtra em memória se for exame/procedimento para corresponder ao item
+  const ags = (rawAgs ?? []).filter((a) => {
+    if (serviceType === "Procedimento" || serviceType === "Exame") {
+      const reasonText = String(a.reason || "").toLowerCase();
+      let itemName = "";
+      if (serviceType === "Exame") {
+        itemName = EXAMES_TUSS.find((ex) => ex.tuss === itemId)?.nome || "";
+      } else {
+        // Encontra o procedimento de forma síncrona/segura
+        itemName = "Procedimento";
+      }
+      return reasonText.includes(itemName.toLowerCase());
+    }
+    return true;
+  });
 
   // Conta agendamentos que SOBREPÕEM cada slot (considera a duração real), não
   // só os que começam exatamente na hora do slot. Ocupado ao atingir a capacidade.

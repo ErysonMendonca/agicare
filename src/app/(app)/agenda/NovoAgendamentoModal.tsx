@@ -18,6 +18,7 @@ import {
   Printer,
   MessageSquare,
   Mail,
+  MessageCircle,
 } from "lucide-react";
 import { qrToSvg } from "@/lib/integrations/qrcode";
 import { toast } from "sonner";
@@ -245,7 +246,7 @@ export function NovoAgendamentoModal({
       // agregada da escala da especialidade (atribuição posterior).
       const grid = profissionalId
         ? await listSlots(profissionalId, data)
-        : await listSlotsBySpecialty(especialidade, data);
+        : await listSlotsBySpecialty(especialidade, data, tipo, itemId);
       setSlots(grid.slots);
       setDuracao(grid.slotMinutes);
       setPasso(2);
@@ -311,7 +312,7 @@ export function NovoAgendamentoModal({
    * Envia o comprovante (SMS/e-mail) como STUB local: registra a intenção de
    * envio em appointment_notifications (marca sent_at). Não chama gateway real.
    */
-  function enviar(channel: "sms" | "email") {
+  function enviar(channel: "sms" | "email" | "whatsapp") {
     if (!protocolo || protocolo === "—") {
       toast.error("Confirme o agendamento antes de enviar o comprovante.");
       return;
@@ -322,7 +323,7 @@ export function NovoAgendamentoModal({
         protocol: protocolo,
         patient_id: pacienteId,
         to:
-          channel === "sms"
+          channel === "sms" || channel === "whatsapp"
             ? paciente?.telefone ?? avulsoTel ?? ""
             : paciente?.email ?? "",
       });
@@ -330,7 +331,9 @@ export function NovoAgendamentoModal({
         toast.success(
           channel === "sms"
             ? "Comprovante registrado para envio por SMS."
-            : "Comprovante registrado para envio por e-mail.",
+            : channel === "whatsapp"
+              ? "Comprovante registrado para envio por WhatsApp."
+              : "Comprovante registrado para envio por e-mail.",
         );
       } else {
         toast.error(res?.error ?? "Não foi possível registrar o envio.");
@@ -570,13 +573,16 @@ export function NovoAgendamentoModal({
               </Select>
             ) : null}
 
-            <Input
-              label="Data do Atendimento"
-              type="date"
-              min={hoje}
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-            />
+            <div className="sm:col-span-2">
+              <span className="mb-1.5 block text-sm font-medium text-ink">
+                Data do Atendimento
+              </span>
+              <InlineCalendar
+                value={data}
+                onChange={setData}
+                minDate={hoje}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -728,7 +734,7 @@ export function NovoAgendamentoModal({
             Apresente este QR Code na recepção
           </p>
 
-          <div className="mt-5 grid w-full grid-cols-3 gap-2">
+          <div className="mt-5 grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
             <Button variant="outline" size="sm" onClick={() => window.print()}>
               <Printer className="h-4 w-4" />
               Imprimir
@@ -750,6 +756,15 @@ export function NovoAgendamentoModal({
             >
               <Mail className="h-4 w-4" />
               Enviar E-mail
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => enviar("whatsapp")}
+              disabled={enviando}
+            >
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
             </Button>
           </div>
         </div>
@@ -865,6 +880,125 @@ function ResumoLinha({
         {label}
       </span>
       <span className="text-right text-sm font-medium text-ink">{valor}</span>
+    </div>
+  );
+}
+
+interface InlineCalendarProps {
+  value: string; // YYYY-MM-DD
+  onChange: (date: string) => void;
+  minDate?: string; // YYYY-MM-DD
+}
+
+export function InlineCalendar({ value, onChange, minDate }: InlineCalendarProps) {
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (value) {
+      const [y, m, d] = value.split("-").map(Number);
+      return new Date(y, m - 1, d);
+    }
+    return new Date();
+  });
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const MONTHS = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+  ];
+
+  const DAYS_OF_WEEK = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const days: (Date | null)[] = [];
+  for (let i = 0; i < firstDayOfMonth; i++) {
+    days.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(new Date(year, month, i));
+  }
+
+  function handlePrevMonth() {
+    setCurrentDate(new Date(year, month - 1, 1));
+  }
+
+  function handleNextMonth() {
+    setCurrentDate(new Date(year, month + 1, 1));
+  }
+
+  const todayStr = minDate || new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="rounded-xl border border-line p-4 bg-muted-surface max-w-sm mx-auto sm:mx-0">
+      <div className="flex items-center justify-between mb-3">
+        <button
+          type="button"
+          onClick={handlePrevMonth}
+          className="p-1.5 rounded-lg hover:bg-white text-ink transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="text-sm font-semibold text-ink">
+          {MONTHS[month]} {year}
+        </span>
+        <button
+          type="button"
+          onClick={handleNextMonth}
+          className="p-1.5 rounded-lg hover:bg-white text-ink transition-colors"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted mb-2">
+        {DAYS_OF_WEEK.map((d) => (
+          <div key={d} className="py-1">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((date, idx) => {
+          if (!date) {
+            return <div key={`empty-${idx}`} />;
+          }
+
+          const isoStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+          const isSelected = value === isoStr;
+          const isPast = isoStr < todayStr;
+
+          return (
+            <button
+              key={isoStr}
+              type="button"
+              disabled={isPast}
+              onClick={() => onChange(isoStr)}
+              className={`h-8 w-8 mx-auto flex items-center justify-center rounded-lg text-xs font-medium transition-all ${
+                isSelected
+                  ? "bg-brand-500 text-white shadow-sm font-semibold"
+                  : isPast
+                    ? "text-muted/40 cursor-not-allowed"
+                    : "text-ink hover:bg-brand-50 hover:text-brand-700"
+              }`}
+            >
+              {date.getDate()}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
