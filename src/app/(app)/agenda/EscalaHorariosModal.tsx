@@ -161,7 +161,7 @@ export function EscalaHorariosModal({
     return (
       escalas.find((e) => {
         if (!e.active) return false;
-        if (e.specialty !== esp) return false;
+        if (e.specialty !== esp || e.serviceType !== tipo) return false;
         if (escalaParaEditar && e.id === escalaParaEditar.id) return false;
         const s = (e.startDate || "").slice(0, 10);
         const en = (e.endDate || "").slice(0, 10);
@@ -539,7 +539,10 @@ export function EscalaHorariosModal({
             onChange={(e) => setProfissionalId(e.target.value)}
           >
             <option value="">Selecione o profissional (opcional)</option>
-            {profissionais.map((p) => (
+            {(especialidade
+              ? profissionais.filter((p) => p.especialidade === especialidade)
+              : profissionais
+            ).map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nome}
               </option>
