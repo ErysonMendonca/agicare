@@ -25,7 +25,7 @@ export async function listScannedRecords(patientId: string): Promise<ScannedReco
   if (error || !data) return [];
 
   // Generate signed URLs for the files
-  const records = data.map((row: any) => ({
+  const records: ScannedRecord[] = data.map((row: any) => ({
     id: row.id,
     patientId: row.patient_id,
     filePath: row.file_path,
@@ -36,6 +36,7 @@ export async function listScannedRecords(patientId: string): Promise<ScannedReco
     uploadedBy: row.uploaded_by,
     uploadedByName: row.auth_users?.raw_user_meta_data?.full_name ?? null,
     createdAt: row.created_at,
+    signedUrl: null,
   }));
 
   const paths = records.map((r) => r.filePath);
