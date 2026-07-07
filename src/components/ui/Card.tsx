@@ -27,3 +27,7 @@ export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElemen
 export function CardBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("p-5", className)} {...props} />;
 }
+
+export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("p-5 pt-0 flex items-center", className)} {...props} />;
+}

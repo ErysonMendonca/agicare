@@ -1,6 +1,6 @@
 import { requireView } from "@/lib/permissions";
 import { PageHeader } from "@/components/app/PageHeader";
-import { getAttendanceOptions } from "@/lib/data/attendance-options";
+import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { listEspecialidades } from "@/lib/data/especialidades";
 import { ProfissionalForm } from "../ProfissionalForm";
 
@@ -8,7 +8,7 @@ export default async function NovoProfissionalPage() {
   await requireView("profissionais");
 
   const [options, especialidades] = await Promise.all([
-    getAttendanceOptions(),
+    listAttendanceOptions(),
     listEspecialidades(),
   ]);
 
