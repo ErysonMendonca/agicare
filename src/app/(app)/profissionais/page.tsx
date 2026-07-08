@@ -26,14 +26,6 @@ export default async function ProfissionaisPage() {
       <PageHeader
         title="Profissionais"
         subtitle="Gestão de equipe clínica, administrativa e controle de acessos"
-        actions={
-          <Link
-            href="/profissionais/novo"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-sm font-medium text-white transition-colors hover:bg-brand-700"
-          >
-            <Plus className="h-4 w-4" /> Novo Profissional
-          </Link>
-        }
       />
 
       {/* KPIs clicáveis + abas funcionais + lista filtrável (estado no client). */}
