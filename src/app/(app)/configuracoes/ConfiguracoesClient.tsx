@@ -561,7 +561,7 @@ export function ConfiguracoesClient({
           </Card>
         </TabPane>
 
-        <div className={`mt-6 flex justify-end ${tabAtiva === "Fluxo" ? "hidden" : ""}`}>
+        <div className={`mt-6 flex justify-end ${["Geral", "Notificações", "Segurança", "Backup", "Marca"].includes(tabAtiva) ? "" : "hidden"}`}>
           <Button type="submit" variant="primary" disabled={pending}>
             <Save className="h-4 w-4" />
             {pending ? "Salvando..." : "Salvar Alterações"}
