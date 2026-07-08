@@ -45,6 +45,7 @@ const CATEGORY_LABELS: Record<AttendanceOptionCategory, string> = {
   localizacao: "Localização",
   classificacao_xyz: "Classificação XYZ",
   tipo_profissional: "Tipo de Profissional",
+  departamento: "Departamento",
 };
 
 /**
