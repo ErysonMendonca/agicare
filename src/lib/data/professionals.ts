@@ -57,6 +57,7 @@ export type ProfissionalEdit = {
   council_uf?: string;
   council_expiry?: string;
   professional_type?: string;
+  department?: string;
   /** Credenciamentos de convênio (só admin lê — RLS 0070). */
   credentials?: CredencialEdit[];
 };

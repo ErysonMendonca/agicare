@@ -253,8 +253,12 @@ export function ProfissionaisLista({
                         </span>
                       )}
                     </Button>
-                    <Link href="/profissionais/novo" className={LINK_BTN_MD}>
-                      <Plus className="h-4 w-4" /> Novo Cadastro
+                    <Link
+                      href={aba === "administrativa" ? "/profissionais/novo-admin" : "/profissionais/novo"}
+                      className={LINK_BTN_MD}
+                    >
+                      <Plus className="h-4 w-4" />
+                      {aba === "administrativa" ? "Novo Administrativo" : "Novo Profissional"}
                     </Link>
                   </>
                 )}

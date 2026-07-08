@@ -96,6 +96,8 @@ const baseSchema = z.object({
   neighborhood: opt,
   city: opt,
   state: opt,
+  // Departamento (Administrativo)
+  department: opt,
   // Observações (4º bloco do cadastro — escopo 11.2; coluna em 0034).
   notes: opt,
   // Credenciamento de convênio (0070) — lista via campo oculto JSON.
@@ -158,6 +160,8 @@ function professionalPayload(d: z.infer<typeof baseSchema>) {
     council_reg: derivarCouncilReg(d),
     // E-mail de contato real (0085). Comum a create e update.
     email: d.email || null,
+    // Departamento
+    department: d.department || null,
   };
 }
 
@@ -337,6 +341,102 @@ export async function createProfessional(
   } catch (e) {
     if (e instanceof TenantAuthError) return { error: e.message };
     return { error: "Não foi possível concluir o cadastro do profissional." };
+  }
+}
+
+/** Schema para criação da equipe administrativa (com login e senha) */
+const createAdminSchema = baseSchema.extend({
+  active: z.enum(["true", "false"]).optional(),
+  login_email: z.string().trim().min(1, "O login (e-mail) é obrigatório.").email("Login deve ser um e-mail válido."),
+  password: z.string().trim().min(6, "A senha deve ter no mínimo 6 caracteres."),
+});
+
+/**
+ * Cria um membro da Equipe Administrativa NOVO na CLÍNICA ATIVA.
+ * Diferente da equipe clínica, a equipe administrativa já define a senha e o
+ * username no momento do cadastro.
+ */
+export async function createAdminProfessional(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const parsed = createAdminSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+  const d = parsed.data;
+  const ativo = d.active ? d.active === "true" : true;
+
+  if (isDemoMode()) return { ok: true };
+
+  try {
+    return await withTenantService(async ({ svc, clinicId }) => {
+      // Cria a conta Auth COM o login e senha fornecidos
+      const { data: created, error: authError } = await svc.auth.admin.createUser({
+        email: d.login_email, // Este é o e-mail de login real
+        password: d.password,
+        email_confirm: true,
+        user_metadata: { full_name: d.full_name, role: d.role, username: d.login_email },
+      });
+
+      if (authError || !created?.user) {
+        return { error: "Erro ao criar conta: " + (authError?.message || "Desconhecido.") };
+      }
+
+      const userId = created.user.id;
+
+      // Completa o profile criado pelo trigger
+      const { error: profileError } = await svc
+        .from("profiles")
+        .update({
+          full_name: d.full_name,
+          role: d.role,
+          phone: d.phone || null,
+          username: d.login_email,
+        })
+        .eq("id", userId);
+
+      if (profileError) {
+        await svc.auth.admin.deleteUser(userId);
+        return { error: "Não foi possível salvar os dados do perfil." };
+      }
+
+      // Membership na clínica ativa
+      const { error: memberError } = await svc.from("clinic_members").insert({
+        clinic_id: clinicId,
+        user_id: userId,
+        role: d.role,
+        active: true,
+      });
+      
+      if (memberError) {
+        await svc.auth.admin.deleteUser(userId);
+        return { error: "Não foi possível vincular à clínica." };
+      }
+
+      // Registro na tabela professionals
+      const payload = {
+        ...professionalPayload(d),
+        ...addressPayload(d),
+      };
+
+      const { error: profError } = await svc.from("professionals").insert({
+        id: userId,
+        clinic_id: clinicId,
+        active: ativo,
+        ...payload,
+      });
+
+      if (profError) {
+        await svc.auth.admin.deleteUser(userId);
+        return { error: "Erro ao salvar os detalhes do profissional." };
+      }
+
+      return { ok: true };
+    });
+  } catch (err) {
+    if (err instanceof TenantAuthError) return { error: err.message };
+    return { error: "Ocorreu um erro inesperado." };
   }
 }
 

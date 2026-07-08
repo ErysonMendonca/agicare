@@ -4,6 +4,9 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { getProfessionalById } from "@/lib/data/professionals";
 import { ProfissionalForm } from "../ProfissionalForm";
+import { AdminForm } from "../AdminForm";
+
+const PAPEIS_CLINICOS = ["medico", "enfermeiro", "enfermagem"];
 
 export default async function EditarProfissionalPage({
   params,
@@ -22,20 +25,30 @@ export default async function EditarProfissionalPage({
   const options = await listAttendanceOptions();
   const especialidades = options["especialidade"] || [];
   const tiposProfissional = options["tipo_profissional"] || [];
+  const departamentos = options["departamento"] || [];
+
+  const isAdmin = !PAPEIS_CLINICOS.includes(profissional.role);
 
   return (
     <>
       <div className="mb-4">
         <PageHeader
-          title="Editar Profissional"
-          subtitle="Atualize os dados do profissional cadastrado."
+          title={isAdmin ? "Editar Administrativo" : "Editar Profissional"}
+          subtitle="Atualize os dados do cadastro."
         />
       </div>
-      <ProfissionalForm
-        profissional={profissional || undefined}
-        especialidades={especialidades}
-        tiposProfissional={tiposProfissional}
-      />
+      {isAdmin ? (
+        <AdminForm
+          profissional={profissional}
+          departamentos={departamentos}
+        />
+      ) : (
+        <ProfissionalForm
+          profissional={profissional}
+          especialidades={especialidades}
+          tiposProfissional={tiposProfissional}
+        />
+      )}
     </>
   );
 }
