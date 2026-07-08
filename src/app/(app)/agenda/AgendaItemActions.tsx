@@ -118,6 +118,10 @@ export function AgendaItemActions({
   }
 
   function confirmarCancelamento() {
+    if (!motivo.trim()) {
+      toast.error("Informe o motivo do cancelamento.");
+      return;
+    }
     startTransition(async () => {
       const res = await cancelAppointment(atendimento.id, motivo);
       if (res?.ok) {
@@ -295,7 +299,7 @@ export function AgendaItemActions({
             como cancelado.
           </p>
           <Input
-            label="Motivo (opcional)"
+            label="Motivo"
             placeholder="Ex.: Solicitação do paciente"
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}

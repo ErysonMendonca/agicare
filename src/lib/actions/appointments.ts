@@ -295,10 +295,12 @@ async function updateAppointment(
 /** Cancela um agendamento (→ status cancelado). */
 export async function cancelAppointment(
   id: string,
-  motivo?: string,
+  motivo: string,
 ): Promise<AgendaActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  if (!motivo?.trim()) return { error: "Informe o motivo do cancelamento." };
+  
   const res = await updateAppointment(parsed.data, {
     status: "cancelado",
     reason: motivo?.trim() || null,
