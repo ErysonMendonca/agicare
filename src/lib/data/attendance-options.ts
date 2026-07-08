@@ -51,6 +51,7 @@ const DEMO_OPTIONS: Record<AttendanceOptionCategory, string[]> = {
   localizacao: ["Prateleira A1", "Prateleira B2", "Geladeira 1"],
   classificacao_xyz: ["X", "Y", "Z"],
   tipo_profissional: ["Médico", "Enfermeiro", "Fisioterapeuta", "Nutricionista"],
+  departamento: ["Recepção", "Administração"],
 };
 
 function demoOptions(): AttendanceOptionsByCategory {
