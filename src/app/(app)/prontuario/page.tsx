@@ -106,7 +106,7 @@ export default async function ProntuarioPage({
 
   const todos = filtrada.length;
   const aguardando = filtrada.filter(
-    (i) => i.statusRaw === "aguardando" || i.statusRaw === "chamado",
+    (i) => i.statusRaw === "aguardando" || i.statusRaw === "aguardando_atendimento" || i.statusRaw === "chamado",
   ).length;
   const emAtendimento = filtrada.filter(
     (i) => i.statusRaw === "em_atendimento",

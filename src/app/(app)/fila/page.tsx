@@ -60,10 +60,12 @@ export default async function FilaPage({
     listProfissionaisVinculo(),
   ]);
 
-  const aguardando = fila.filter((i) => i.status.label === "Aguardando").length;
+  const aguardando = fila.filter((i) => 
+    i.status.label === "Aguardando" || i.status.label === "Aguardando atendimento"
+  ).length;
   const chamados = fila.filter((i) => i.status.label === "Chamado").length;
   const emAtendimento = fila.filter(
-    (i) => i.status.label === "Em Atendimento",
+    (i) => i.status.label === "Em atendimento",
   ).length;
   const total = fila.length;
 
