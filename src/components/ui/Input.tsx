@@ -5,24 +5,30 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   /** Texto de apoio exibido abaixo do campo. */
   hint?: string;
+  /** Mensagem de erro de validação (exibida em vermelho). */
+  error?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, hint, id, ...props }, ref) => {
+  ({ className, label, hint, error, id, ...props }, ref) => {
     const input = (
       <input
         ref={ref}
         id={id}
         className={cn(
           "h-10 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100",
+          error && "border-red-500 focus:border-red-500 focus:ring-red-100",
           className,
         )}
         {...props}
       />
     );
-    const hintEl = hint ? (
+    const hintEl = error ? (
+      <span className="mt-1 block text-xs text-red-500 font-medium">{error}</span>
+    ) : hint ? (
       <span className="mt-1 block text-xs text-muted">{hint}</span>
     ) : null;
+    
     if (!label) {
       return hintEl ? (
         <span className="block">

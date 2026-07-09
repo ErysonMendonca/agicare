@@ -8,7 +8,12 @@ import {
   TenantAuthError,
 } from "@/lib/supabase/tenant-service";
 
-export type ActionState = { error?: string; ok?: boolean } | undefined;
+export type ActionState = { 
+  error?: string; 
+  ok?: boolean; 
+  fieldErrors?: Record<string, string[]>;
+  data?: any;
+} | undefined;
 
 /** Texto opcional ("" é aceito e tratado como ausente na persistência). Limite
  *  de tamanho defensivo (evita blobs/DoS via campo). */
@@ -258,7 +263,11 @@ export async function createProfessional(
 ): Promise<ActionState> {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+    return { 
+      error: "Verifique os campos em vermelho e tente novamente.", 
+      fieldErrors: parsed.error.flatten().fieldErrors,
+      data: Object.fromEntries(formData)
+    };
   }
   const d = parsed.data;
   // Status inicial (default ativo). Espelha o toggle de status da edição: só
@@ -480,7 +489,11 @@ export async function updateProfessional(
 
   const parsed = updateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+    return { 
+      error: "Verifique os campos em vermelho e tente novamente.",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+      data: Object.fromEntries(formData)
+    };
   }
   const d = parsed.data;
 

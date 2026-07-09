@@ -63,12 +63,14 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 function CamposProfissional({
   prefixo,
   defaults,
+  errors,
   mostrarStatus,
   especialidades,
   tiposProfissional,
 }: {
   prefixo: string;
   defaults: FormDefaults;
+  errors?: Record<string, string[]>;
   mostrarStatus: boolean;
   especialidades: AttendanceOption[];
   tiposProfissional: AttendanceOption[];
@@ -137,6 +139,7 @@ function CamposProfissional({
           label="Nome completo"
           placeholder="Ex.: Dr. João Pedro Oliveira"
           defaultValue={defaults.full_name ?? ""}
+          error={errors?.full_name?.[0]}
           required
         />
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -155,7 +158,7 @@ function CamposProfissional({
           </Select>
           <div>
             <Input
-              id={`${prefixo}-documento`}
+              id={`${prefixo}-document`}
               name="document"
               label={personType === "cnpj" ? "CNPJ" : "CPF"}
               inputMode="numeric"
@@ -164,6 +167,8 @@ function CamposProfissional({
               }
               value={documento}
               onChange={(e) => setDocumento(mascararDoc(e.target.value))}
+              error={errors?.document?.[0]}
+              required
             />
           </div>
         </div>
@@ -174,6 +179,7 @@ function CamposProfissional({
             label="Nome social"
             placeholder="Como prefere ser chamado(a)"
             defaultValue={defaults.social_name ?? ""}
+            error={errors?.social_name?.[0]}
           />
           <Input
             id={`${prefixo}-nascimento`}
@@ -181,6 +187,7 @@ function CamposProfissional({
             type="date"
             label="Data de nascimento"
             defaultValue={defaults.birth_date ?? ""}
+            error={errors?.birth_date?.[0]}
           />
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -257,6 +264,7 @@ function CamposProfissional({
             label="CNS"
             placeholder="000 0000 0000 0000"
             defaultValue={defaults.cns ?? ""}
+            error={errors?.cns?.[0]}
           />
           <Input
             id={`${prefixo}-cnes`}
@@ -264,6 +272,7 @@ function CamposProfissional({
             label="CNES"
             placeholder="Cód. do estabelecimento"
             defaultValue={defaults.cnes ?? ""}
+            error={errors?.cnes?.[0]}
           />
         </div>
       </Secao>
@@ -282,6 +291,7 @@ function CamposProfissional({
             label="Número de conselho"
             placeholder="123456"
             defaultValue={defaults.council_number ?? ""}
+            error={errors?.council_number?.[0]}
           />
           <Input
             id={`${prefixo}-council-name`}
@@ -289,6 +299,7 @@ function CamposProfissional({
             label="Conselho"
             placeholder="Ex.: CRM, CRO, COREN"
             defaultValue={defaults.council_name ?? ""}
+            error={errors?.council_name?.[0]}
           />
           <Input
             id={`${prefixo}-council-uf`}
@@ -297,6 +308,7 @@ function CamposProfissional({
             placeholder="SP"
             maxLength={2}
             defaultValue={defaults.council_uf ?? ""}
+            error={errors?.council_uf?.[0]}
           />
           <Input
             id={`${prefixo}-council-expiry`}
@@ -304,6 +316,7 @@ function CamposProfissional({
             type="date"
             label="Validade do conselho"
             defaultValue={defaults.council_expiry ?? ""}
+            error={errors?.council_expiry?.[0]}
           />
         </div>
       </Secao>
@@ -318,6 +331,7 @@ function CamposProfissional({
             placeholder="(11) 90000-0000"
             value={telefone}
             onChange={(e) => setTelefone(e.target.value)}
+            error={errors?.phone?.[0]}
           />
           <Input
             id={`${prefixo}-email`}
@@ -327,6 +341,7 @@ function CamposProfissional({
             placeholder="email@exemplo.com"
             autoComplete="email"
             defaultValue={defaults.email ?? ""}
+            error={errors?.email?.[0]}
           />
         </div>
 
@@ -370,6 +385,7 @@ function CamposProfissional({
                 }
               }}
               onBlur={(e) => buscarCep(e.target.value)}
+              error={errors?.cep?.[0]}
             />
             <div className="sm:col-span-2">
               <Input
@@ -378,6 +394,7 @@ function CamposProfissional({
                 label="Logradouro"
                 value={endereco}
                 onChange={(e) => setEndereco(e.target.value)}
+                error={errors?.address?.[0]}
               />
             </div>
             <Input
@@ -385,6 +402,7 @@ function CamposProfissional({
               name="address_number"
               label="Número"
               defaultValue={defaults.address_number ?? ""}
+              error={errors?.address_number?.[0]}
             />
           </div>
           <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -393,6 +411,7 @@ function CamposProfissional({
               name="address_complement"
               label="Complemento"
               defaultValue={defaults.complement ?? ""}
+              error={errors?.address_complement?.[0]}
             />
             <Input
               id={`${prefixo}-bairro`}
@@ -400,6 +419,7 @@ function CamposProfissional({
               label="Bairro"
               value={bairro}
               onChange={(e) => setBairro(e.target.value)}
+              error={errors?.neighborhood?.[0]}
             />
             <Input
               id={`${prefixo}-cidade`}
@@ -407,6 +427,7 @@ function CamposProfissional({
               label="Cidade"
               value={cidade}
               onChange={(e) => setCidade(e.target.value)}
+              error={errors?.city?.[0]}
             />
           </div>
           <div className="mt-5 sm:w-1/3">
@@ -417,6 +438,7 @@ function CamposProfissional({
               maxLength={2}
               value={uf}
               onChange={(e) => setUf(e.target.value)}
+              error={errors?.state?.[0]}
             />
           </div>
         </div>
@@ -433,6 +455,7 @@ function CamposProfissional({
               label="Login (Usuário)"
               placeholder="joao.silva"
               autoComplete="off"
+              error={errors?.username?.[0]}
             />
           </div>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 mt-5">
@@ -443,6 +466,7 @@ function CamposProfissional({
               label="Senha"
               placeholder="••••••••"
               autoComplete="new-password"
+              error={errors?.password?.[0]}
             />
             <Input
               id={`${prefixo}-senha-confirma`}
@@ -612,7 +636,8 @@ export function ProfissionalForm({
         <CardBody className="p-8">
           <CamposProfissional
             prefixo={profissional ? `ep-${profissional.id}` : "np"}
-            defaults={profissional ?? {}}
+            defaults={state?.data ?? profissional ?? {}}
+            errors={state?.fieldErrors}
             mostrarStatus={!!profissional}
             especialidades={especialidades}
             tiposProfissional={tiposProfissional}
