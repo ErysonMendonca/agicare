@@ -137,23 +137,24 @@ function dayRangeISO(dateISO: string): { startISO: string; endISO: string } {
  * id curto do registro — mantendo os filtros Registro/Paciente operacionais.
  */
 export async function listAtendimentosPorData(
-  dateISO: string,
+  // `null`/vazio → TODOS os períodos (sem filtro de data); uma data ISO → só o dia.
+  dateISO: string | null,
   opts?: { specialty?: string | null },
 ): Promise<FilaItem[]> {
-  if (!dateISO) return [];
-
   try {
     const supabase = await createClient();
-    const { startISO, endISO } = dayRangeISO(dateISO);
 
     let query = supabase
       .from("attendance_records")
       .select(
         "id, patient_id, patient_name, medico, especialidade, convenio, created_at",
       )
-      .gte("created_at", startISO)
-      .lt("created_at", endISO)
       .order("created_at", { ascending: false });
+
+    if (dateISO) {
+      const { startISO, endISO } = dayRangeISO(dateISO);
+      query = query.gte("created_at", startISO).lt("created_at", endISO);
+    }
 
     if (opts?.specialty) query = query.eq("especialidade", opts.specialty);
 

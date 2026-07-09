@@ -87,6 +87,15 @@ export type PacienteEditavel = {
   blood_type: string;
   convenio: string;
   plan: string;
+  /** Campos de convênio (obrigatórios conforme o convênio — ver actions/pacientes). */
+  convenio_carteirinha: string;
+  convenio_validade: string;
+  convenio_titular: string;
+  convenio_acomodacao: string;
+  /** Representante legal (exigido para pacientes menores de idade). */
+  responsavel_cpf: string;
+  responsavel_parentesco: string;
+  responsavel_telefone: string;
   origin: string;
   phone: string;
   email: string;
@@ -123,6 +132,13 @@ const DEMO_EDITAVEL: PacienteEditavel = {
   blood_type: "O+",
   convenio: "Unimed",
   plan: "Premium",
+  convenio_carteirinha: "",
+  convenio_validade: "",
+  convenio_titular: "",
+  convenio_acomodacao: "",
+  responsavel_cpf: "",
+  responsavel_parentesco: "",
+  responsavel_telefone: "",
   origin: "",
   phone: "(11) 91234-5678",
   email: "joao.oliveira@email.com",
@@ -205,6 +221,13 @@ export async function getPatientEditavel(
     blood_type: (p.blood_type as string | null) ?? "",
     convenio: (p.convenio as string | null) ?? "",
     plan: (p.plan as string | null) ?? "",
+    convenio_carteirinha: (p.convenio_carteirinha as string | null) ?? "",
+    convenio_validade: isoData(p.convenio_validade),
+    convenio_titular: (p.convenio_titular as string | null) ?? "",
+    convenio_acomodacao: (p.convenio_acomodacao as string | null) ?? "",
+    responsavel_cpf: (p.responsavel_cpf as string | null) ?? "",
+    responsavel_parentesco: (p.responsavel_parentesco as string | null) ?? "",
+    responsavel_telefone: (p.responsavel_telefone as string | null) ?? "",
     origin: (p.origin as string | null) ?? "",
     phone: (p.phone as string | null) ?? "",
     email: (p.email as string | null) ?? "",

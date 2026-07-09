@@ -155,7 +155,7 @@ export function AreaChart({
         {/* Zonas de hover (uma por ponto) */}
         {labels.map((l, i) => (
           <button
-            key={`hit-${l}`}
+            key={`hit-${i}`}
             type="button"
             aria-label={`${l}: ${series.map((s) => `${s.name} ${s.values[i]}`).join(", ")}`}
             className="absolute top-0 h-full -translate-x-1/2 cursor-default"
@@ -196,7 +196,7 @@ export function AreaChart({
       <div className="absolute bottom-0 left-9 right-2 h-5">
         {labels.map((l, i) => (
           <span
-            key={l}
+            key={`xlabel-${i}`}
             className="absolute -translate-x-1/2 text-[#6b7280]"
             style={{ left: `${xAt(i)}%` }}
           >
@@ -251,7 +251,7 @@ export function BarChart({
       })}
       {labels.map((l, i) => (
         <text
-          key={l}
+          key={`blabel-${i}`}
           x={pad + i * slot + slot / 2}
           y={h - 6}
           textAnchor="middle"

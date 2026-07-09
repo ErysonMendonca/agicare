@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Clock,
   Stethoscope,
@@ -151,6 +151,9 @@ export function FilaClient({
   totemEnabled?: boolean;
 }) {
   const router = useRouter();
+  // Path atual para o filtro de data navegar na própria rota (Fila ou Prontuário),
+  // em vez de um destino fixo — o componente é reusado nas duas telas.
+  const pathname = usePathname();
   const [navegando, startNavegacao] = useTransition();
 
   const [selected, setSelected] = useState<FilaItem | null>(null);
@@ -221,7 +224,8 @@ export function FilaClient({
     const params = new URLSearchParams();
     if (novaData) params.set("data", novaData);
     const qs = params.toString();
-    startNavegacao(() => router.push(qs ? `/fila?${qs}` : "/fila"));
+    const base = pathname || "/fila";
+    startNavegacao(() => router.push(qs ? `${base}?${qs}` : base));
   }
 
   function abrir(item: FilaItem) {

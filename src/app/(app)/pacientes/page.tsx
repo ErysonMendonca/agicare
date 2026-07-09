@@ -1,7 +1,7 @@
 import { Users } from "lucide-react";
 import { PageHeader } from "@/components/app/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { CadastroPacienteModal } from "./CadastroPacienteModal";
+import { NovoPacienteButton } from "./NovoPacienteButton";
 import { PacientesClient } from "./PacientesClient";
 import { listPatients } from "@/lib/data/patients";
 import { requireView } from "@/lib/permissions";
@@ -22,7 +22,7 @@ export default async function PacientesPage() {
       <PageHeader
         title="Cadastro de Pacientes"
         subtitle="Gerencie os dados completos dos pacientes da clínica"
-        actions={<CadastroPacienteModal />}
+        actions={<NovoPacienteButton />}
       />
 
       {total === 0 ? (
@@ -33,7 +33,7 @@ export default async function PacientesPage() {
           icon={Users}
           title="Nenhum paciente encontrado"
           description="Ainda não há pacientes cadastrados nesta clínica. Cadastre o primeiro para começar."
-          action={<CadastroPacienteModal />}
+          action={<NovoPacienteButton />}
           className="mt-6 rounded-2xl border border-line bg-surface shadow-[var(--shadow-card)]"
         />
       ) : (

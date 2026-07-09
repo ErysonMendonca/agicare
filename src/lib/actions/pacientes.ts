@@ -9,9 +9,19 @@ import { canView } from "@/lib/permissions";
 import { isValidCPF } from "@/lib/cpf";
 import { isValidCNS } from "@/lib/cns";
 import { getPatientEditavel, type PacienteEditavel } from "@/lib/data/patients";
+import { listAttendanceOptions } from "@/lib/data/attendance-options";
 
 export type ActionState =
-  | { error?: string; ok?: boolean; patientId?: string; clinicId?: string }
+  | {
+      error?: string;
+      ok?: boolean;
+      patientId?: string;
+      clinicId?: string;
+      /** Erros por campo (borda vermelha no input correspondente). */
+      fieldErrors?: Record<string, string[]>;
+      /** Eco dos dados enviados p/ preservar o formulário quando NÃO houve sucesso. */
+      data?: Record<string, string>;
+    }
   | undefined;
 
 const texto = z.string().trim().optional().or(z.literal(""));
@@ -34,9 +44,23 @@ const pacienteCampos = {
   marital_status: texto,
   legal_guardian: texto,
   blood_type: texto,
-  // Convênio (não-SUS exige plano)
+  // Convênio (não-SUS exige plano; não-Particular/não-SUS exige carteirinha)
   convenio: texto,
   plan: texto,
+  convenio_carteirinha: texto,
+  // Data ISO (YYYY-MM-DD) ou vazia — evita erro cru do Postgres numa coluna date.
+  convenio_validade: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data de validade inválida.")
+    .optional()
+    .or(z.literal("")),
+  convenio_titular: texto,
+  convenio_acomodacao: texto,
+  // Representante legal (exigido para pacientes menores de idade)
+  responsavel_cpf: texto,
+  responsavel_parentesco: texto,
+  responsavel_telefone: texto,
   // Origem / canal de captação (alimenta o BI "Origem dos Pacientes")
   origin: texto,
   // Contato e endereço
@@ -53,8 +77,34 @@ const pacienteCampos = {
   death_cause: texto,
 } as const;
 
-// Mesmas regras de negócio (DV de CPF/CNS + convênio exige plano) aplicadas tanto
-// ao cadastro quanto à edição, garantindo paridade de validação na borda.
+/** Idade em anos a partir de "YYYY-MM-DD". -1 quando data inválida/ausente. */
+function idadeEmAnos(birth?: string): number {
+  const iso = (birth ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return -1;
+  const [a, m, dia] = iso.split("-").map(Number);
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - a;
+  const passouAniv =
+    hoje.getMonth() + 1 > m ||
+    (hoje.getMonth() + 1 === m && hoje.getDate() >= dia);
+  if (!passouAniv) idade -= 1;
+  return idade;
+}
+
+/** Paciente menor de idade (idade conhecida e < 18). */
+function ehMenor(birth?: string): boolean {
+  const idade = idadeEmAnos(birth);
+  return idade >= 0 && idade < 18;
+}
+
+/** Convênio que exige carteirinha (qualquer um exceto vazio, Particular e SUS). */
+function convenioExigeCarteirinha(convenio?: string): boolean {
+  const c = (convenio ?? "").trim().toLowerCase();
+  return c !== "" && c !== "particular" && c !== "sus";
+}
+
+// Mesmas regras de negócio (DV de CPF/CNS + convênio + representante legal)
+// aplicadas tanto ao cadastro quanto à edição, garantindo paridade na borda.
 type PacienteInput = z.infer<z.ZodObject<typeof pacienteCampos>>;
 function comRegras<S extends z.ZodType<PacienteInput>>(schema: S) {
   return schema
@@ -73,6 +123,42 @@ function comRegras<S extends z.ZodType<PacienteInput>>(schema: S) {
         d.convenio.toLowerCase() === "particular" ||
         !!d.plan,
       { message: "Convênio (não-SUS) exige o plano.", path: ["plan"] },
+    )
+    // Convênio não-Particular/não-SUS exige o nº da carteirinha.
+    .refine((d) => !convenioExigeCarteirinha(d.convenio) || !!d.convenio_carteirinha, {
+      message: "Informe o nº da carteirinha do convênio.",
+      path: ["convenio_carteirinha"],
+    })
+    // SUS: a carteirinha é o CNS (já coletado nos dados pessoais).
+    .refine((d) => (d.convenio ?? "").toLowerCase() !== "sus" || !!d.cns, {
+      message: "Convênio SUS exige o CNS (Cartão SUS).",
+      path: ["cns"],
+    })
+    // Menor de idade: representante legal completo (nome/CPF/parentesco/telefone).
+    .refine((d) => !ehMenor(d.birth_date) || !!d.legal_guardian, {
+      message: "Menor de idade: informe o representante legal.",
+      path: ["legal_guardian"],
+    })
+    .refine((d) => !ehMenor(d.birth_date) || !!d.responsavel_cpf, {
+      message: "Informe o CPF do responsável.",
+      path: ["responsavel_cpf"],
+    })
+    .refine((d) => !d.responsavel_cpf || isValidCPF(d.responsavel_cpf), {
+      message: "CPF do responsável inválido (dígito verificador).",
+      path: ["responsavel_cpf"],
+    })
+    .refine((d) => !ehMenor(d.birth_date) || !!d.responsavel_parentesco, {
+      message: "Informe o parentesco do responsável.",
+      path: ["responsavel_parentesco"],
+    })
+    .refine(
+      (d) =>
+        !ehMenor(d.birth_date) ||
+        (d.responsavel_telefone ?? "").replace(/\D/g, "").length >= 8,
+      {
+        message: "Informe o telefone do responsável.",
+        path: ["responsavel_telefone"],
+      },
     )
     .refine(
       (d) => {
@@ -106,13 +192,38 @@ const pacienteUpdateSchema = comRegras(
  * para montar o path do anexo de prontuário no Storage (mesmo layout do
  * protético — `prontuarios/<clinic_id>/<patient_id>/<arquivo>`).
  */
+/**
+ * Catálogos da clínica usados nos selects do cadastro/edição de paciente:
+ * convênios e parentescos (do `attendance_options`). Só valores ATIVOS, já
+ * ordenados. Server action — chamada também do modal de edição (client).
+ */
+export async function getPacienteCatalogos(): Promise<{
+  convenios: string[];
+  parentescos: string[];
+}> {
+  // Defesa-em-profundidade (mesmo padrão das outras actions do módulo). O RLS de
+  // attendance_options já escopa por clínica; a guarda só reforça o acesso staff.
+  const guard = await requirePacientesAccess();
+  if ("error" in guard) return { convenios: [], parentescos: [] };
+  const opts = await listAttendanceOptions();
+  return {
+    convenios: (opts.convenio ?? []).map((o) => o.value).filter(Boolean),
+    parentescos: (opts.parentesco ?? []).map((o) => o.value).filter(Boolean),
+  };
+}
+
 export async function createPacienteCompleto(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const parsed = pacienteSchema.safeParse(Object.fromEntries(formData));
+  const brutos = Object.fromEntries(formData) as Record<string, string>;
+  const parsed = pacienteSchema.safeParse(brutos);
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+    return {
+      error: parsed.error.issues[0]?.message ?? "Dados inválidos.",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+      data: brutos,
+    };
   }
   const d = parsed.data;
   const enderecoPartes = [d.address, d.district, d.city, d.uf, d.cep].filter(
@@ -120,6 +231,10 @@ export async function createPacienteCompleto(
   );
   const notas =
     enderecoPartes.length > 0 ? `Endereço: ${enderecoPartes.join(", ")}` : null;
+
+  // Autorização de módulo (defesa-em-profundidade, além do requireClinic + RLS).
+  const guard = await requirePacientesAccess();
+  if ("error" in guard) return { error: guard.error, data: brutos };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -131,7 +246,13 @@ export async function createPacienteCompleto(
     cpf: d.cpf ?? "",
     cns: d.cns ?? "",
   });
-  if (dup) return { error: dup };
+  if (dup) {
+    return {
+      error: dup,
+      fieldErrors: { cpf: [dup], cns: [dup] },
+      data: brutos,
+    };
+  }
 
   const { data: novo, error } = await supabase
     .from("patients")
@@ -153,6 +274,13 @@ export async function createPacienteCompleto(
       blood_type: d.blood_type || null,
       convenio: d.convenio || null,
       plan: d.plan || null,
+      convenio_carteirinha: d.convenio_carteirinha || null,
+      convenio_validade: d.convenio_validade || null,
+      convenio_titular: d.convenio_titular || null,
+      convenio_acomodacao: d.convenio_acomodacao || null,
+      responsavel_cpf: d.responsavel_cpf || null,
+      responsavel_parentesco: d.responsavel_parentesco || null,
+      responsavel_telefone: d.responsavel_telefone || null,
       origin: d.origin || null,
       phone: d.cell || d.phone || null,
       email: d.email || null,
@@ -166,9 +294,13 @@ export async function createPacienteCompleto(
 
   if (error || !novo) {
     if (error?.code === "23505") {
-      return { error: "CPF ou CNS já cadastrado para outro paciente nesta clínica." };
+      const msg = "CPF ou CNS já cadastrado para outro paciente nesta clínica.";
+      return { error: msg, fieldErrors: { cpf: [msg], cns: [msg] }, data: brutos };
     }
-    return { error: error?.message ?? "Falha ao cadastrar o paciente." };
+    return {
+      error: error?.message ?? "Falha ao cadastrar o paciente.",
+      data: brutos,
+    };
   }
 
   revalidatePath("/pacientes");
@@ -411,17 +543,20 @@ export async function updatePaciente(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const parsed = pacienteUpdateSchema.safeParse(Object.fromEntries(formData));
+  const brutos = Object.fromEntries(formData) as Record<string, string>;
+  const parsed = pacienteUpdateSchema.safeParse(brutos);
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+    return {
+      error: parsed.error.issues[0]?.message ?? "Dados inválidos.",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+      data: brutos,
+    };
   }
 
   const d = parsed.data;
 
-
-
   const guard = await requirePacientesAccess();
-  if ("error" in guard) return { error: guard.error };
+  if ("error" in guard) return { error: guard.error, data: brutos };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -435,7 +570,13 @@ export async function updatePaciente(
     { cpf: d.cpf || "", cns: d.cns || "" },
     d.id,
   );
-  if (dupErro) return { error: dupErro };
+  if (dupErro) {
+    return {
+      error: dupErro,
+      fieldErrors: { cpf: [dupErro], cns: [dupErro] },
+      data: brutos,
+    };
+  }
 
   let q = supabase
     .from("patients")
@@ -459,6 +600,13 @@ export async function updatePaciente(
       blood_type: d.blood_type || null,
       convenio: d.convenio || null,
       plan: d.plan || null,
+      convenio_carteirinha: d.convenio_carteirinha || null,
+      convenio_validade: d.convenio_validade || null,
+      convenio_titular: d.convenio_titular || null,
+      convenio_acomodacao: d.convenio_acomodacao || null,
+      responsavel_cpf: d.responsavel_cpf || null,
+      responsavel_parentesco: d.responsavel_parentesco || null,
+      responsavel_telefone: d.responsavel_telefone || null,
       origin: d.origin || null,
       phone: d.cell || d.phone || null,
       email: d.email || null,
@@ -488,9 +636,10 @@ export async function updatePaciente(
   if (error) {
     // Rede de segurança do índice único 0046 (corrida que passou pela checagem).
     if (error.code === "23505") {
-      return { error: "CPF ou CNS já cadastrado para outro paciente nesta clínica." };
+      const msg = "CPF ou CNS já cadastrado para outro paciente nesta clínica.";
+      return { error: msg, fieldErrors: { cpf: [msg], cns: [msg] }, data: brutos };
     }
-    return { error: error.message };
+    return { error: error.message, data: brutos };
   }
   if (!atualizado) {
     // Linha não casou. Distingue conflito de concorrência (existe na clínica,
@@ -505,9 +654,10 @@ export async function updatePaciente(
       return {
         error:
           "Cadastro alterado por outro usuário. Recarregue e tente de novo.",
+        data: brutos,
       };
     }
-    return { error: "Paciente não encontrado nesta clínica." };
+    return { error: "Paciente não encontrado nesta clínica.", data: brutos };
   }
 
   revalidatePath("/pacientes");

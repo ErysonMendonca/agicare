@@ -10,7 +10,6 @@ import {
   CalendarDays,
   CalendarClock,
   FileText,
-  ShieldCheck,
   Users,
   Stethoscope,
   Briefcase,
@@ -29,12 +28,11 @@ import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import type { Profissional } from "@/lib/data/professionals";
 import type { AttendanceOption } from "@/lib/data/attendance-options.shared";
 
-type AbaId = "clinica" | "administrativa" | "perfis";
+type AbaId = "clinica" | "administrativa";
 
 const ABAS: { id: AbaId; label: string }[] = [
   { id: "clinica", label: "Equipe Clínica" },
   { id: "administrativa", label: "Equipe Administrativa" },
-  { id: "perfis", label: "Perfis de Acesso" },
 ];
 
 /**
@@ -50,11 +48,10 @@ const LINK_BTN_SM = `${LINK_BTN_BASE} h-8 px-3 text-xs`;
 const LINK_BTN_MD = `${LINK_BTN_BASE} h-10 gap-2 px-4 text-sm`;
 
 /**
- * Lista de profissionais com abas FUNCIONAIS (Clínica/Administrativa/Perfis) e
- * busca por nome/especialidade/conselho. O fetch é feito no Server Component
+ * Lista de profissionais com abas FUNCIONAIS (Clínica/Administrativa) e busca
+ * por nome/especialidade/conselho. O fetch é feito no Server Component
  * (page.tsx); aqui apenas filtramos a exibição (estado local).
  *
- * - "Perfis de Acesso": resumo por papel + atalho para /permissoes.
  * - "Ver Agenda": rota real /profissionais/{id}/agenda (lista os agendamentos
  *   do profissional, reusando o data layer de appointments).
  * - "Documentos": rota real /profissionais/{id}/documentos (empty-state honesto
@@ -101,37 +98,26 @@ export function ProfissionaisLista({
     const q = busca.trim().toLowerCase();
     return profissionais.filter((p) => {
       const ehClinico = PAPEIS_CLINICOS.includes(p.role);
-      const casaAba =
-        aba === "perfis" ||
-        (aba === "clinica" ? ehClinico : !ehClinico);
+      const casaAba = aba === "clinica" ? ehClinico : !ehClinico;
       const casaBusca =
         !q ||
         p.nome.toLowerCase().includes(q) ||
         p.especialidade.toLowerCase().includes(q) ||
         p.crm.toLowerCase().includes(q);
-      // Os filtros de status/especialidade não se aplicam à aba "Perfis"
-      // (painel oculto lá) — evita filtrar de forma invisível ao usuário.
-      const aplicaFiltros = aba !== "perfis";
       const casaStatus =
-        !aplicaFiltros ||
         filtroStatus === "todos" ||
         (filtroStatus === "ativo" ? p.ativo : !p.ativo);
       const casaEspec =
-        !aplicaFiltros ||
-        filtroEspec === "todas" ||
-        p.especialidade === filtroEspec;
+        filtroEspec === "todas" || p.especialidade === filtroEspec;
       return casaAba && casaBusca && casaStatus && casaEspec;
     });
   }, [profissionais, aba, busca, filtroStatus, filtroEspec]);
 
-  /** KPI "Ativos": filtra por status ativo (toggle), revela o painel e sai de "Perfis". */
+  /** KPI "Ativos": filtra por status ativo (toggle) e revela o painel. */
   function toggleAtivos() {
     setFiltroStatus((prev) => {
       const next = prev === "ativo" ? "todos" : "ativo";
-      if (next === "ativo") {
-        setMostrarFiltros(true);
-        setAba((a) => (a === "perfis" ? "clinica" : a));
-      }
+      if (next === "ativo") setMostrarFiltros(true);
       return next;
     });
   }
@@ -212,16 +198,12 @@ export function ProfissionaisLista({
                 <h3 className="font-semibold text-ink">
                   {aba === "clinica"
                     ? "Profissionais de Saúde"
-                    : aba === "administrativa"
-                      ? "Equipe Administrativa"
-                      : "Perfis de Acesso"}
+                    : "Equipe Administrativa"}
                 </h3>
                 <p className="text-sm text-muted">
                   {aba === "clinica"
                     ? "Médicos, enfermeiros e equipe assistencial"
-                    : aba === "administrativa"
-                      ? "Recepção, administração e apoio"
-                      : "Papel de cada profissional e controle de permissões"}
+                    : "Recepção, administração e apoio"}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -234,50 +216,35 @@ export function ProfissionaisLista({
                     onChange={(e) => setBusca(e.target.value)}
                   />
                 </div>
-                {aba === "perfis" ? (
-                  <Link href="/permissoes" className={LINK_BTN_MD}>
-                    <ShieldCheck className="h-4 w-4" /> Gerenciar Perfis
+                <Button
+                  variant={mostrarFiltros ? "primary" : "outline"}
+                  size="md"
+                  onClick={() => setMostrarFiltros((v) => !v)}
+                  aria-expanded={mostrarFiltros}
+                >
+                  <Filter className="h-4 w-4" /> Filtrar
+                  {filtrosAtivos > 0 && (
+                    <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/90 px-1.5 text-xs font-semibold text-brand-600">
+                      {filtrosAtivos}
+                    </span>
+                  )}
+                </Button>
+                {aba === "clinica" ? (
+                  <Link href="/profissionais/novo" className={LINK_BTN_MD}>
+                    <Plus className="h-4 w-4" />
+                    Novo Profiss. Saúde
                   </Link>
                 ) : (
-                  <>
-                    <Button
-                      variant={mostrarFiltros ? "primary" : "outline"}
-                      size="md"
-                      onClick={() => setMostrarFiltros((v) => !v)}
-                      aria-expanded={mostrarFiltros}
-                    >
-                      <Filter className="h-4 w-4" /> Filtrar
-                      {filtrosAtivos > 0 && (
-                        <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white/90 px-1.5 text-xs font-semibold text-brand-600">
-                          {filtrosAtivos}
-                        </span>
-                      )}
-                    </Button>
-                    {aba === "clinica" && (
-                      <Link
-                        href="/profissionais/novo"
-                        className={LINK_BTN_MD}
-                      >
-                        <Plus className="h-4 w-4" />
-                        Novo Profiss. Saúde
-                      </Link>
-                    )}
-                    {aba === "administrativa" && (
-                      <Link
-                        href="/profissionais/novo-admin"
-                        className={LINK_BTN_MD}
-                      >
-                        <Plus className="h-4 w-4" />
-                        Novo Administrativo
-                      </Link>
-                    )}
-                  </>
+                  <Link href="/profissionais/novo-admin" className={LINK_BTN_MD}>
+                    <Plus className="h-4 w-4" />
+                    Novo Administrativo
+                  </Link>
                 )}
               </div>
             </div>
 
             {/* Painel de filtros (status / especialidade) */}
-            {aba !== "perfis" && mostrarFiltros && (
+            {mostrarFiltros && (
               <div className="flex flex-col gap-4 border-t border-line bg-canvas/40 px-5 py-4 sm:flex-row sm:items-end">
                 <Select
                   id="filtro-status"
@@ -347,9 +314,26 @@ export function ProfissionaisLista({
                             </span>
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-2">
-                            <Badge status="active">{p.especialidade}</Badge>
-                            <span className="text-xs text-muted">{p.crm}</span>
-                            <Badge status="warn">{p.cargo}</Badge>
+                            {aba === "administrativa" ? (
+                              <>
+                                {p.departamento ? (
+                                  <Badge status="active">
+                                    {p.departamento}
+                                  </Badge>
+                                ) : null}
+                                <Badge status="warn">{p.cargo}</Badge>
+                              </>
+                            ) : (
+                              <>
+                                <Badge status="active">
+                                  {p.especialidade}
+                                </Badge>
+                                <span className="text-xs text-muted">
+                                  {p.crm}
+                                </span>
+                                <Badge status="warn">{p.cargo}</Badge>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -369,54 +353,42 @@ export function ProfissionaisLista({
                       </span>
                     </div>
 
-                    {aba !== "perfis" && (
-                      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 pl-14 text-sm">
-                        <span className="flex items-center gap-1.5 text-muted">
-                          <CalendarDays className="h-4 w-4 text-brand-600" />
-                          <span className="font-medium text-ink">
-                            {p.consultasHoje}
-                          </span>{" "}
-                          {p.consultasHoje === 1
-                            ? "consulta hoje"
-                            : "consultas hoje"}
+                    <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 pl-14 text-sm">
+                      <span className="flex items-center gap-1.5 text-muted">
+                        <CalendarDays className="h-4 w-4 text-brand-600" />
+                        <span className="font-medium text-ink">
+                          {p.consultasHoje}
+                        </span>{" "}
+                        {p.consultasHoje === 1
+                          ? "consulta hoje"
+                          : "consultas hoje"}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-muted">
+                        <CalendarClock className="h-4 w-4 text-brand-600" />
+                        Próxima:{" "}
+                        <span className="font-medium text-ink">
+                          {p.proximaConsulta ?? "Sem agendamentos"}
                         </span>
-                        <span className="flex items-center gap-1.5 text-muted">
-                          <CalendarClock className="h-4 w-4 text-brand-600" />
-                          Próxima:{" "}
-                          <span className="font-medium text-ink">
-                            {p.proximaConsulta ?? "Sem agendamentos"}
-                          </span>
-                        </span>
-                      </div>
-                    )}
+                      </span>
+                    </div>
 
-                    {aba === "perfis" ? (
-                      <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
-                        <Badge status="active">Papel: {p.cargo}</Badge>
-                        <Link href="/permissoes" className={LINK_BTN_SM}>
-                          <ShieldCheck className="h-3.5 w-3.5" /> Gerenciar
-                          acesso
-                        </Link>
-                      </div>
-                    ) : (
-                      <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
-                        <Link href={`/profissionais/${p.id}`} className={LINK_BTN_SM}>
-                          <SquarePen className="h-3.5 w-3.5" /> Editar
-                        </Link>
-                        <Link
-                          href={`/profissionais/${p.id}/agenda`}
-                          className={LINK_BTN_SM}
-                        >
-                          <CalendarDays className="h-3.5 w-3.5" /> Ver Agenda
-                        </Link>
-                        <Link
-                          href={`/profissionais/${p.id}/documentos`}
-                          className={LINK_BTN_SM}
-                        >
-                          <FileText className="h-3.5 w-3.5" /> Documentos
-                        </Link>
-                      </div>
-                    )}
+                    <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
+                      <Link href={`/profissionais/${p.id}`} className={LINK_BTN_SM}>
+                        <SquarePen className="h-3.5 w-3.5" /> Editar
+                      </Link>
+                      <Link
+                        href={`/profissionais/${p.id}/agenda`}
+                        className={LINK_BTN_SM}
+                      >
+                        <CalendarDays className="h-3.5 w-3.5" /> Ver Agenda
+                      </Link>
+                      <Link
+                        href={`/profissionais/${p.id}/documentos`}
+                        className={LINK_BTN_SM}
+                      >
+                        <FileText className="h-3.5 w-3.5" /> Documentos
+                      </Link>
+                    </div>
                   </div>
                 ))
               )}

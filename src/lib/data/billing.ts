@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getActiveClinicId } from "@/lib/tenant";
 import { type Status } from "@/components/ui/Badge";
 
 export type Convenio = "Convênio" | "Particular";
@@ -15,6 +16,31 @@ export type Evento = {
   tipo: Convenio;
   status: { label: string; tone: Status };
   faturavel: boolean;
+  /** Status cru do banco (pendente|faturado|glosado) — decide as ações da linha. */
+  statusRaw: string;
+};
+
+/**
+ * Check-out salvo (confirmado) — serve tanto para VISUALIZAR/IMPRIMIR o recibo
+ * quanto para EDITAR (reabrir a conferência pré-preenchida com o que foi gravado).
+ */
+export type CheckoutSalvo = {
+  codigo: string;
+  paciente: string;
+  data: string;
+  /** Forma de cobrança gravada (kind). */
+  forma: "particular" | "convenio" | "empresa";
+  /** Forma de pagamento (payment_method: pix|cartao|boleto) quando particular. */
+  pagamento: string | null;
+  itens: ItemCheckout[];
+  desconto: number;
+  acrescimo: number;
+  total: number;
+  /** Dados da NF (pagador empresa) — preservados ao editar. */
+  nfNumero: string;
+  nfEmissao: string;
+  nfVencimento: string;
+  nfPrazos: string;
 };
 
 /** Mapeia status do banco → rótulo + tom do Badge. */
@@ -64,6 +90,7 @@ const MOCK: Evento[] = [
     tipo: "Convênio",
     status: { label: "Pendente", tone: "warn" },
     faturavel: true,
+    statusRaw: "pendente",
   },
   {
     codigo: "EVT-2024-002",
@@ -76,6 +103,7 @@ const MOCK: Evento[] = [
     tipo: "Particular",
     status: { label: "Pendente", tone: "warn" },
     faturavel: true,
+    statusRaw: "pendente",
   },
   {
     codigo: "EVT-2024-003",
@@ -88,6 +116,7 @@ const MOCK: Evento[] = [
     tipo: "Convênio",
     status: { label: "Faturado", tone: "active" },
     faturavel: false,
+    statusRaw: "faturado",
   },
   {
     codigo: "EVT-2024-004",
@@ -100,6 +129,7 @@ const MOCK: Evento[] = [
     tipo: "Convênio",
     status: { label: "Glosado", tone: "danger" },
     faturavel: false,
+    statusRaw: "glosado",
   },
 ];
 
@@ -398,23 +428,53 @@ export async function getCheckoutData(
   const servico = evt.service ?? fallbackServico;
   const itens: ItemCheckout[] = [];
 
-  // Procedimento principal — casado pelo nome do serviço.
-  const { data: proc } = await supabase
-    .from("procedures")
-    .select("code, name, price")
-    .ilike("name", servico)
-    .limit(1)
-    .maybeSingle();
-
-  const procValor = proc?.price ? Number(proc.price) : valorEvento;
-  itens.push({
-    source: "procedimento",
-    tipo: "TUSS",
-    codigo: proc?.code ?? "10101012",
-    descricao: proc?.name ?? servico,
-    qtd: 1,
-    valor: Math.round(procValor * 100) / 100,
+  // TODOS os procedimentos lançados no atendimento e vinculados a este evento
+  // (billable_event_id) — cada um vira uma linha de cobrança no check-out.
+  const clinicId = await getActiveClinicId();
+  let execQuery = supabase
+    .from("procedure_executions")
+    .select("amount, procedures(code, name)")
+    .eq("billable_event_id", evt.id);
+  // Defesa em profundidade: além do RLS, escopa pela clínica ativa.
+  if (clinicId) execQuery = execQuery.eq("clinic_id", clinicId);
+  const { data: execs } = await execQuery.order("created_at", {
+    ascending: true,
   });
+
+  if (execs && execs.length > 0) {
+    for (const ex of execs) {
+      const p = (
+        Array.isArray(ex.procedures) ? ex.procedures[0] : ex.procedures
+      ) as { code: string | null; name: string | null } | null;
+      itens.push({
+        source: "procedimento",
+        tipo: "TUSS",
+        codigo: p?.code ?? "10101012",
+        descricao: p?.name ?? servico,
+        qtd: 1,
+        valor: Math.round(Number(ex.amount ?? 0) * 100) / 100,
+      });
+    }
+  } else {
+    // Fallback (eventos legados, sem execuções vinculadas): procedimento
+    // principal casado pelo nome do serviço, como antes.
+    const { data: proc } = await supabase
+      .from("procedures")
+      .select("code, name, price")
+      .ilike("name", servico)
+      .limit(1)
+      .maybeSingle();
+
+    const procValor = proc?.price ? Number(proc.price) : valorEvento;
+    itens.push({
+      source: "procedimento",
+      tipo: "TUSS",
+      codigo: proc?.code ?? "10101012",
+      descricao: proc?.name ?? servico,
+      qtd: 1,
+      valor: Math.round(procValor * 100) / 100,
+    });
+  }
 
   // Exames faturáveis do paciente (código TUSS oficial).
   if (evt.patient_id) {
@@ -492,6 +552,75 @@ export async function listBillableEvents(): Promise<Evento[]> {
       tipo: mapTipo(r.kind ?? "convenio"),
       status: mapStatus(status),
       faturavel: status === "pendente",
+      statusRaw: status,
     };
   });
+}
+
+/**
+ * Check-out REAL confirmado: lê o evento faturado (forma/pagamento/desconto/
+ * acréscimo/total/data) + os billing_items gravados (em formato ItemCheckout).
+ * Usado por Visualizar/Imprimir (recibo) e Editar (reabrir a conferência).
+ * `null` se o evento não existe.
+ */
+export async function getCheckoutSalvo(
+  code: string,
+): Promise<CheckoutSalvo | null> {
+  const supabase = await createClient();
+  const clinicId = await getActiveClinicId();
+
+  let evtQuery = supabase
+    .from("billable_events")
+    .select(
+      "id, code, amount, net_amount, discount, surcharge, kind, payment_method, checked_out_at, created_at, nf_number, nf_issue_date, nf_due_date, nf_terms, patients(full_name)",
+    )
+    .eq("code", code);
+  if (clinicId) evtQuery = evtQuery.eq("clinic_id", clinicId);
+  const { data: evt } = await evtQuery.maybeSingle();
+  if (!evt) return null;
+
+  const patient = Array.isArray(evt.patients) ? evt.patients[0] : evt.patients;
+
+  // Itens gravados no check-out (exclui as linhas de ajuste desconto/acréscimo,
+  // mostradas separadamente a partir das colunas do evento).
+  const { data: rows } = await supabase
+    .from("billing_items")
+    .select("description, quantity, unit_price, amount, source, code, kind")
+    .eq("event_id", evt.id);
+
+  const itens: ItemCheckout[] = (rows ?? [])
+    .filter((i) => i.source !== "ajuste")
+    .map((i) => ({
+      source: ((i.source as string | null) ?? "procedimento") as
+        | "procedimento"
+        | "exame"
+        | "material"
+        | "ajuste",
+      tipo: i.kind === "material" ? "Material" : "TUSS",
+      codigo: (i.code as string | null) ?? "—",
+      descricao: (i.description as string | null) ?? "Item",
+      qtd: Number(i.quantity ?? 1),
+      valor: Number(i.unit_price ?? i.amount ?? 0),
+    }));
+
+  const kind = ((evt.kind as string | null) ?? "particular") as
+    | "particular"
+    | "convenio"
+    | "empresa";
+
+  return {
+    codigo: (evt.code as string | null) ?? code,
+    paciente: patient?.full_name ?? "—",
+    data: formatData((evt.checked_out_at ?? evt.created_at) as string | null),
+    forma: kind === "convenio" || kind === "empresa" ? kind : "particular",
+    pagamento: (evt.payment_method as string | null) ?? null,
+    itens,
+    desconto: Number(evt.discount ?? 0),
+    acrescimo: Number(evt.surcharge ?? 0),
+    total: Number(evt.net_amount ?? evt.amount ?? 0),
+    nfNumero: (evt.nf_number as string | null) ?? "",
+    nfEmissao: ((evt.nf_issue_date as string | null) ?? "").slice(0, 10),
+    nfVencimento: ((evt.nf_due_date as string | null) ?? "").slice(0, 10),
+    nfPrazos: (evt.nf_terms as string | null) ?? "",
+  };
 }

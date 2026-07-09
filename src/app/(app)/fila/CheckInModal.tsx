@@ -84,7 +84,14 @@ export function CheckInModal({
   const bloqueado = avulso && !cadastroConcluido;
   // Nome/convênio exibidos e enviados: dados frescos quando houver, senão o snapshot.
   const nomeAtual = dadosAtuais?.nome || agendado.paciente;
-  const convenioAtual = dadosAtuais ? dadosAtuais.convenio : agendado.convenio;
+  // Convênio do snapshot: o da fila (insurance) e, se vazio/"—", cai no convênio
+  // do CADASTRO do paciente (patients.convenio) — evita mostrar "—" no check-in
+  // quando o convênio só foi informado na ficha, não no agendamento.
+  const convenioSnapshot =
+    agendado.convenio && agendado.convenio !== "—"
+      ? agendado.convenio
+      : agendado.convenioCadastro ?? null;
+  const convenioAtual = dadosAtuais ? dadosAtuais.convenio : convenioSnapshot;
 
   function confirmar() {
     if (!agendado) return;
