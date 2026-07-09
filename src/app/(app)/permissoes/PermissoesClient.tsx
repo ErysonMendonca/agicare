@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition, useEffect } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { ShieldCheck, Save, Info, Trash2 } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Save, Info, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -16,12 +16,17 @@ import { excluirCargo, criarCargo } from "@/lib/actions/usuarios";
 import {
   MODULES,
   MODULE_LABELS,
+  ACTIONS,
+  ACTION_LABELS,
+  ACTION_KEY,
+  temEnforcementDeAcoes,
+  type Action,
   type ModuleSlug,
   type ModulePermission,
   type PermissionRow,
   type Scope,
 } from "@/lib/permissions.shared";
-import { UserCog, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { Cargo } from "@/lib/data/usuarios.shared";
 
 /** Papéis geridos aqui (paciente NÃO entra como usuário — removido). */
@@ -36,11 +41,35 @@ const ROLES: { role: ManagedRole; label: string; desc: string }[] = [
 
 type Matrix = Record<ManagedRole, Record<ModuleSlug, ModulePermission>>;
 
+/** Permissão "zerada" — usada como base antes de aplicar as linhas do servidor. */
+const EMPTY_PERMISSION: ModulePermission = {
+  canView: false,
+  canCreate: false,
+  canEdit: false,
+  canDelete: false,
+  scope: "all",
+};
+
+/**
+ * Módulos sensíveis: dão acesso a dados/config de segurança. Ganham marca
+ * visual na grade para o admin pensar duas vezes antes de conceder.
+ */
+const SENSIVEIS: ModuleSlug[] = ["usuarios", "logs", "permissoes"];
+
+/** Aviso extra em módulos cuja concessão tem efeito colateral de segurança. */
+const AVISO_SENSIVEL: Partial<Record<ModuleSlug, string>> = {
+  permissoes:
+    "Conceder este módulo permite editar os perfis de acesso de outros papéis.",
+};
+
+/** Colunas da grade no desktop: módulo · 4 ações · escopo. Mobile empilha. */
+const GRID_COLS = "sm:grid-cols-[1fr_repeat(4,3.5rem)_200px]";
+
 /** Monta a matriz editável a partir das linhas vindas do servidor. */
 function buildMatrix(rows: PermissionRow[]): Matrix {
   const base = ROLES.reduce((acc, { role }) => {
     acc[role] = MODULES.reduce((m, module) => {
-      m[module] = { canView: false, scope: "all" };
+      m[module] = { ...EMPTY_PERMISSION };
       return m;
     }, {} as Record<ModuleSlug, ModulePermission>);
     return acc;
@@ -50,7 +79,13 @@ function buildMatrix(rows: PermissionRow[]): Matrix {
     // Linhas de papéis não geridos aqui (ex.: paciente) são ignoradas.
     const role = r.role as ManagedRole;
     if (base[role] && base[role][r.module]) {
-      base[role][r.module] = { canView: r.canView, scope: r.scope };
+      base[role][r.module] = {
+        canView: r.canView,
+        canCreate: r.canCreate,
+        canEdit: r.canEdit,
+        canDelete: r.canDelete,
+        scope: r.scope,
+      };
     }
   }
   return base;
@@ -62,8 +97,7 @@ function flatten(matrix: Matrix): PermissionRow[] {
     MODULES.map((module) => ({
       role,
       module,
-      canView: matrix[role][module].canView,
-      scope: matrix[role][module].scope,
+      ...matrix[role][module],
     })),
   );
 }
@@ -85,23 +119,41 @@ export function PermissoesClient({
   const activeRole = selectedOption.split(":")[0] as ManagedRole;
   const isAdminTab = activeRole === "admin";
 
-  useEffect(() => {
+  /** Trocar de perfil volta para a 1ª página da grade (sem efeito colateral). */
+  const handleSelectRole = (value: string) => {
+    setSelectedOption(value);
     setCurrentPage(1);
-  }, [activeRole]);
+  };
 
   const ITEMS_PER_PAGE = 5;
   const totalPages = Math.ceil(MODULES.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedModules = MODULES.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-  const setCanView = (module: ModuleSlug, canView: boolean) => {
-    setMatrix((prev) => ({
-      ...prev,
-      [activeRole]: {
-        ...prev[activeRole],
-        [module]: { ...prev[activeRole][module], canView },
-      },
-    }));
+  /**
+   * Alterna uma ação de um módulo aplicando a INVARIANTE "quem não vê não age":
+   * desmarcar `view` zera create/edit/delete; marcar qualquer outra ação exige
+   * `view` (a UI já desabilita, mas o estado se protege sozinho).
+   */
+  const setAction = (module: ModuleSlug, action: Action, value: boolean) => {
+    setMatrix((prev) => {
+      const perm = prev[activeRole][module];
+      let next: ModulePermission;
+
+      if (action === "view") {
+        next = value
+          ? { ...perm, canView: true }
+          : { ...perm, canView: false, canCreate: false, canEdit: false, canDelete: false };
+      } else {
+        if (!perm.canView) return prev; // ação sem "Ver" é ignorada
+        next = { ...perm, [ACTION_KEY[action]]: value };
+      }
+
+      return {
+        ...prev,
+        [activeRole]: { ...prev[activeRole], [module]: next },
+      };
+    });
   };
 
   const setScope = (module: ModuleSlug, scope: Scope) => {
@@ -114,9 +166,21 @@ export function PermissoesClient({
     }));
   };
   const current = matrix[activeRole];
-  const allChecked = MODULES.every((mod) => current[mod].canView);
 
+  /** "Marcar todos" só fica ligado quando TODAS as ações de TODOS os módulos estão ligadas. */
+  const allChecked = MODULES.every((mod) =>
+    ACTIONS.every((a) => current[mod][ACTION_KEY[a]]),
+  );
 
+  /** Estado do "marcar todos" de uma coluna (ação) considerando a invariante. */
+  const isColumnChecked = (action: Action) =>
+    MODULES.every((mod) =>
+      action === "view"
+        ? current[mod].canView
+        : current[mod].canView && current[mod][ACTION_KEY[action]],
+    );
+
+  /** Liga/desliga TODAS as ações de TODOS os módulos do papel ativo. */
   const handleToggleAll = (checked: boolean) => {
     setMatrix((prev) => {
       const updatedRoleMatrix = { ...prev[activeRole] };
@@ -124,12 +188,34 @@ export function PermissoesClient({
         updatedRoleMatrix[mod] = {
           ...updatedRoleMatrix[mod],
           canView: checked,
+          canCreate: checked,
+          canEdit: checked,
+          canDelete: checked,
         };
       });
-      return {
-        ...prev,
-        [activeRole]: updatedRoleMatrix,
-      };
+      return { ...prev, [activeRole]: updatedRoleMatrix };
+    });
+  };
+
+  /**
+   * Liga/desliga uma ação em todos os módulos. Ligar create/edit/delete NÃO
+   * concede "Ver" implicitamente: só afeta módulos que já são visíveis.
+   * Desligar "Ver" em massa zera as demais ações (invariante).
+   */
+  const handleToggleColumn = (action: Action, checked: boolean) => {
+    setMatrix((prev) => {
+      const updatedRoleMatrix = { ...prev[activeRole] };
+      MODULES.forEach((mod) => {
+        const perm = updatedRoleMatrix[mod];
+        if (action === "view") {
+          updatedRoleMatrix[mod] = checked
+            ? { ...perm, canView: true }
+            : { ...perm, canView: false, canCreate: false, canEdit: false, canDelete: false };
+        } else if (perm.canView) {
+          updatedRoleMatrix[mod] = { ...perm, [ACTION_KEY[action]]: checked };
+        }
+      });
+      return { ...prev, [activeRole]: updatedRoleMatrix };
     });
   };
 
@@ -200,7 +286,7 @@ export function PermissoesClient({
         <Select
           id="active-role-select"
           value={selectedOption}
-          onChange={(e) => setSelectedOption(e.target.value)}
+          onChange={(e) => handleSelectRole(e.target.value)}
         >
           <optgroup label="Perfis base">
             {ROLES.filter(({ role }) => role !== "admin").map(({ role, label }) => (
@@ -247,7 +333,7 @@ export function PermissoesClient({
             </div>
           )}
 
-          {/* Opção Marcar Todos */}
+          {/* Opção Marcar Todos (todas as ações de todos os módulos) */}
           <div className="mb-3 flex items-center justify-end gap-2 px-1">
             <input
               id="select-all-modules"
@@ -265,45 +351,110 @@ export function PermissoesClient({
             </label>
           </div>
 
-          {/* Grade de módulos */}
+          {/* Grade de módulos × ações */}
           <div className="overflow-hidden rounded-xl border border-line">
-            {/* Cabeçalho da grade */}
-            <div className="hidden grid-cols-[1fr_auto_220px] items-center gap-4 border-b border-line bg-muted-surface px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted sm:grid">
+            {/* Cabeçalho da grade: cada ação vira uma coluna com "marcar coluna" */}
+            <div className={`${GRID_COLS} hidden items-end gap-4 border-b border-line bg-muted-surface px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted sm:grid`}>
               <span>Módulo</span>
-              <span className="text-center">Ver</span>
+              {ACTIONS.map((action) => (
+                <span key={action} className="flex flex-col items-center gap-1">
+                  {ACTION_LABELS[action]}
+                  <input
+                    type="checkbox"
+                    checked={isColumnChecked(action)}
+                    disabled={isAdminTab}
+                    onChange={(e) => handleToggleColumn(action, e.target.checked)}
+                    aria-label={`Marcar ${ACTION_LABELS[action]} em todos os módulos`}
+                    title={`Marcar ${ACTION_LABELS[action]} em todos os módulos`}
+                    className="h-3.5 w-3.5 rounded border-line text-brand-500 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </span>
+              ))}
               <span>Escopo dos dados</span>
             </div>
 
             <ul className="divide-y divide-line">
               {paginatedModules.map((module) => {
                 const perm = current[module];
-                const checkboxId = `view-${activeRole}-${module}`;
                 const scopeId = `scope-${activeRole}-${module}`;
+                const sensivel = SENSIVEIS.includes(module);
+                const aviso = AVISO_SENSIVEL[module];
+                const comAcoes = temEnforcementDeAcoes(module);
                 return (
                   <li
                     key={module}
-                    className="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-3 sm:grid-cols-[1fr_auto_220px]"
+                    className={`${GRID_COLS} grid grid-cols-1 items-center gap-x-4 gap-y-3 px-4 py-3`}
                   >
-                    <label
-                      htmlFor={checkboxId}
-                      className="text-sm font-medium text-ink"
-                    >
-                      {MODULE_LABELS[module]}
-                    </label>
-
-                    <div className="flex items-center justify-center">
-                      <input
-                        id={checkboxId}
-                        type="checkbox"
-                        checked={perm.canView}
-                        disabled={isAdminTab}
-                        onChange={(e) => setCanView(module, e.target.checked)}
-                        aria-label={`Ver ${MODULE_LABELS[module]}`}
-                        className="h-5 w-5 rounded border-line text-brand-500 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-ink">
+                          {MODULE_LABELS[module]}
+                        </span>
+                        {sensivel && (
+                          <span
+                            className="inline-flex items-center text-amber-600"
+                            title="Módulo sensível"
+                          >
+                            <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span className="sr-only">Módulo sensível</span>
+                          </span>
+                        )}
+                      </div>
+                      {sensivel && (
+                        <p className="mt-0.5 text-[11px] leading-snug text-muted">
+                          {aviso ?? "Módulo sensível"}
+                        </p>
+                      )}
+                      {!comAcoes && (
+                        <p className="mt-0.5 text-[11px] leading-snug text-muted">
+                          Controla apenas o acesso à tela.
+                        </p>
+                      )}
                     </div>
 
-                    <div className="col-span-2 sm:col-span-1">
+                    {/* Ações: no mobile viram chips com rótulo; no desktop, colunas */}
+                    <div className="flex flex-wrap gap-x-5 gap-y-2 sm:contents">
+                      {ACTIONS.map((action) => {
+                        // ACTION_KEY nunca aponta para `scope` — cast seguro.
+                        const checked = perm[ACTION_KEY[action]] as boolean;
+                        // Sem "Ver", as demais ações são desabilitadas (invariante).
+                        // E nos módulos sem enforcement no servidor, create/edit/
+                        // delete não são oferecidos: marcá-los não travaria nada.
+                        const disabled =
+                          isAdminTab ||
+                          (action !== "view" &&
+                            (!perm.canView || !comAcoes));
+                        return (
+                          <label
+                            key={action}
+                            className="flex cursor-pointer items-center gap-2 sm:justify-center"
+                            title={
+                              action !== "view" && !comAcoes
+                                ? "Este módulo ainda só controla o acesso (Ver). Criar/Editar/Excluir não são aplicados no servidor."
+                                : undefined
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={disabled}
+                              onChange={(e) =>
+                                setAction(module, action, e.target.checked)
+                              }
+                              aria-label={`${ACTION_LABELS[action]} em ${MODULE_LABELS[module]}`}
+                              className="h-5 w-5 rounded border-line text-brand-500 focus:ring-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                            <span
+                              className={`text-xs sm:hidden ${disabled ? "text-muted" : "text-ink"}`}
+                            >
+                              {ACTION_LABELS[action]}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    <div>
                       <Select
                         id={scopeId}
                         aria-label={`Escopo de ${MODULE_LABELS[module]}`}

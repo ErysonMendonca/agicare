@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireClinic, getActiveClinicId, DEMO_CLINIC_ID } from "@/lib/tenant";
 import { getCurrentUser, requireClinico } from "@/lib/auth";
-import { canView } from "@/lib/permissions";
+import { canView, requireAction } from "@/lib/permissions";
 import { isValidCPF } from "@/lib/cpf";
 import { isValidCNS } from "@/lib/cns";
 import { getPatientEditavel, type PacienteEditavel } from "@/lib/data/patients";
@@ -235,6 +235,8 @@ export async function createPacienteCompleto(
   // Autorização de módulo (defesa-em-profundidade, além do requireClinic + RLS).
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error, data: brutos };
+  const denied = await requireAction("pacientes", "create");
+  if (denied) return { error: denied, data: brutos };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -352,6 +354,8 @@ export async function criarPacienteAvulso(input: {
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
+  const denied = await requireAction("pacientes", "create");
+  if (denied) return { error: denied };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -439,6 +443,9 @@ export async function completarCadastroAvulso(input: {
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
+  // Completa um cadastro avulso já existente → edição.
+  const denied = await requireAction("pacientes", "edit");
+  if (denied) return { error: denied };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -507,6 +514,8 @@ export async function registrarObito(
   // módulo, igual ao cadastro/edição — não confiar só na RLS.
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
+  const denied = await requireAction("pacientes", "edit");
+  if (denied) return { error: denied };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -557,6 +566,8 @@ export async function updatePaciente(
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error, data: brutos };
+  const denied = await requireAction("pacientes", "edit");
+  if (denied) return { error: denied, data: brutos };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -950,6 +961,8 @@ export async function anexarProntuarioManual(input: {
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
+  const denied = await requireAction("pacientes", "edit");
+  if (denied) return { error: denied };
 
   // Anti-IDOR: o path DEVE estar dentro da pasta da clínica ativa + do próprio
   // paciente (<clinic_id>/<patient_id>/...). Impede apontar manual_record_path

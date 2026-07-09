@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, requireClinico } from "@/lib/auth";
+import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
 import { FREQUENCIAS } from "@/lib/data/prescricao";
@@ -126,6 +127,9 @@ export async function criarPrescricao(input: PrescricaoInput): Promise<ActionSta
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };
+  // Defesa em profundidade: papel clínico + permissão de módulo na matriz.
+  const denied = await requireAction("prontuario", "create");
+  if (denied) return { error: denied };
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };
@@ -231,6 +235,8 @@ export async function updatePrescricao(
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -347,6 +353,8 @@ export async function deletePrescricao(
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };
+  const denied = await requireAction("prontuario", "delete");
+  if (denied) return { error: denied };
 
   const supabase = await createClient();
 
@@ -393,6 +401,9 @@ export async function checarItem(
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };
+  // Checar item da prescrição = alterar o registro clínico existente.
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };

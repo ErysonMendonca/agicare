@@ -6,6 +6,7 @@ import {
   withTenantService,
   TenantAuthError,
 } from "@/lib/supabase/tenant-service";
+import { requireAction } from "@/lib/permissions";
 import { getSettings } from "@/lib/data/settings";
 import { buildSenhaSchema, normalizePolicy } from "@/lib/validation/password";
 import { consume, retryLabel } from "@/lib/rate-limit";
@@ -27,6 +28,10 @@ export type NovoCargoInput = z.input<typeof cargoSchema>;
 
 /** Cria um cargo (rótulo) que herda o acesso de um cargo-base. Admin-only. */
 export async function criarCargo(input: NovoCargoInput): Promise<ActionState> {
+  // Gate de módulo (o withTenantService abaixo ainda exige admin da clínica).
+  const denied = await requireAction("usuarios", "create");
+  if (denied) return { error: denied };
+
   const parsed = cargoSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
@@ -64,6 +69,9 @@ export type AtribuirCargoInput = z.input<typeof atribuirSchema>;
 
 /** Define o cargo (e o acesso via role-base) de um membro da clínica. Admin-only. */
 export async function atribuirCargo(input: AtribuirCargoInput): Promise<ActionState> {
+  const denied = await requireAction("usuarios", "edit");
+  if (denied) return { error: denied };
+
   const parsed = atribuirSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
@@ -144,7 +152,8 @@ export async function definirSenha(input: {
   userId: string;
   newPassword: string;
 }): Promise<ActionState> {
-
+  const denied = await requireAction("usuarios", "edit");
+  if (denied) return { error: denied };
 
   // Política de senha vigente da clínica (mesma da troca self-service).
   const settings = await getSettings();
@@ -200,7 +209,8 @@ export async function definirUsuario(input: {
   userId: string;
   username: string;
 }): Promise<ActionState> {
-
+  const denied = await requireAction("usuarios", "edit");
+  if (denied) return { error: denied };
 
   const schema = z.object({
     userId: z.string().uuid("Usuário inválido."),
@@ -266,6 +276,9 @@ export async function definirUsuario(input: {
 
 // ── Apagar cargo personalizado ──────────────────────────────────
 export async function excluirCargo(cargoId: string): Promise<ActionState> {
+  const denied = await requireAction("usuarios", "delete");
+  if (denied) return { error: denied };
+
   if (!cargoId) return { error: "Cargo inválido." };
   try {
     return await withTenantService(async ({ svc, clinicId }) => {

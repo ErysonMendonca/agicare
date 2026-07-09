@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Clock,
@@ -17,6 +17,9 @@ import {
   Users,
   Hash,
   ArrowRight,
+  FileText,
+  Activity,
+  CheckCircle2,
 } from "lucide-react";
 import { StatCard } from "@/components/ui/StatCard";
 import { Card } from "@/components/ui/Card";
@@ -99,12 +102,29 @@ function fluxoDoStatus(
   }
 }
 
-const STATUS_OPCOES = [
+export type StatusOpcao = { value: string; label: string };
+
+const STATUS_OPCOES: StatusOpcao[] = [
   { value: "todos", label: "Todos os Status" },
+  { value: "agendado", label: "Agendados" },
   { value: "aguardando", label: "Aguardando" },
   { value: "na_recepcao", label: "Na recepção" },
   { value: "aguardando_pagamento", label: "Check-out (Pagamento)" },
 ];
+
+/**
+ * Filtros que englobam mais de um `statusRaw`. "Aguardando" cobre o paciente
+ * liberado pela triagem (`aguardando_atendimento`) e o já chamado (`chamado`).
+ */
+const STATUS_GRUPOS: Record<string, string[]> = {
+  aguardando: ["aguardando", "aguardando_atendimento", "chamado"],
+};
+
+function casaComStatus(statusRaw: string, filtro: string): boolean {
+  if (filtro === "todos") return true;
+  const grupo = STATUS_GRUPOS[filtro];
+  return grupo ? grupo.includes(statusRaw) : statusRaw === filtro;
+}
 
 export function FilaClient({
   fila,
@@ -114,6 +134,10 @@ export function FilaClient({
   profissionais = [],
   triageTemplates = [],
   kpis,
+  kpisProntuario,
+  statusOpcoes = STATUS_OPCOES,
+  agendadosSoQuandoFiltrado = false,
+  tituloLista,
   dataSelecionada,
   isHoje = true,
   todoPeriodo = false,
@@ -139,6 +163,20 @@ export function FilaClient({
     checkout: number;
     total: number;
   };
+  /** KPIs da tela de Prontuário (clicáveis: cada uma aplica seu filtro). */
+  kpisProntuario?: {
+    todos: number;
+    agendados: number;
+    aguardando: number;
+    emAtendimento: number;
+    realizados: number;
+  };
+  /** Opções do Select de status (default: as da Fila/recepção). */
+  statusOpcoes?: StatusOpcao[];
+  /** true → a seção de agendados só aparece com o filtro "agendado" ativo. */
+  agendadosSoQuandoFiltrado?: boolean;
+  /** Cabeçalho opcional exibido logo acima da barra de busca/filtros. */
+  tituloLista?: ReactNode;
   /** Dia exibido (yyyy-mm-dd). A fila já vem filtrada por este dia no servidor. */
   dataSelecionada?: string;
   /** true quando o dia exibido é hoje (mostra agendados aguardando chegada). */
@@ -200,22 +238,22 @@ export function FilaClient({
           item.paciente.toLowerCase().includes(termo) ||
           item.codigo.toLowerCase().includes(termo) ||
           (item.atendimentoCodigo?.toLowerCase().includes(termo) ?? false);
-        const casaStatus =
-          statusFiltro === "todos" || item.statusRaw === statusFiltro;
-        return casaTexto && casaStatus;
+        return casaTexto && casaComStatus(item.statusRaw, statusFiltro);
       })
       .sort((a, b) => compararFila(a, b, ordenacao));
   }, [fila, termo, statusFiltro, ordenacao]);
 
   // Agendados aparecem em "todos" ou quando o filtro é explicitamente "agendado".
   const agendadosFiltrados = useMemo(() => {
-    if (statusFiltro !== "todos" && statusFiltro !== "agendado") return [];
+    if (statusFiltro !== "agendado") {
+      if (agendadosSoQuandoFiltrado || statusFiltro !== "todos") return [];
+    }
     return agendados
       .filter(
         (item) => termo === "" || item.paciente.toLowerCase().includes(termo),
       )
       .sort((a, b) => compararFila(a, b, ordenacao));
-  }, [agendados, termo, statusFiltro, ordenacao]);
+  }, [agendados, termo, statusFiltro, ordenacao, agendadosSoQuandoFiltrado]);
 
   // Troca o dia exibido navegando pela URL (?data=…). A page re-consulta a fila
   // no servidor já filtrada pelo dia → não carrega pacientes de dias passados.
@@ -299,6 +337,61 @@ export function FilaClient({
         </Stagger>
       )}
 
+      {kpisProntuario && (
+        <Stagger className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <FadeInUp>
+            <StatCard
+              icon={<FileText className="h-5 w-5" />}
+              value={String(kpisProntuario.todos)}
+              label="Todos"
+              tone="neutral"
+              onClick={() => setStatusFiltro("todos")}
+              active={statusFiltro === "todos"}
+            />
+          </FadeInUp>
+          <FadeInUp>
+            <StatCard
+              icon={<CalendarClock className="h-5 w-5" />}
+              value={String(kpisProntuario.agendados)}
+              label="Agendados"
+              tone="info"
+              onClick={() => toggleStatus("agendado")}
+              active={statusFiltro === "agendado"}
+            />
+          </FadeInUp>
+          <FadeInUp>
+            <StatCard
+              icon={<Clock className="h-5 w-5" />}
+              value={String(kpisProntuario.aguardando)}
+              label="Aguardando Atendimento"
+              tone="info"
+              onClick={() => toggleStatus("aguardando")}
+              active={statusFiltro === "aguardando"}
+            />
+          </FadeInUp>
+          <FadeInUp>
+            <StatCard
+              icon={<Activity className="h-5 w-5" />}
+              value={String(kpisProntuario.emAtendimento)}
+              label="Em Atendimento"
+              tone="info"
+              onClick={() => toggleStatus("em_atendimento")}
+              active={statusFiltro === "em_atendimento"}
+            />
+          </FadeInUp>
+          <FadeInUp>
+            <StatCard
+              icon={<CheckCircle2 className="h-5 w-5" />}
+              value={String(kpisProntuario.realizados)}
+              label="Atendimentos Realizados"
+              tone="success"
+              onClick={() => toggleStatus("finalizado")}
+              active={statusFiltro === "finalizado"}
+            />
+          </FadeInUp>
+        </Stagger>
+      )}
+
       {/* Agendados (aguardando chegada) */}
       {agendadosFiltrados.length > 0 && (
         <section className="mt-6">
@@ -371,7 +464,8 @@ export function FilaClient({
       )}
 
       {/* Busca + filtro (funcionais) */}
-      <Card className="mt-6 p-4">
+      {tituloLista && <div className="mt-6 mb-1">{tituloLista}</div>}
+      <Card className={tituloLista ? "p-4" : "mt-6 p-4"}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -436,7 +530,7 @@ export function FilaClient({
               value={statusFiltro}
               onChange={(e) => setStatusFiltro(e.target.value)}
             >
-              {STATUS_OPCOES.map((o) => (
+              {statusOpcoes.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, getRole } from "@/lib/auth";
+import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
 import { getPatientEditavel } from "@/lib/data/patients";
@@ -38,6 +39,9 @@ export async function emitirReceituario(
 
   const negado = await guardMedico();
   if (negado) return { error: negado };
+  // Defesa em profundidade: papel clínico + permissão de módulo na matriz.
+  const denied = await requireAction("prontuario", "create");
+  if (denied) return { error: denied };
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };
@@ -94,6 +98,8 @@ export async function removerReceituario(id: string): Promise<ActionState> {
 
   const negado = await guardMedico();
   if (negado) return { error: negado };
+  const denied = await requireAction("prontuario", "delete");
+  if (denied) return { error: denied };
 
   const supabase = await createClient();
   const clinicId = await requireClinic();

@@ -13,6 +13,7 @@ import {
   BarChart3,
   Settings,
   ShieldCheck,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 import type { ModuleSlug } from "@/lib/permissions.shared";
@@ -49,7 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Pacientes", href: "/pacientes", icon: Users, module: "pacientes" },
       { label: "Agenda", href: "/agenda", icon: CalendarDays, module: "agenda" },
       { label: "Prontuário", href: "/prontuario", icon: FileText, module: "prontuario" },
-      { label: "Procedimentos", href: "/procedimentos", icon: Stethoscope, gestorOnly: true, module: "procedimentos" },
+      { label: "Procedimentos", href: "/procedimentos", icon: Stethoscope, module: "procedimentos" },
       { label: "Laboratório", href: "/laboratorio", icon: FlaskConical, module: "laboratorio" },
       { label: "Estoque", href: "/estoque", icon: Boxes, badge: 3, module: "estoque" },
       { label: "Solicitações", href: "/solicitacoes", icon: ClipboardList, module: "solicitacoes" },
@@ -64,7 +65,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Relatórios", href: "/relatorios", icon: BarChart3, module: "relatorios" },
       { label: "Configurações", href: "/configuracoes", icon: Settings, module: "configuracoes" },
       { label: "Perfis de Acesso", href: "/permissoes", icon: ShieldCheck, module: "permissoes" },
-      { label: "Usuários", href: "/usuarios", icon: Users, module: "permissoes" },
+      { label: "Usuários", href: "/usuarios", icon: Users, module: "usuarios" },
+      { label: "Logs / Auditoria", href: "/logs", icon: ScrollText, module: "logs" },
     ],
   },
 ];

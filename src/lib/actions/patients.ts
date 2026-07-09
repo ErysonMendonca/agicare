@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireClinic } from "@/lib/tenant";
+import { requireAction } from "@/lib/permissions";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -22,6 +23,10 @@ export async function createPatient(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  // Autorização de módulo no servidor (a RLS por clínica é a 2ª camada).
+  const denied = await requireAction("pacientes", "create");
+  if (denied) return { error: denied };
+
   const parsed = patientSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };

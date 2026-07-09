@@ -5,12 +5,14 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireClinic } from "@/lib/tenant";
 import { getCurrentUser, getRole } from "@/lib/auth";
+import { requireAction } from "@/lib/permissions";
 import { listProcedimentosAtendimento } from "@/lib/data/atendimento";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
 function revalidar(patientId?: string) {
   revalidatePath("/fila");
+  revalidatePath("/prontuario");
   if (patientId) revalidatePath(`/prontuario/${patientId}`);
 }
 
@@ -36,6 +38,9 @@ export async function registrarProcedimento(input: {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const negado = await guardMedico();
   if (negado) return { error: negado };
+  // Defesa em profundidade: papel clínico + permissão de módulo na matriz.
+  const denied = await requireAction("prontuario", "create");
+  if (denied) return { error: denied };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -81,6 +86,8 @@ export async function removerProcedimento(id: string): Promise<ActionState> {
   if (!uuid.safeParse(id).success) return { error: "Registro inválido." };
   const negado = await guardMedico();
   if (negado) return { error: negado };
+  const denied = await requireAction("prontuario", "delete");
+  if (denied) return { error: denied };
   const clinicId = await requireClinic();
   const supabase = await createClient();
 
@@ -117,6 +124,8 @@ export async function finalizarAtendimento(
   if (!uuid.safeParse(queueEntryId).success) return { error: "Atendimento inválido." };
   const negado = await guardMedico();
   if (negado) return { error: negado };
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
   const clinicId = await requireClinic();
   const supabase = await createClient();
 

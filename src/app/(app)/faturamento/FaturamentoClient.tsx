@@ -349,7 +349,7 @@ export function FaturamentoClient({
                             size="sm"
                             onClick={() => abrir(evt, "editar")}
                           >
-                            <Pencil className="h-4 w-4" /> Editar
+                            <Pencil className="h-4 w-4" /> Reabrir
                           </Button>
                           <Button
                             variant="outline"
