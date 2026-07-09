@@ -127,7 +127,7 @@ async function validarDisponibilidadeHorario(
   const { data: escalas } = await supabase
     .from("schedules")
     .select(
-      "professional_id, specialty, slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks",
+      "professional_id, specialty, slot_minutes, overbook_limit, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks",
     )
     .eq("active", true);
 
@@ -184,7 +184,9 @@ async function validarDisponibilidadeHorario(
     return { ok: false, error: "Este horário está bloqueado na escala de atendimento." };
   }
 
-  // 5) Verifica se há agendamentos sobrepostos
+  // 5) Verifica a LOTAÇÃO do slot. Não basta existir um agendamento sobreposto:
+  // a escala define um "Limite de Encaixe" (`overbook_limit`) que diz quantos
+  // pacientes cabem no mesmo horário. Só recusamos quando o slot está cheio.
   const newStart = toIso(dateISO, timeHHMM);
   const newEnd = addMinutes(newStart, slotMinutes);
 
@@ -207,8 +209,29 @@ async function validarDisponibilidadeHorario(
   }
 
   const { data: ags } = await query;
-  if (ags && ags.length > 0) {
-    return { ok: false, error: "Este horário já está ocupado por outro paciente agendado." };
+  const ocupados = ags?.length ?? 0;
+
+  // Na agenda por especialidade (sem profissional escolhido), a base é o número
+  // de profissionais ativos — mesmo critério de `listSlotsBySpecialty`.
+  let base = 1;
+  if (!professionalId && especialidade) {
+    const { count } = await supabase
+      .from("professionals")
+      .select("id", { count: "exact", head: true })
+      .eq("specialty", especialidade)
+      .eq("active", true);
+    base = Math.max(1, count ?? 1);
+  }
+
+  const capacidade = capacidadeSlot(escala.overbook_limit, base);
+  if (ocupados >= capacidade) {
+    return {
+      ok: false,
+      error:
+        capacidade === 1
+          ? "Este horário já está ocupado por outro paciente agendado."
+          : `Limite de encaixe atingido para as ${timeHHMM}: já há ${ocupados} de ${capacidade} agendamentos.`,
+    };
   }
 
   return { ok: true };
@@ -1123,6 +1146,23 @@ function isoToMin(iso: string): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
+/**
+ * Capacidade de um slot: quantos agendamentos cabem no mesmo horário.
+ *
+ * `overbook_limit` ("Limite de Encaixe" na tela de escala) é o TETO de
+ * agendamentos do slot — limite 3 às 18:00 = até 3 pacientes às 18:00. O
+ * default da coluna é 0, que significa "sem encaixe": cai na capacidade-base.
+ *
+ * A base é 1 na agenda de um profissional, mas na agenda por ESPECIALIDADE é o
+ * número de profissionais ativos dela (dois cardiologistas atendem dois
+ * pacientes às 18:00 sem que isso seja encaixe). Por isso o teto nunca reduz a
+ * base — tomamos o maior dos dois.
+ */
+function capacidadeSlot(overbookLimit: unknown, base = 1): number {
+  const teto = Number(overbookLimit) || 0;
+  return Math.max(1, base, teto);
+}
+
 /** Intervalo ocupado [inícioMin, fimMin). */
 type Intervalo = [number, number];
 
@@ -1142,17 +1182,6 @@ function ocupacaoIntervalos(
     out.push([ini, fim > ini ? fim : ini + slotMinutes]);
   }
   return out;
-}
-
-/** Um slot [hora, hora+slotMinutes) sobrepõe algum intervalo ocupado? */
-function sobrepoe(
-  hora: string,
-  slotMinutes: number,
-  intervalos: Intervalo[],
-): boolean {
-  const ini = horaToMin(hora);
-  const fim = ini + slotMinutes;
-  return intervalos.some(([i, f]) => i < fim && ini < f);
 }
 
 /** Quantos intervalos ocupados sobrepõem o slot [hora, hora+slotMinutes)? */
@@ -1196,7 +1225,7 @@ export async function listSlots(
   const { data: escalas } = await supabase
     .from("schedules")
     .select(
-      "professional_id, specialty, slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks",
+      "professional_id, specialty, slot_minutes, overbook_limit, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks",
     )
     .eq("active", true);
 
@@ -1255,7 +1284,12 @@ export async function listSlots(
   return {
     slots: horarios.map((hora) => ({
       hora,
-      ocupado: bloqueados.has(hora) || sobrepoe(hora, slotMinutes, intervalos),
+      // Um slot só fica indisponível quando ATINGE a capacidade (limite de
+      // encaixe da escala); com 1 vaga usada de 3, ainda aceita encaixe.
+      ocupado:
+        bloqueados.has(hora) ||
+        contarSobrepostos(hora, slotMinutes, intervalos) >=
+          capacidadeSlot(escala?.overbook_limit),
     })),
     slotMinutes,
   };
@@ -1345,7 +1379,7 @@ export async function listSlotsBySpecialty(
   const query = supabase
     .from("schedules")
     .select(
-      "slot_minutes, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks, specialty, service_type, procedure_codes, exam_tuss_codes",
+      "slot_minutes, overbook_limit, weekdays, start_time, end_time, week_hours, active, start_date, end_date, recurring_blocks, specialty, service_type, procedure_codes, exam_tuss_codes",
     )
     .eq("active", true);
 
@@ -1395,16 +1429,18 @@ export async function listSlotsBySpecialty(
       ).sort((a, b) => a.localeCompare(b))
     : [];
 
-  // Capacidade = profissionais ativos da especialidade (mín. 1).
-  let capacity = 1;
+  // Capacidade = profissionais ativos da especialidade (mín. 1), elevada pelo
+  // "Limite de Encaixe" da escala quando este for maior — ver `capacidadeSlot`.
+  let base = 1;
   if (!serviceType || serviceType === "Consulta" || serviceType === "Retorno") {
     const { count: profCount } = await supabase
       .from("professionals")
       .select("id", { count: "exact", head: true })
       .eq("specialty", specialty)
       .eq("active", true);
-    capacity = Math.max(1, profCount ?? 1);
+    base = Math.max(1, profCount ?? 1);
   }
+  const capacity = capacidadeSlot(escala?.overbook_limit, base);
 
   const dayStart = toIso(dateISO, "00:00");
   const dayEnd = addMinutes(toIso(dateISO, "00:00"), 24 * 60);
