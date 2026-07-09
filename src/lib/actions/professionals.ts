@@ -404,6 +404,21 @@ export async function createAdminProfessional(
       const finalRole = parsedBaseRole || "recepcao";
       const cargoId = parsedCargoId || null;
 
+      // Verifica se o username já existe antes de tentar criar
+      const { data: existingProfile } = await svc
+        .from("profiles")
+        .select("id")
+        .eq("username", d.username)
+        .maybeSingle();
+
+      if (existingProfile) {
+        return { 
+          error: "Verifique os campos em vermelho e tente novamente.",
+          fieldErrors: { username: ["Este nome de usuário já está em uso. Escolha outro."] },
+          data: Object.fromEntries(formData)
+        };
+      }
+
       // Cria a conta Auth COM o login (username) e senha fornecidos
       const synthEmail = `${d.username}@agicare.local`;
       const { data: created, error: authError } = await svc.auth.admin.createUser({
@@ -414,7 +429,16 @@ export async function createAdminProfessional(
       });
 
       if (authError || !created?.user) {
-        return { error: "Erro ao criar conta: " + (authError?.message || "Desconhecido.") };
+        const msg = authError?.message ?? "Desconhecido";
+        // Email sintético já existe = username duplicado
+        if (msg.toLowerCase().includes("already") || msg.toLowerCase().includes("duplicate") || msg.toLowerCase().includes("unique")) {
+          return {
+            error: "Verifique os campos em vermelho e tente novamente.",
+            fieldErrors: { username: ["Este nome de usuário já está em uso. Escolha outro."] },
+            data: Object.fromEntries(formData)
+          };
+        }
+        return { error: "Erro ao criar conta: " + msg };
       }
 
       const userId = created.user.id;
@@ -432,7 +456,7 @@ export async function createAdminProfessional(
 
       if (profileError) {
         await svc.auth.admin.deleteUser(userId);
-        return { error: "Não foi possível salvar os dados do perfil." };
+        return { error: "Não foi possível salvar os dados do perfil: " + profileError.message };
       }
 
       // Membership na clínica ativa
@@ -446,7 +470,7 @@ export async function createAdminProfessional(
       
       if (memberError) {
         await svc.auth.admin.deleteUser(userId);
-        return { error: "Não foi possível vincular à clínica." };
+        return { error: "Não foi possível vincular à clínica: " + memberError.message };
       }
 
       // Registro na tabela professionals
@@ -457,6 +481,7 @@ export async function createAdminProfessional(
 
       const { error: profError } = await svc.from("professionals").insert({
         id: userId,
+        profile_id: userId,
         clinic_id: clinicId,
         active: ativo,
         ...payload,
@@ -464,14 +489,15 @@ export async function createAdminProfessional(
 
       if (profError) {
         await svc.auth.admin.deleteUser(userId);
-        return { error: "Erro ao salvar os detalhes do profissional." };
+        return { error: "Erro ao salvar os detalhes do profissional: " + profError.message };
       }
 
       return { ok: true };
     });
   } catch (err) {
     if (err instanceof TenantAuthError) return { error: err.message };
-    return { error: "Ocorreu um erro inesperado." };
+    const msg = err instanceof Error ? err.message : String(err);
+    return { error: "Ocorreu um erro inesperado: " + msg };
   }
 }
 
