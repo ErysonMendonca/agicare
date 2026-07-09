@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, getRole } from "@/lib/auth";
+import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
 import { logAction } from "@/lib/system-log";
@@ -50,6 +51,9 @@ export async function emitirAtestado(input: AtestadoInput): Promise<ActionState>
 
   const negado = await guardMedico();
   if (negado) return { error: negado };
+  // Defesa em profundidade: papel clínico + permissão de módulo na matriz.
+  const denied = await requireAction("prontuario", "create");
+  if (denied) return { error: denied };
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };
@@ -114,6 +118,9 @@ export async function darAlta(input: AltaInput): Promise<ActionState> {
 
   const negado = await guardMedico();
   if (negado) return { error: negado };
+  // Alta encerra o atendimento em curso → edição do registro clínico.
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };

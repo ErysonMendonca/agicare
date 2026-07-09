@@ -1,20 +1,20 @@
-import {
-  FileText,
-  Clock,
-  Activity,
-  CheckCircle2,
-  CalendarClock,
-  Stethoscope,
-} from "lucide-react";
+import { Stethoscope } from "lucide-react";
 import { PageHeader } from "@/components/app/PageHeader";
-import { StatCard } from "@/components/ui/StatCard";
-import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { FilaClient } from "@/app/(app)/fila/FilaClient";
 import { listQueue, listAgendadosHoje } from "@/lib/data/queue";
 import { getMySpecialty, listAtendimentosPorData } from "@/lib/data/prontuario";
 import { getCurrentUser, getRole } from "@/lib/auth";
 import { getSettings } from "@/lib/data/settings";
 import { requireView } from "@/lib/permissions";
+
+/** Status oferecidos no Select — espelham as KPIs clicáveis desta tela. */
+const STATUS_OPCOES_PRONTUARIO = [
+  { value: "todos", label: "Todos os Status" },
+  { value: "agendado", label: "Agendados" },
+  { value: "aguardando", label: "Aguardando Atendimento" },
+  { value: "em_atendimento", label: "Em Atendimento" },
+  { value: "finalizado", label: "Atendimentos Realizados" },
+];
 
 /** Data local de hoje em yyyy-mm-dd (coerente com <input type="date">). */
 function hojeISO(): string {
@@ -90,8 +90,6 @@ export default async function ProntuarioPage({
   if (souProfissional && myName) {
     agendadosBase = agendadosBase.filter((i) => i.medico === myName);
   }
-  const agendados = agendadosBase.length;
-
   const todos = filtrada.length;
   const aguardando = filtrada.filter(
     (i) =>
@@ -125,34 +123,28 @@ export default async function ProntuarioPage({
         )}
       </div>
 
-      {/* KPIs */}
-      <Stagger className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <FadeInUp>
-          <StatCard icon={<FileText className="h-5 w-5" />} value={String(todos)} label="Todos" tone="neutral" />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard icon={<CalendarClock className="h-5 w-5" />} value={String(agendados)} label="Agendados" tone="info" />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard icon={<Clock className="h-5 w-5" />} value={String(aguardando)} label="Aguardando Atendimento" tone="info" />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard icon={<Activity className="h-5 w-5" />} value={String(emAtendimento)} label="Em Atendimento" tone="info" />
-        </FadeInUp>
-        <FadeInUp>
-          <StatCard icon={<CheckCircle2 className="h-5 w-5" />} value={String(realizados)} label="Atendimentos Realizados" tone="success" />
-        </FadeInUp>
-      </Stagger>
-
-      {/* Lista de pacientes — busca, filtro de data (default hoje / "Todo o
+      {/* KPIs (clicáveis) + lista de pacientes — busca, filtro de data (default hoje / "Todo o
           período") e status ficam DENTRO do FilaClient, logo abaixo das KPIs.
           Sempre renderizado para que os filtros continuem acessíveis mesmo com
           a lista vazia (o FilaClient tem seu próprio estado-vazio). */}
-      <h3 className="mb-1 font-semibold text-ink">
-        Lista de Pacientes <span className="text-muted">({todos} registros)</span>
-      </h3>
       <FilaClient
+        tituloLista={
+          <h3 className="font-semibold text-ink">
+            Lista de Pacientes{" "}
+            <span className="text-muted">({todos} registros)</span>
+          </h3>
+        }
         fila={filtrada}
+        agendados={agendadosBase}
+        agendadosSoQuandoFiltrado
+        kpisProntuario={{
+          todos,
+          agendados: agendadosBase.length,
+          aguardando,
+          emAtendimento,
+          realizados,
+        }}
+        statusOpcoes={STATUS_OPCOES_PRONTUARIO}
         isMedico={isMedico}
         totemEnabled={totemEnabled}
         dataSelecionada={dataSelecionada}

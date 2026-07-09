@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isGestor } from "@/lib/auth";
+import { requireAction } from "@/lib/permissions";
 import { gerarLoteTissXML, type GuiaXML } from "@/lib/faturamento-tiss";
 import {
   getCheckoutData,
@@ -74,6 +75,8 @@ export async function carregarItensCheckout(
   fallbackServico: string,
   fallbackValor: number,
 ): Promise<{ itens: ItemCheckout[] }> {
+  // Leitura de dado financeiro: exige ver o módulo (a RLS é a 2ª camada).
+  if (await requireAction("faturamento", "view")) return { itens: [] };
   const parsed = idSchema.safeParse(eventCode);
   if (!parsed.success) return { itens: [] };
   const data = await getCheckoutData(parsed.data, fallbackServico, fallbackValor);
@@ -88,6 +91,8 @@ export async function carregarItensCheckout(
 export async function carregarCheckoutSalvo(
   eventCode: string,
 ): Promise<{ recibo: CheckoutSalvo | null }> {
+  // Leitura de dado financeiro: exige ver o módulo (a RLS é a 2ª camada).
+  if (await requireAction("faturamento", "view")) return { recibo: null };
   const parsed = idSchema.safeParse(eventCode);
   if (!parsed.success) return { recibo: null };
   const recibo = await getCheckoutSalvo(parsed.data);
@@ -111,6 +116,10 @@ function revalidateFaturamento() {
 export async function registrarCheckout(
   input: CheckoutInput,
 ): Promise<ActionState> {
+  // Gate de módulo (matriz de permissões): fechar check-out é uma edição.
+  const denied = await requireAction("faturamento", "edit");
+  if (denied) return { error: denied };
+
   const parsed = checkoutSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const { eventCode, forma, pagamento, desconto, acrescimo, empresa } =
@@ -125,15 +134,25 @@ export async function registrarCheckout(
 
   const supabase = await createClient();
 
-  // Localiza o evento pelo código de negócio (traz os ajustes já gravados).
+  // Localiza o evento pelo código de negócio (traz status + ajustes gravados).
   const { data: evt, error: evtErr } = await supabase
     .from("billable_events")
-    .select("id, amount, discount, surcharge")
+    .select("id, amount, status, discount, surcharge")
     .eq("code", eventCode)
     .maybeSingle();
 
   if (evtErr) return { error: evtErr.message };
   if (!evt) return { error: "Evento faturável não encontrado." };
+
+  // REABERTURA de conta já faturada (modo "editar" do recibo) é admin-only:
+  // regravar itens/valores de um check-out fechado altera o que já foi cobrado
+  // e o histórico contábil. Fechar a conta pela 1ª vez segue liberado a quem
+  // tem `faturamento × edit` (ex.: recepção).
+  if (evt.status === "faturado" && !gestor) {
+    return {
+      error: "Apenas o gestor pode reabrir um check-out já faturado.",
+    };
+  }
 
   // Não-gestor não altera ajustes: PRESERVA o desconto/acréscimo já gravado
   // (ex.: recepção editando um evento que o gestor abateu) em vez de zerar.

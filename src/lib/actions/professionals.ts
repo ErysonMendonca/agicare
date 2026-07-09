@@ -7,8 +7,9 @@ import {
   withTenantService,
   TenantAuthError,
 } from "@/lib/supabase/tenant-service";
+import { requireAction } from "@/lib/permissions";
 
-export type ActionState = { 
+export type ActionState = {
   error?: string; 
   ok?: boolean; 
   fieldErrors?: Record<string, string[]>;
@@ -261,6 +262,10 @@ export async function createProfessional(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  // Gate de módulo (o withTenantService abaixo ainda exige admin da clínica).
+  const denied = await requireAction("profissionais", "create");
+  if (denied) return { error: denied };
+
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { 
@@ -385,6 +390,9 @@ export async function createAdminProfessional(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const denied = await requireAction("profissionais", "create");
+  if (denied) return { error: denied };
+
   const parsed = createAdminSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { 
@@ -516,6 +524,9 @@ export async function updateProfessional(
   formData: FormData,
 ): Promise<ActionState> {
   if (!id) return { error: "Profissional inválido." };
+
+  const denied = await requireAction("profissionais", "edit");
+  if (denied) return { error: denied };
 
   const parsed = updateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {

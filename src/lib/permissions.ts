@@ -6,6 +6,8 @@ import {
   MODULES,
   DEFAULT_MATRIX,
   defaultMapForRole,
+  permissionAllows,
+  type Action,
   type ModuleSlug,
   type Scope,
   type PermissionMap,
@@ -31,8 +33,12 @@ export {
   MODULES,
   MODULE_LABELS,
   DEFAULT_MATRIX,
+  ACTIONS,
+  ACTION_LABELS,
+  permissionAllows,
 } from "@/lib/permissions.shared";
 export type {
+  Action,
   Scope,
   ModuleSlug,
   ModulePermission,
@@ -51,7 +57,7 @@ export async function getPermissionMatrix(): Promise<PermissionRow[]> {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("role_permissions")
-      .select("role, module, can_view, scope");
+      .select("role, module, can_view, can_create, can_edit, can_delete, scope");
 
     if (error || !data || data.length === 0) return DEFAULT_MATRIX;
 
@@ -59,6 +65,9 @@ export async function getPermissionMatrix(): Promise<PermissionRow[]> {
       role: r.role as Role,
       module: r.module as ModuleSlug,
       canView: Boolean(r.can_view),
+      canCreate: Boolean(r.can_create),
+      canEdit: Boolean(r.can_edit),
+      canDelete: Boolean(r.can_delete),
       scope: (r.scope as Scope) ?? "all",
     }));
   } catch {
@@ -78,9 +87,15 @@ export const getMyPermissions = cache(async (): Promise<PermissionMap> => {
 
   const role = await getRole();
   if (!role) {
-    // Sem papel definido → fail-closed (nada visível).
+    // Sem papel definido → fail-closed (nada visível, nenhuma ação).
     return MODULES.reduce((acc, module) => {
-      acc[module] = { canView: false, scope: "all" };
+      acc[module] = {
+        canView: false,
+        canCreate: false,
+        canEdit: false,
+        canDelete: false,
+        scope: "all",
+      };
       return acc;
     }, {} as PermissionMap);
   }
@@ -89,7 +104,7 @@ export const getMyPermissions = cache(async (): Promise<PermissionMap> => {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("role_permissions")
-      .select("module, can_view, scope")
+      .select("module, can_view, can_create, can_edit, can_delete, scope")
       .eq("role", role);
 
     if (error || !data || data.length === 0) return defaultMapForRole(role);
@@ -102,6 +117,9 @@ export const getMyPermissions = cache(async (): Promise<PermissionMap> => {
       if (MODULES.includes(slug)) {
         map[slug] = {
           canView: Boolean(r.can_view),
+          canCreate: Boolean(r.can_create),
+          canEdit: Boolean(r.can_edit),
+          canDelete: Boolean(r.can_delete),
           scope: (r.scope as Scope) ?? "all",
         };
       }
@@ -114,8 +132,34 @@ export const getMyPermissions = cache(async (): Promise<PermissionMap> => {
 
 /** O papel logado pode ver o módulo? */
 export async function canView(module: ModuleSlug): Promise<boolean> {
+  return can(module, "view");
+}
+
+/**
+ * O papel logado pode executar `action` no módulo? Admin sempre pode (contrato
+ * "admin = acesso total", idêntico ao de `requireView`). Toda ação implica
+ * `canView` — ver `permissionAllows`.
+ */
+export async function can(
+  module: ModuleSlug,
+  action: Action,
+): Promise<boolean> {
+  if ((await getRole()) === "admin") return true;
   const perms = await getMyPermissions();
-  return perms[module]?.canView ?? false;
+  return permissionAllows(perms[module], action);
+}
+
+/**
+ * Guard de MUTATION para server actions: devolve mensagem de erro quando o
+ * papel logado não pode executar a ação, `null` quando pode. Diferente de
+ * `requireView`, não redireciona — actions devolvem `{ error }` ao client.
+ */
+export async function requireAction(
+  module: ModuleSlug,
+  action: Action,
+): Promise<string | null> {
+  if (await can(module, action)) return null;
+  return "Você não tem permissão para executar esta ação.";
 }
 
 /** Escopo de visualização do papel logado no módulo (default 'all'). */

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { getMySpecialty } from "@/lib/data/prontuario";
 import { chaveEspecialidade } from "@/lib/clinico/anamnese-config";
@@ -50,6 +51,10 @@ export async function gerarAnamnese(input: AnamneseInput): Promise<ActionState> 
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };
+
+  // Defesa em profundidade: permissão de escrita no módulo Prontuário.
+  const denied = await requireAction("prontuario", "create");
+  if (denied) return { error: denied };
 
   // Regra de especialidade: só gera quem é da especialidade da ficha.
   const minhaEspecialidade = await getMySpecialty();

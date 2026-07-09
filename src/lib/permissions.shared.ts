@@ -27,16 +27,52 @@ export type ModuleSlug =
   | "faturamento"
   | "relatorios"
   | "configuracoes"
+  | "usuarios"
+  | "logs"
   | "permissoes";
 
-export type ModulePermission = { canView: boolean; scope: Scope };
-export type PermissionMap = Record<ModuleSlug, ModulePermission>;
-export type PermissionRow = {
-  role: Role;
-  module: ModuleSlug;
+/**
+ * Ações granulares por módulo. `view` governa o acesso à rota/menu; as demais
+ * governam as mutations (server actions). Toda ação implica `view` — quem não
+ * vê o módulo não age sobre ele (invariante aplicada em `can()`).
+ */
+export type Action = "view" | "create" | "edit" | "delete";
+
+export const ACTIONS: Action[] = ["view", "create", "edit", "delete"];
+
+export const ACTION_LABELS: Record<Action, string> = {
+  view: "Ver",
+  create: "Criar",
+  edit: "Editar",
+  delete: "Excluir",
+};
+
+export type ModulePermission = {
   canView: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   scope: Scope;
 };
+export type PermissionMap = Record<ModuleSlug, ModulePermission>;
+export type PermissionRow = { role: Role; module: ModuleSlug } & ModulePermission;
+
+/** Chave de `ModulePermission` correspondente a cada ação. */
+export const ACTION_KEY: Record<Action, keyof ModulePermission> = {
+  view: "canView",
+  create: "canCreate",
+  edit: "canEdit",
+  delete: "canDelete",
+};
+
+/** Toda ação exige `canView`. Ponto único da invariante (client e servidor). */
+export function permissionAllows(
+  perm: ModulePermission | undefined,
+  action: Action,
+): boolean {
+  if (!perm?.canView) return false;
+  return Boolean(perm[ACTION_KEY[action]]);
+}
 
 // ── Catálogo de módulos ──────────────────────────────────────────
 /** Ordem canônica dos módulos (espelha o menu lateral e o seed da 0019). */
@@ -54,6 +90,8 @@ export const MODULES: ModuleSlug[] = [
   "faturamento",
   "relatorios",
   "configuracoes",
+  "usuarios",
+  "logs",
   "permissoes",
 ];
 
@@ -72,8 +110,33 @@ export const MODULE_LABELS: Record<ModuleSlug, string> = {
   faturamento: "Faturamento",
   relatorios: "Relatórios",
   configuracoes: "Configurações",
+  usuarios: "Usuários",
+  logs: "Logs / Auditoria",
   permissoes: "Perfis de Acesso",
 };
+
+/** Módulos sensíveis: nenhum papel não-admin os recebe por default. */
+const RESTRITOS: ModuleSlug[] = ["usuarios", "logs", "permissoes"];
+
+/**
+ * Módulos cujas MUTATIONS já checam `create/edit/delete` no servidor (via
+ * `requireAction`). Nos demais, só `canView` é aplicado — marcar as ações ali
+ * não teria efeito, então a tela as desabilita em vez de prometer um controle
+ * que o servidor ainda não faz. Ao acrescentar `requireAction(...)` às actions
+ * de um módulo, inclua-o nesta lista.
+ */
+export const MODULOS_COM_ACOES: ModuleSlug[] = [
+  "pacientes",
+  "prontuario",
+  "profissionais",
+  "faturamento",
+  "usuarios",
+];
+
+/** As ações create/edit/delete são aplicadas no servidor para este módulo? */
+export function temEnforcementDeAcoes(module: ModuleSlug): boolean {
+  return MODULOS_COM_ACOES.includes(module);
+}
 
 // ── Defaults (espelham EXATAMENTE o seed da migration 0019) ──────
 /**
@@ -88,16 +151,36 @@ export const MODULE_LABELS: Record<ModuleSlug, string> = {
 export function defaultCanView(role: Role, module: ModuleSlug): boolean {
   if (role === "admin") return true;
   if (role === "paciente") return false;
+  // Usuários, Logs e Perfis de Acesso são liberáveis pelo admin, mas nunca
+  // vêm ligados por default para papéis não-admin.
+  if (RESTRITOS.includes(module)) return false;
   // O médico não acessa a Fila de Atendimento — a lista dos pacientes dele
   // (mesma regra de especialidade/atribuição) fica na tela de Prontuário.
   if (role === "medico")
-    return (
-      module !== "procedimentos" &&
-      module !== "permissoes" &&
-      module !== "fila"
-    );
+    return module !== "procedimentos" && module !== "fila";
   // recepcao
-  return module !== "procedimentos" && module !== "permissoes";
+  return module !== "procedimentos";
+}
+
+/**
+ * Permissão default de um (papel, módulo). Preserva o comportamento vigente:
+ * antes das ações granulares, quem via o módulo podia agir nele. A exceção é
+ * `recepcao × faturamento`, que fecha o check-out (edit) mas não cria nem
+ * exclui lançamentos — reabrir/conciliar/gerar lote seguem com o admin.
+ */
+export function defaultPermission(
+  role: Role,
+  module: ModuleSlug,
+): ModulePermission {
+  const canView = defaultCanView(role, module);
+  const base = { canView, scope: "all" as Scope };
+  if (!canView) {
+    return { ...base, canCreate: false, canEdit: false, canDelete: false };
+  }
+  if (role === "recepcao" && module === "faturamento") {
+    return { ...base, canCreate: false, canEdit: true, canDelete: false };
+  }
+  return { ...base, canCreate: true, canEdit: true, canDelete: true };
 }
 
 /** Matriz default completa (todas as linhas), idêntica ao seed. */
@@ -107,15 +190,14 @@ export const DEFAULT_MATRIX: PermissionRow[] = (
   MODULES.map((module) => ({
     role,
     module,
-    canView: defaultCanView(role, module),
-    scope: "all" as Scope,
+    ...defaultPermission(role, module),
   })),
 );
 
 /** Mapa default de um papel (todos os módulos, scope 'all'). */
 export function defaultMapForRole(role: Role): PermissionMap {
   return MODULES.reduce((acc, module) => {
-    acc[module] = { canView: defaultCanView(role, module), scope: "all" };
+    acc[module] = defaultPermission(role, module);
     return acc;
   }, {} as PermissionMap);
 }

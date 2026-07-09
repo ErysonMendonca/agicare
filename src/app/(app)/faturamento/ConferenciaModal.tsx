@@ -314,7 +314,7 @@ export function ConferenciaModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={modo === "editar" ? "Editar Check-out" : "Conferência de Check-out"}
+      title={modo === "editar" ? "Reabrir Check-out" : "Conferência de Check-out"}
       subtitle={`${evento.paciente} · ${evento.codigo}`}
       className="max-w-2xl"
       footer={

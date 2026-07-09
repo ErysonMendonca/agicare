@@ -29,6 +29,8 @@ export function FinalizarAtendimentoButton({
       const res = await finalizarAtendimento(queueEntryId);
       if (res?.ok) {
         toast.success("Atendimento finalizado. Encaminhado à recepção para pagamento.");
+        // Volta à listagem de pacientes do prontuário (o médico já terminou aqui).
+        router.push("/prontuario");
         router.refresh();
       } else {
         toast.error(res?.error ?? "Não foi possível finalizar o atendimento.");
