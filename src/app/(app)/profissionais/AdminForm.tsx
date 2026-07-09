@@ -41,12 +41,14 @@ function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
 
 function CamposAdmin({
   defaults,
+  errors,
   mostrarStatus,
   departamentos,
   isEdit,
   cargos,
 }: {
   defaults: FormDefaults;
+  errors?: Record<string, string[]>;
   mostrarStatus: boolean;
   departamentos: AttendanceOption[];
   isEdit: boolean;
@@ -54,6 +56,12 @@ function CamposAdmin({
 }) {
   const [telefone, setTelefone] = useState(defaults.phone ?? "");
   const [documento, setDocumento] = useState(defaults.document ?? "");
+
+  // Quando o servidor retorna dados preservados (state.data), re-sincroniza os estados controlados
+  useEffect(() => {
+    setTelefone(defaults.phone ?? "");
+    setDocumento(defaults.document ?? "");
+  }, [defaults.phone, defaults.document]);
 
   function handleCpfCnpj(v: string) {
     const limpo = v.replace(/\D/g, "");
@@ -83,6 +91,7 @@ function CamposAdmin({
               label="Nome Completo"
               defaultValue={defaults.full_name}
               placeholder="Ex.: Maria da Silva"
+              error={errors?.full_name?.[0]}
               required
               autoFocus
             />
@@ -96,6 +105,7 @@ function CamposAdmin({
               value={documento}
               onChange={(e) => handleCpfCnpj(e.target.value)}
               placeholder="000.000.000-00"
+              error={errors?.document?.[0]}
               required
             />
             <input type="hidden" name="person_type" value="cpf" />
@@ -108,6 +118,7 @@ function CamposAdmin({
               label="Telefone"
               value={telefone}
               onChange={(e) => setTelefone(e.target.value)}
+              error={errors?.phone?.[0]}
               required
             />
           </div>
@@ -120,6 +131,7 @@ function CamposAdmin({
               label="E-mail de Contato"
               defaultValue={defaults.email}
               placeholder="Ex.: maria@clinica.com.br"
+              error={errors?.email?.[0]}
               required
             />
           </div>
@@ -136,6 +148,7 @@ function CamposAdmin({
             label="Departamento"
             placeholder="Ex.: Financeiro"
             defaultValue={defaults.department ?? ""}
+            error={errors?.department?.[0]}
             required
           />
           <Input
@@ -145,6 +158,7 @@ function CamposAdmin({
             label="Cargo"
             placeholder="Ex.: Gerente Financeiro"
             defaultValue={defaults.job_title ?? ""}
+            error={errors?.job_title?.[0]}
             required
           />
         </div>
@@ -160,6 +174,8 @@ function CamposAdmin({
               type="text"
               label="Login (Usuário)"
               placeholder="joao.silva"
+              defaultValue={defaults.username ?? ""}
+              error={errors?.username?.[0]}
               required
             />
             <Select
@@ -183,6 +199,7 @@ function CamposAdmin({
               type="password"
               label="Senha"
               placeholder="Mínimo de 6 caracteres"
+              error={errors?.password?.[0]}
               required
             />
             <Input
@@ -191,6 +208,7 @@ function CamposAdmin({
               type="password"
               label="Confirmar Senha"
               placeholder="••••••••"
+              error={errors?.confirm_password?.[0]}
               required
             />
           </div>
@@ -273,7 +291,11 @@ export function AdminForm({
       );
       router.push("/profissionais");
     } else if (state?.error) {
-      toast.error(state.error);
+      // Se há erros de campo, mostrar o primeiro deles para ser mais específico
+      const primeiroErro = state.fieldErrors
+        ? Object.values(state.fieldErrors).flat()[0]
+        : undefined;
+      toast.error(primeiroErro ?? state.error);
     }
   }, [state, isEdit, router]);
 
@@ -282,7 +304,8 @@ export function AdminForm({
       <form action={formAction}>
         <CardBody className="p-6 sm:p-8">
           <CamposAdmin
-            defaults={profissional ?? {}}
+            defaults={state?.data ?? profissional ?? {}}
+            errors={state?.fieldErrors}
             mostrarStatus={isEdit}
             departamentos={departamentos}
             isEdit={isEdit}

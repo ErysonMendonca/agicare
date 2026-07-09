@@ -387,7 +387,11 @@ export async function createAdminProfessional(
 ): Promise<ActionState> {
   const parsed = createAdminSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+    return { 
+      error: "Verifique os campos em vermelho e tente novamente.",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+      data: Object.fromEntries(formData)
+    };
   }
   const d = parsed.data;
   const ativo = d.active ? d.active === "true" : true;

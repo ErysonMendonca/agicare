@@ -61,6 +61,8 @@ export type ProfissionalEdit = {
   cargoId?: string;
   /** Credenciamentos de convênio (só admin lê — RLS 0070). */
   credentials?: CredencialEdit[];
+  /** Login do usuário (só disponível ao retornar dados do formulário via state). */
+  username?: string;
 };
 
 export type Profissional = {
