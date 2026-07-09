@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { type Status } from "@/components/ui/Badge";
 
 // ── Helpers de formatação ───────────────────────────────────────────
@@ -92,7 +91,6 @@ const MOCK_VITAIS: SinalVital[] = [
 export async function listSinaisVitais(
   patientId: string,
 ): Promise<SinalVital[]> {
-  if (isDemoMode()) return MOCK_VITAIS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -165,7 +163,6 @@ const MOCK_ANOTACOES: AnotacaoEnfermagem[] = [
 export async function listAnotacoes(
   patientId: string,
 ): Promise<AnotacaoEnfermagem[]> {
-  if (isDemoMode()) return MOCK_ANOTACOES;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -192,7 +189,6 @@ export async function listAnotacoes(
 
 /** Próximo código sequencial ANO-NNN (base para o formulário). */
 export async function nextAnotacaoCode(patientId: string): Promise<string> {
-  if (isDemoMode()) return "ANO-003";
   const supabase = await createClient();
   const { count } = await supabase
     .from("nursing_notes")
@@ -261,7 +257,6 @@ const MOCK_CUIDADOS: Cuidado[] = [
 ];
 
 export async function listCuidados(patientId: string): Promise<Cuidado[]> {
-  if (isDemoMode()) return MOCK_CUIDADOS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -333,7 +328,6 @@ const MOCK_BALANCO: BalancoHidrico = {
 export async function getBalancoHidrico(
   patientId: string,
 ): Promise<BalancoHidrico | null> {
-  if (isDemoMode()) return MOCK_BALANCO;
 
   const supabase = await createClient();
   const { data: bal } = await supabase
@@ -415,7 +409,6 @@ const MOCK_EVOLUCOES: EvolucaoEnfermagem[] = [
 export async function listEvolucoes(
   patientId: string,
 ): Promise<EvolucaoEnfermagem[]> {
-  if (isDemoMode()) return MOCK_EVOLUCOES;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -485,7 +478,6 @@ const MOCK_ESCALAS: EscalaRegistro[] = [
 export async function listEscalas(
   patientId: string,
 ): Promise<EscalaRegistro[]> {
-  if (isDemoMode()) return MOCK_ESCALAS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -552,7 +544,6 @@ const MOCK_PROCEDIMENTOS: ProcedimentoEnfermagem[] = [
 export async function listProcedimentosEnfermagem(
   patientId: string,
 ): Promise<ProcedimentoEnfermagem[]> {
-  if (isDemoMode()) return MOCK_PROCEDIMENTOS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -609,7 +600,6 @@ const MOCK_SAE: RegistroSae[] = [
 ];
 
 export async function listSae(patientId: string): Promise<RegistroSae[]> {
-  if (isDemoMode()) return MOCK_SAE;
 
   const supabase = await createClient();
   const { data, error } = await supabase

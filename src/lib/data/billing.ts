@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { type Status } from "@/components/ui/Badge";
 
 export type Convenio = "Convênio" | "Particular";
@@ -286,7 +285,6 @@ const MOCK_LOTES: LoteTISS[] = [
 
 /** Lista guias TISS: do banco quando configurado, mock no modo demo. */
 export async function listTissGuides(): Promise<GuiaTISS[]> {
-  if (isDemoMode()) return MOCK_GUIAS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -323,7 +321,6 @@ export async function listTissGuides(): Promise<GuiaTISS[]> {
 
 /** Lista lotes TISS: do banco quando configurado, mock no modo demo. */
 export async function listTissBatches(): Promise<LoteTISS[]> {
-  if (isDemoMode()) return MOCK_LOTES;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -384,29 +381,7 @@ export async function getCheckoutData(
   fallbackServico: string,
   fallbackValor: number,
 ): Promise<CheckoutData> {
-  if (isDemoMode()) {
-    return {
-      eventId: null,
-      itens: [
-        {
-          source: "procedimento",
-          tipo: "TUSS",
-          codigo: "10101012",
-          descricao: fallbackServico,
-          qtd: 1,
-          valor: Math.round(fallbackValor * 0.8 * 100) / 100,
-        },
-        {
-          source: "material",
-          tipo: "Material",
-          codigo: "MAT-014",
-          descricao: "Materiais e insumos",
-          qtd: 1,
-          valor: Math.round(fallbackValor * 0.2 * 100) / 100,
-        },
-      ],
-    };
-  }
+
 
   const supabase = await createClient();
   const { data: evt } = await supabase
@@ -482,7 +457,6 @@ export async function getCheckoutData(
 
 /** Lista eventos faturáveis: do banco quando configurado, mock no modo demo. */
 export async function listBillableEvents(): Promise<Evento[]> {
-  if (isDemoMode()) return MOCK;
 
   const supabase = await createClient();
   const { data, error } = await supabase

@@ -1,6 +1,5 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 /** Bloco Segurança (persistido em clinic_settings.security jsonb). */
 export type SecuritySettings = {
@@ -198,7 +197,6 @@ function mapBranding(raw: unknown): BrandingSettings {
  * na página de Configurações).
  */
 export const getSettings = cache(async (): Promise<ClinicSettings> => {
-  if (isDemoMode()) return DEFAULTS;
 
   const supabase = await createClient();
   const { data, error } = await supabase

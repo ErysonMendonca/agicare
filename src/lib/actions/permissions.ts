@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
 import { MODULES, type PermissionRow } from "@/lib/permissions";
@@ -35,9 +34,7 @@ export async function savePermissions(
   // Reforço de autorização no servidor (config sensível; o gate do proxy é otimista).
   if (!(await isGestor())) return { error: "Acesso restrito ao gestor." };
 
-  if (isDemoMode()) {
-    return { error: "Indisponível no modo demonstração." };
-  }
+
 
   const parsed = payloadSchema.safeParse(rows);
   if (!parsed.success) {

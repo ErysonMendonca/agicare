@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getActiveClinicId } from "@/lib/tenant";
 import {
   type RelatoriosFiltros,
@@ -66,7 +65,6 @@ export async function getTempoEsperaBI(
   };
 
   // Tempo de espera é REAL: em demo não há fila persistida → vazio honesto.
-  if (isDemoMode()) return vazio;
 
   const supabase = await createClient();
   const { startIso: windowStart, endIso: windowEnd } = bucketWindow(buckets);
@@ -152,7 +150,6 @@ export async function getTempoEsperaSemanaBI(
   };
 
   // Espera é REAL: em demo não há fila persistida → vazio honesto (nunca mock).
-  if (isDemoMode()) return vazio;
 
   const supabase = await createClient();
   // Período explícito do filtro; sem filtro, janela de 90 dias (amostra/dia).
@@ -227,7 +224,6 @@ const DEMO_ORIGEM: OrigemPacientesBI = {
 export async function getOrigemPacientesBI(
   filtros: RelatoriosFiltros = {},
 ): Promise<OrigemPacientesBI> {
-  if (isDemoMode()) return DEMO_ORIGEM;
 
   const supabase = await createClient();
   // Origem não tem vínculo com profissional → respeita só o período (quando
@@ -303,7 +299,6 @@ export async function getTempoEsperaAgendaBI(
   };
 
   // Espera é REAL: em demo não há agenda persistida → vazio honesto (nunca mock).
-  if (isDemoMode()) return vazio;
 
   // Escopo de tenant EXPLÍCITO (defense-in-depth, além da RLS). Sem clínica
   // ativa, a RLS já negaria — devolvemos vazio honesto sem consultar.
@@ -442,7 +437,6 @@ const NEG_ALERGIA = ["nenhuma", "nega", "não", "nao", "sem alergia", "—", "n/
 export async function getEpidemiologicoBI(
   filtros: RelatoriosFiltros = {},
 ): Promise<EpidemiologicoBI> {
-  if (isDemoMode()) return DEMO_EPIDEMIO;
 
   const supabase = await createClient();
   // Epidemiologia recorta por especialidade da ficha e período (created_at).
@@ -613,7 +607,6 @@ export async function getFinanceiroBI(
   filtros: RelatoriosFiltros = {},
 ): Promise<FinanceiroBI | null> {
   if (!gestor) return null; // gate de servidor (LGPD/estratégico)
-  if (isDemoMode()) return DEMO_FINANCEIRO;
 
   const supabase = await createClient();
   const janela = dateWindow(filtros);

@@ -10,7 +10,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { getMyPermissions } from "@/lib/permissions";
 import { getMenuCounters, getNotificacoes } from "@/lib/data/dashboard";
 import { getSettings } from "@/lib/data/settings";
-import { DEMO_USER, isDemoMode } from "@/lib/supabase/config";
 
 export default async function AppLayout({
   children,
@@ -18,17 +17,11 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   try {
-    // Modo demo (fora de prod, sem Supabase): usuário fictício. Caso contrário: usuário real.
-    let user = DEMO_USER;
-    if (!isDemoMode()) {
-      const current = await getCurrentUser();
-      if (current?.profile) {
-        user = {
-          name: current.profile.full_name ?? "Usuário",
-          role: roleLabel(current.profile.role),
-        };
-      }
-    }
+    const current = await getCurrentUser();
+    let user = {
+      name: current?.profile?.full_name ?? "Usuário",
+      role: roleLabel(current?.profile?.role ?? ""),
+    };
     // Permissões do papel logado: definem quais itens do menu aparecem.
     // Branding: logo da clínica (white-label) exibido no topo da sidebar.
     const [permissions, counters, settings, notificacoes] = await Promise.all([

@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 import { type Status } from "@/components/ui/Badge";
 
@@ -64,7 +63,6 @@ function fmtValidade(iso: string | null): string {
 
 /** Lista produtos de estoque: do banco quando configurado, mock no modo demo. */
 export async function listStockProducts(): Promise<ProdutoEstoque[]> {
-  if (isDemoMode()) return MOCK;
 
   const supabase = await createClient();
   // Tenta com o embed de fornecedor (0006); se falhar (migration não aplicada),
@@ -241,7 +239,6 @@ const MOCK_PRODUTO_COMPLETO: ProdutoCompleto = {
 export async function getProdutoCompleto(
   productId: string,
 ): Promise<ProdutoCompleto | null> {
-  if (isDemoMode()) return MOCK_PRODUTO_COMPLETO;
   if (!productId) return null;
 
   const clinicId = await requireClinic();
@@ -333,7 +330,6 @@ const MOCK_FORNECEDORES: Fornecedor[] = [
 ];
 
 export async function listSuppliers(): Promise<Fornecedor[]> {
-  if (isDemoMode()) return MOCK_FORNECEDORES;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -445,7 +441,6 @@ function fmtDataHora(iso: string | null): string {
 }
 
 export async function listDispensacoes(): Promise<Dispensacao[]> {
-  if (isDemoMode()) return MOCK_DISPENSACOES;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -526,7 +521,6 @@ const MOCK_PRESCRITOS: ItemPrescrito[] = [
 export async function listItensPrescritosPaciente(
   patientId: string,
 ): Promise<ItemPrescrito[]> {
-  if (isDemoMode()) return MOCK_PRESCRITOS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -619,7 +613,6 @@ const MOCK_ENTRADAS: EntradaProduto[] = [
 ];
 
 export async function listEntradas(): Promise<EntradaProduto[]> {
-  if (isDemoMode()) return MOCK_ENTRADAS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -705,7 +698,6 @@ const MOCK_COMPRAS: SolicitacaoCompra[] = [
 ];
 
 export async function listCompras(): Promise<SolicitacaoCompra[]> {
-  if (isDemoMode()) return MOCK_COMPRAS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -786,7 +778,6 @@ export type InventarioAberto = {
 
 /** Lista inventários ABERTOS com as contagens persistidas. Vazio em demo. */
 export async function listInventarios(): Promise<InventarioAberto[]> {
-  if (isDemoMode()) return [];
 
   const supabase = await createClient();
   const { data, error } = await supabase

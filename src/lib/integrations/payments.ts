@@ -3,7 +3,6 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { isDemoMode } from '@/lib/supabase/config'
 import { isGestor, getCurrentUser } from '@/lib/auth'
 import { requireClinic } from '@/lib/tenant'
 
@@ -83,16 +82,6 @@ export async function registrarPagamento(
 
   const gateway = resolveGateway()
   const identificador = gerarReferencia(metodo)
-
-  if (isDemoMode()) {
-    return {
-      ok: true,
-      status: 'pendente',
-      identificador,
-      paymentId: 'demo',
-    }
-  }
-
   const supabase = await createClient()
   const clinicId = await requireClinic()
 
@@ -153,7 +142,6 @@ export async function atualizarStatusPagamento(
   if (!(await isGestor())) {
     return { error: 'Apenas o gestor pode confirmar ou cancelar pagamentos.' }
   }
-  if (isDemoMode()) return { ok: true, status: parsed.data.resultado }
 
   const supabase = await createClient()
   const { error } = await supabase

@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic, getActiveClinicId } from "@/lib/tenant";
 import { requireClinico, isGestor } from "@/lib/auth";
 import { logAction } from "@/lib/system-log";
@@ -160,7 +159,6 @@ export async function createStockProduct(
       return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
     }
 
-    if (isDemoMode()) return { ok: true };
 
     const d = parsed.data;
     // Clínica ausente → erro amigável retornado (NÃO deixar `requireClinic()`
@@ -278,7 +276,6 @@ export async function updateStockProduct(
       return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
     }
 
-    if (isDemoMode()) return { ok: true };
 
     const d = parsed.data;
     const clinicId = await getActiveClinicId();
@@ -369,7 +366,6 @@ export async function deleteStockProduct(id: string): Promise<ActionState> {
   const parsed = z.string().min(1, "Produto inválido.").safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await getActiveClinicId();
   if (!clinicId) return { error: SEM_CLINICA_ERR };
@@ -401,7 +397,6 @@ async function updateDispensacao(
   id: string,
   patch: Record<string, unknown>,
 ): Promise<ActionState> {
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -441,7 +436,6 @@ export async function concluirSeparacao(id: string): Promise<ActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -485,7 +479,6 @@ export async function recusarDispensacao(
   const parsed = recusaSchema.safeParse({ id, motivo });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -596,7 +589,6 @@ export async function criarDispensacao(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
 
@@ -794,7 +786,6 @@ export async function registrarEntrada(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
   const clinicId = await requireClinic();
@@ -841,7 +832,6 @@ export async function criarSolicitacaoCompra(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
   const clinicId = await requireClinic();
@@ -912,7 +902,6 @@ export async function criarCotacao(
     }
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -980,7 +969,6 @@ export async function getCotacaoUrl(
   const parsed = z.string().min(1).safeParse(path);
   if (!parsed.success) return { error: "Anexo inválido." };
 
-  if (isDemoMode()) return { error: "Anexo indisponível no modo demonstração." };
 
   const supabase = await createClient();
   const { data, error } = await supabase.storage
@@ -998,7 +986,6 @@ export async function decidirCompra(
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -1042,7 +1029,6 @@ export async function abrirInventario(
     return { error: "Selecione a categoria do inventário parcial." };
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -1133,7 +1119,6 @@ export async function salvarContagem(input: {
     return { error: parsed.error.issues[0]?.message ?? "Contagem inválida." };
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
   const supabase = await createClient();
@@ -1165,7 +1150,6 @@ export async function fecharInventario(id: string): Promise<ActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase

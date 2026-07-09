@@ -17,19 +17,6 @@ const isHex = (v: string): boolean => HEX.test(v);
 const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
 /**
- * Script bloqueante (1ª coisa no <body>) que aplica a classe `.dark` no <html>
- * ANTES do paint, conforme o modo salvo — evita flash de tema claro/escuro.
- * Em "auto", resolve via prefers-color-scheme. O ThemeProvider reconcilia depois.
- */
-export function ThemeScript({ mode }: { mode: string }) {
-  const js =
-    `(function(){try{var m=${JSON.stringify(mode)};` +
-    `var d=m==='escuro'||(m==='auto'&&window.matchMedia('(prefers-color-scheme: dark)').matches);` +
-    `document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
-  return <script dangerouslySetInnerHTML={{ __html: js }} />;
-}
-
-/**
  * Injeta as CSS custom properties da PALETA (cor primária/destaque por hex) em
  * runtime, a partir do clinic_settings. Só emite overrides quando a cor difere
  * do default — assim o tema teal padrão continua PIXEL-PERFECT (usa os tokens

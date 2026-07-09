@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { listStockProducts } from "@/lib/data/stock";
 import type {
   Medicamento,
@@ -85,7 +84,6 @@ const DEMO_PRESCRICOES: Prescricao[] = [
 
 /** Lista prescrições do paciente com seus medicamentos e cuidados. */
 export async function listPrescricoes(patientId: string): Promise<Prescricao[]> {
-  if (isDemoMode()) return DEMO_PRESCRICOES;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -159,7 +157,6 @@ const DEMO_CHECAGENS: Checagem[] = [
 
 /** Lista a fila de checagem (aprazamentos) do paciente, por horário. */
 export async function listChecagens(patientId: string): Promise<Checagem[]> {
-  if (isDemoMode()) return DEMO_CHECAGENS;
 
   const supabase = await createClient();
   const { data, error } = await supabase

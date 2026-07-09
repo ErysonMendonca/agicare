@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic, getActiveClinicId, DEMO_CLINIC_ID } from "@/lib/tenant";
 import { getCurrentUser, requireClinico } from "@/lib/auth";
 import { canView } from "@/lib/permissions";
@@ -115,11 +114,6 @@ export async function createPacienteCompleto(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
-
-  if (isDemoMode()) {
-    return { ok: true, patientId: `demo-pac-${Date.now()}`, clinicId: DEMO_CLINIC_ID };
-  }
-
   const d = parsed.data;
   const enderecoPartes = [d.address, d.district, d.city, d.uf, d.cep].filter(
     Boolean,
@@ -222,9 +216,7 @@ export async function criarPacienteAvulso(input: {
   }
   const d = parsed.data;
 
-  if (isDemoMode()) {
-    return { ok: true, patientId: `demo-avulso-${Date.now()}` };
-  }
+
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
@@ -312,7 +304,6 @@ export async function completarCadastroAvulso(input: {
   }
   const d = parsed.data;
 
-  if (isDemoMode()) return { ok: true, patientId: d.id };
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
@@ -379,7 +370,6 @@ export async function registrarObito(
   const parsed = obitoSchema.safeParse({ id, death_date, death_cause });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   // Defesa-em-profundidade (além da RLS): registrar óbito é ação de staff do
   // módulo, igual ao cadastro/edição — não confiar só na RLS.
@@ -428,9 +418,7 @@ export async function updatePaciente(
 
   const d = parsed.data;
 
-  if (isDemoMode()) {
-    return { ok: true, patientId: d.id, clinicId: DEMO_CLINIC_ID };
-  }
+
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
@@ -539,10 +527,7 @@ export async function getPacienteEditavel(
 ): Promise<{ error?: string; paciente?: PacienteEditavel }> {
   if (!id) return { error: "Paciente inválido." };
 
-  if (isDemoMode()) {
-    const paciente = await getPatientEditavel(id);
-    return paciente ? { paciente } : { error: "Paciente não encontrado." };
-  }
+
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
@@ -592,7 +577,6 @@ export async function buscarPacientePorDocumento(input: {
   const parsed = buscaDocSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { encontrados: [] };
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
@@ -763,7 +747,6 @@ export async function buscarPacientePorCpf(cpf: string): Promise<{
     return { error: "CPF inválido (dígito verificador)." };
   }
 
-  if (isDemoMode()) return { ok: true, found: false };
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
@@ -814,7 +797,6 @@ export async function anexarProntuarioManual(input: {
   const parsed = anexoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const guard = await requirePacientesAccess();
   if ("error" in guard) return { error: guard.error };
@@ -856,9 +838,6 @@ export async function getProntuarioManualUrl(
   patientId: string,
 ): Promise<{ error?: string; url?: string }> {
   if (!patientId) return { error: "Paciente inválido." };
-  if (isDemoMode()) {
-    return { error: "Anexo indisponível no modo demonstração." };
-  }
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };

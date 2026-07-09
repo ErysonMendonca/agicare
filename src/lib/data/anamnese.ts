@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 // Re-exporta o motor PURO (config) para conveniência em Server Components.
 export {
@@ -50,7 +49,6 @@ const DEMO_ANAMNESES: AnamneseRegistro[] = [
 export async function listAnamneses(
   patientId: string,
 ): Promise<AnamneseRegistro[]> {
-  if (isDemoMode()) return DEMO_ANAMNESES;
 
   const supabase = await createClient();
   const { data, error } = await supabase

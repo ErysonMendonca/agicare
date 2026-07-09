@@ -23,11 +23,12 @@ export function Sidebar({
   user: { name: string; role: string };
   /** Permissões do papel logado: filtra os itens visíveis no menu. */
   permissions: PermissionMap;
-  /** Contadores reais para os badges (fila aguardando + aguardando pagamento, estoque crítico). */
+  /** Contadores reais para os badges (fila aguardando + aguardando pagamento + pendentes checkin). */
   counters?: {
     filaAguardando: number;
     aguardandoPagamento: number;
     estoqueCriticos: number;
+    checkinPendentes?: number;
   };
   /** Logo da clínica (white-label). Quando ausente, usa o wordmark AGIcare. */
   logoUrl?: string | null;
@@ -37,11 +38,11 @@ export function Sidebar({
 
   /** Badge real por módulo (sobrepõe o badge estático do nav). */
   const badgeFor = (module: string, fallback?: number): number | undefined => {
-    // Fila = pacientes aguardando atendimento + prontos para pagamento (ambos
-    // são ações da recepção na Fila): o badge sinaliza quem precisa de atenção lá.
+    // Fila = pacientes aguardando atendimento + prontos para pagamento + pendentes de check-in:
+    // o badge sinaliza quem precisa de atenção na recepção.
     if (module === "fila") {
       if (!counters) return fallback;
-      return counters.filaAguardando + counters.aguardandoPagamento;
+      return counters.filaAguardando + counters.aguardandoPagamento + (counters.checkinPendentes || 0);
     }
     if (module === "estoque") return counters?.estoqueCriticos ?? fallback;
     return fallback;

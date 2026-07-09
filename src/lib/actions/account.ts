@@ -4,7 +4,6 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
 import { getActiveClinicId } from "@/lib/tenant";
 import { getSettings } from "@/lib/data/settings";
@@ -42,9 +41,7 @@ export async function changePassword(
   input: ChangePasswordInput,
 ): Promise<ChangePasswordState> {
   // Em demo não há backend de auth real para reautenticar/atualizar.
-  if (isDemoMode()) {
-    return { error: "Troca de senha indisponível no modo demonstração." };
-  }
+
 
   const current = await getCurrentUser();
   if (!current?.email) {
@@ -133,10 +130,6 @@ export async function changeUsername(input: {
     return { error: "Este tipo de conta não usa nome de acesso." };
   }
 
-  if (isDemoMode()) {
-    return { error: "Alteração indisponível no modo demonstração." };
-  }
-
   const rl = consume(`change-username:${current.userId}`, 10, 15 * 60 * 1000);
   if (!rl.ok) {
     return {
@@ -205,9 +198,7 @@ export async function updateMyAccount(input: {
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada. Faça login novamente." };
 
-  if (isDemoMode()) {
-    return { error: "Alteração indisponível no modo demonstração." };
-  }
+
 
   const optStr = z.string().trim().optional();
   const schema = z.object({

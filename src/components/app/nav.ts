@@ -64,6 +64,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Relatórios", href: "/relatorios", icon: BarChart3, module: "relatorios" },
       { label: "Configurações", href: "/configuracoes", icon: Settings, module: "configuracoes" },
       { label: "Perfis de Acesso", href: "/permissoes", icon: ShieldCheck, module: "permissoes" },
+      { label: "Usuários", href: "/usuarios", icon: Users, module: "permissoes" },
     ],
   },
 ];

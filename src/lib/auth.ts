@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { isDemoMode } from '@/lib/supabase/config'
 import { getActiveClinicId, multitenantSchemaMissing } from '@/lib/tenant'
 
 /**
@@ -59,7 +58,6 @@ export async function getCurrentUser(): Promise<{
  * nesse caso; aqui reforçamos no servidor.
  */
 export async function getRole(): Promise<Role | null> {
-  if (isDemoMode()) return 'admin'
 
   const clinicId = await getActiveClinicId()
   if (!clinicId) return null // sem clínica ativa → fail-closed

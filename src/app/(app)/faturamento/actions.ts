@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 import { gerarLoteTissXML, type GuiaXML } from "@/lib/faturamento-tiss";
 import {
@@ -107,7 +106,6 @@ export async function registrarCheckout(
     return { error: "Apenas o gestor pode aplicar descontos ou acréscimos." };
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
 
@@ -243,19 +241,6 @@ export async function validarGuia(
     return { error: "Apenas o gestor pode validar guias TISS." };
   }
 
-  // Modo demo: avalia o snapshot do client (não há banco para consultar).
-  if (isDemoMode()) {
-    const snap = guiaSnapshotSchema.safeParse(snapshot);
-    const dados = snap.success && snap.data ? snap.data : undefined;
-    const { validacao } = avaliarGuiaTiss({
-      temPaciente: dados?.temPaciente ?? true,
-      insurance: dados?.insurance ?? null,
-      procedure_code: dados?.procedure_code ?? null,
-      amount: dados?.amount ?? 0,
-      validation_note: dados?.validation_note ?? null,
-    });
-    return { ok: true, validacao };
-  }
 
   const supabase = await createClient();
 
@@ -320,7 +305,6 @@ export async function conciliarGuia(
   if (parsed.data.resultado === "glosa" && parsed.data.glosaValor <= 0) {
     return { error: "Informe o valor glosado." };
   }
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const isGlosa = parsed.data.resultado === "glosa";
@@ -356,23 +340,7 @@ export async function gerarLoteXML(id: string): Promise<GerarLoteState> {
     return { error: "Apenas o gestor pode gerar o lote XML TISS." };
   }
 
-  // Em modo demo, gera um XML mínimo (sem banco) para o download funcionar.
-  if (isDemoMode()) {
-    const xml = gerarLoteTissXML({
-      loteCodigo: "LOTE-DEMO",
-      convenio: "Convênio",
-      guias: [
-        {
-          numero: "GUIA-000482",
-          paciente: "Maria Silva Santos",
-          convenio: "Unimed",
-          procedimento: "10101012 — Consulta em consultório",
-          valor: 350,
-        },
-      ],
-    });
-    return { ok: true, xml, nomeArquivo: "LOTE-DEMO" };
-  }
+
 
   const supabase = await createClient();
 

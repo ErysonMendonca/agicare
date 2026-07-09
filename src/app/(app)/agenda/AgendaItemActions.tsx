@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, X, Save, Ban } from "lucide-react";
+import { Pencil, X, Save, Ban, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -14,14 +14,15 @@ import {
   remarcarAppointment,
   trocarProfissional,
   cancelAppointment,
+  changeAppointmentStatus,
   listSlots,
   listSlotsBySpecialty,
 } from "@/lib/actions/appointments";
 
-type Aberto = "editar" | "cancelar" | null;
+type Aberto = "editar" | "cancelar" | "status" | null;
 
 /** Status que ainda podem ser remarcados/cancelados. */
-const ENCERRADOS = new Set(["concluido", "cancelado"]);
+const ENCERRADOS = new Set(["concluido", "cancelado", "faltou"]);
 
 /**
  * Ações de manutenção de um agendamento (Editar / Cancelar), ligadas às
@@ -42,6 +43,7 @@ export function AgendaItemActions({
   const [hora, setHora] = useState(atendimento.hora === "—" ? "" : atendimento.hora);
   const [profissionalId, setProfissionalId] = useState(atendimento.profissionalId);
   const [motivo, setMotivo] = useState("");
+  const [novoStatus, setNovoStatus] = useState(atendimento.status);
 
   const especialidades = useMemo(
     () =>
@@ -81,6 +83,19 @@ export function AgendaItemActions({
   function abrirEditar() {
     resetEditar();
     setAberto("editar");
+  }
+
+  function salvarStatus() {
+    startTransition(async () => {
+      const res = await changeAppointmentStatus(atendimento.id, novoStatus);
+      if (res?.ok) {
+        toast.success("Status atualizado.");
+        setAberto(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível atualizar o status.");
+      }
+    });
   }
 
   function salvarEdicao() {
@@ -141,6 +156,15 @@ export function AgendaItemActions({
         <Button
           variant="outline"
           size="sm"
+          onClick={() => setAberto("status")}
+          title="Alterar status"
+        >
+          <Activity className="h-3.5 w-3.5" />
+          Status
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={abrirEditar}
           disabled={encerrado}
           title={encerrado ? "Agendamento encerrado" : "Editar agendamento"}
@@ -159,6 +183,46 @@ export function AgendaItemActions({
           Cancelar
         </Button>
       </div>
+
+      {/* Alterar Status manualmente */}
+      <Modal
+        open={aberto === "status"}
+        onClose={() => setAberto(null)}
+        title="Alterar Status"
+        subtitle={atendimento.paciente}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAberto(null)}>
+              Fechar
+            </Button>
+            <Button variant="primary" onClick={salvarStatus} disabled={pending}>
+              <Save className="h-4 w-4" />
+              {pending ? "Salvando..." : "Salvar Status"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Select
+            label="Novo Status"
+            value={novoStatus}
+            onChange={(e) => setNovoStatus(e.target.value as any)}
+          >
+            <option value="agendado">Agendado</option>
+            <option value="aguardando_recepcao">Aguardando atendimento recepcionista</option>
+            <option value="em_atendimento_recepcao">Sendo atendido pela Recepção</option>
+            <option value="aguardando_profissional">Aguardando atendimento profissional</option>
+            <option value="em_atendimento_profissional">Em atendimento do profissional</option>
+            <option value="checkout">Check-out</option>
+            <option value="concluido">Finalizado</option>
+            <option value="cancelado">Cancelado</option>
+            <option value="faltou">Faltou</option>
+          </Select>
+          <p className="text-sm text-muted">
+            Lembre-se: os status avançam automaticamente quando o paciente passa pelo totem ou consultório. Use este recurso apenas para ajustes manuais caso algo tenha saído do fluxo.
+          </p>
+        </div>
+      </Modal>
 
       {/* Editar: remarcar data/hora + trocar profissional/especialidade */}
       <Modal

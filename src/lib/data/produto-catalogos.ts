@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 // ════════════════════════════════════════════════════════════════
 // Catálogos do cadastro de produto (attendance_options). Estes catálogos
@@ -74,7 +73,6 @@ const DEMO_CATALOGOS: ProdutoCatalogos = {
  * clínica via RLS. Categorias sem registro no banco vêm como lista vazia.
  */
 export async function listProdutoCatalogos(): Promise<ProdutoCatalogos> {
-  if (isDemoMode()) return DEMO_CATALOGOS;
 
   // Base: toda categoria começa vazia (garante o Record completo, tipado).
   const out = Object.fromEntries(

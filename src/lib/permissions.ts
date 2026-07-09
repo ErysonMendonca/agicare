@@ -1,7 +1,6 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getRole, getCurrentUser, type Role } from "@/lib/auth";
 import {
   MODULES,
@@ -47,7 +46,6 @@ export type {
  * Em demo, devolve a matriz default (espelho do seed). Resiliente a erro → default.
  */
 export async function getPermissionMatrix(): Promise<PermissionRow[]> {
-  if (isDemoMode()) return DEFAULT_MATRIX;
 
   try {
     const supabase = await createClient();
@@ -77,7 +75,6 @@ export async function getPermissionMatrix(): Promise<PermissionRow[]> {
  * a camada de dados podem invocar várias vezes), sem cache global entre requests.
  */
 export const getMyPermissions = cache(async (): Promise<PermissionMap> => {
-  if (isDemoMode()) return defaultMapForRole("admin");
 
   const role = await getRole();
   if (!role) {
@@ -143,7 +140,6 @@ export const getMyProfessionalId = cache(async (): Promise<string | null> => {
  */
 export const getMyProfessional = cache(
   async (): Promise<{ id: string; specialty: string | null } | null> => {
-    if (isDemoMode()) return null;
 
     const current = await getCurrentUser();
     if (!current) return null;

@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 // Constantes e tipos vivem em módulo client-safe (sem next/headers),
 // reexportados aqui para os consumidores existentes.
@@ -100,7 +99,6 @@ const DEMO_PEDIDOS: PedidoProtetico[] = [
 export async function listPedidosProteticos(
   patientId: string,
 ): Promise<PedidoProtetico[]> {
-  if (isDemoMode()) return DEMO_PEDIDOS;
 
   const supabase = await createClient();
   const { data, error } = await supabase

@@ -1,6 +1,5 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import {
   DEFAULT_STAGES,
   sanitizeStages,
@@ -19,7 +18,6 @@ export * from "@/lib/data/attendance-flow.shared";
  * (RLS por clinic_id é a 2ª camada).
  */
 export const getAttendanceFlow = cache(async (): Promise<FlowStage[]> => {
-  if (isDemoMode()) return DEFAULT_STAGES;
 
   try {
     const supabase = await createClient();

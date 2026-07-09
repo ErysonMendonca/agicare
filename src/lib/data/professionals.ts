@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getActiveClinicId } from "@/lib/tenant";
 
 /** Credenciamento de convênio (TISS 3.0) para o formulário (0070). */
@@ -58,6 +57,8 @@ export type ProfissionalEdit = {
   council_expiry?: string;
   professional_type?: string;
   department?: string;
+  job_title?: string;
+  cargoId?: string;
   /** Credenciamentos de convênio (só admin lê — RLS 0070). */
   credentials?: CredencialEdit[];
 };
@@ -306,7 +307,6 @@ async function fetchAgendaIndicadores(
 
 /** Lista profissionais: do banco quando configurado, mock no modo demo. */
 export async function listProfessionals(): Promise<Profissional[]> {
-  if (isDemoMode()) return MOCK;
 
   const supabase = await createClient();
   // NOTE: cep/address/...,notes vêm das migrations 0012/0034. Se não aplicadas,
@@ -446,7 +446,21 @@ export async function listProfessionals(): Promise<Profissional[]> {
 export async function getProfessionalById(id: string): Promise<ProfissionalEdit | null> {
   const all = await listProfessionals();
   const prof = all.find((p) => p.id === id);
-  return prof ? prof.edit : null;
+  if (!prof) return null;
+
+  const supabase = await createClient();
+  const clinicId = await getActiveClinicId();
+  const { data } = await supabase
+    .from("clinic_members")
+    .select("cargo_id")
+    .eq("user_id", prof.edit.profileId)
+    .eq("clinic_id", clinicId)
+    .single();
+
+  return {
+    ...prof.edit,
+    cargoId: data?.cargo_id ?? undefined,
+  };
 }
 
 /**
@@ -474,7 +488,6 @@ const MOCK_VINCULO: ProfissionalVinculo[] = [
  * atendimento. RLS + filtro explícito por `clinic_id`.
  */
 export async function listProfissionaisVinculo(): Promise<ProfissionalVinculo[]> {
-  if (isDemoMode()) return MOCK_VINCULO;
 
   const clinicId = await getActiveClinicId();
   if (!clinicId) return [];

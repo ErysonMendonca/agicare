@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { isDemoMode } from '@/lib/supabase/config'
 import { getSettings, type NotificationSettings } from '@/lib/data/settings'
 
 /**
@@ -241,7 +240,6 @@ export async function enviarNotificacao(
   if (evento) {
     const settings = await getSettings()
     if (!settings.notifications[evento]) {
-      if (isDemoMode()) return { status: 'desativado', provider: 'config' }
       const res = await persistLog({
         canal,
         template,
@@ -285,10 +283,7 @@ export async function enviarNotificacao(
     }
   }
 
-  // Modo demo (sem Supabase): não há onde persistir; devolve o status resolvido.
-  if (isDemoMode()) {
-    return { status, provider: provider.name, error }
-  }
+
 
   // Persistência da intenção/resultado (auditável). Destino é MASCARADO (LGPD).
   const res = await persistLog({

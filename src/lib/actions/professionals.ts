@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isDemoMode } from "@/lib/supabase/config";
 import {
   withTenantService,
   TenantAuthError,
@@ -16,11 +15,9 @@ export type ActionState = { error?: string; ok?: boolean } | undefined;
 const opt = z.string().trim().max(2000).optional().or(z.literal(""));
 
 /**
- * Papéis aceitos para um profissional cadastrado por esta tela.
- * Restringimos a `medico`/`recepcao` de propósito: evita escalonar para `admin`
- * através do formulário. (O enum do banco também não tem `enfermeiro`.)
+ * Papel e cargo do profissional. Pode vir no formato 'baseRole' ou 'baseRole:cargoId'.
  */
-const roleSchema = z.enum(["medico", "recepcao"]);
+const roleSchema = z.string();
 
 /** Credenciamento de convênio (TISS 3.0) — vários por profissional (0070). */
 const credentialSchema = z.object({
@@ -98,6 +95,7 @@ const baseSchema = z.object({
   state: opt,
   // Departamento (Administrativo)
   department: opt,
+  job_title: opt,
   // Observações (4º bloco do cadastro — escopo 11.2; coluna em 0034).
   notes: opt,
   // Credenciamento de convênio (0070) — lista via campo oculto JSON.
@@ -105,11 +103,26 @@ const baseSchema = z.object({
 });
 
 const createSchema = baseSchema.extend({
-  // Credenciais (usuário/senha) NÃO são mais coletadas no cadastro — a conta
-  // nasce sem senha usável e recebe usuário/senha depois em
-  // "Perfis de Acesso › Usuários".
+  // Credenciais (JSON literal do stringify do client).
+  credentials: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (!val) return [];
+      try {
+        return JSON.parse(val) as CredencialConvenio[];
+      } catch {
+        return [];
+      }
+    }),
   // Status inicial do profissional (toggle disponível também na criação).
   active: z.enum(["true", "false"]).optional(),
+  username: z.string().trim().min(3, "O usuário de login deve ter ao menos 3 caracteres."),
+  password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres."),
+  confirm_password: z.string(),
+}).refine((data) => data.password === data.confirm_password, {
+  message: "As senhas não coincidem.",
+  path: ["confirm_password"],
 });
 
 const updateSchema = baseSchema.extend({
@@ -162,6 +175,7 @@ function professionalPayload(d: z.infer<typeof baseSchema>) {
     email: d.email || null,
     // Departamento
     department: d.department || null,
+    job_title: d.job_title || null,
   };
 }
 
@@ -247,24 +261,22 @@ export async function createProfessional(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
   const d = parsed.data;
-  // E-mail sintético interno ÚNICO para o Supabase Auth. A conta nasce SEM
-  // username/senha usável — credenciais são definidas em Perfis de Acesso.
-  const syntheticEmail = `${crypto.randomUUID()}@agicare.local`;
   // Status inicial (default ativo). Espelha o toggle de status da edição: só
   // afeta professionals.active; a membership na clínica permanece ativa.
   const ativo = d.active ? d.active === "true" : true;
 
   // Modo demo: sem banco — apenas simula sucesso (não toca dado real).
-  if (isDemoMode()) return { ok: true };
 
   try {
     return await withTenantService(async ({ svc, clinicId }) => {
-      // Cria a conta Auth SEM senha (conta sem senha usável até o admin definir
-      // em Perfis de Acesso). email_confirm=true evita disparo de e-mail.
+      // Cria a conta Auth COM login e senha, agora integrados na criação do prof.
+      // Usa um e-mail sintético baseado no username.
+      const synthEmail = `${d.username}@agicare.local`;
       const { data: created, error: authError } = await svc.auth.admin.createUser({
-        email: syntheticEmail,
+        email: synthEmail,
+        password: d.password,
         email_confirm: true,
-        user_metadata: { full_name: d.full_name, role: d.role },
+        user_metadata: { full_name: d.full_name, role: d.role, username: d.username },
       });
 
       if (authError || !created?.user) {
@@ -274,19 +286,19 @@ export async function createProfessional(
       const userId = created.user.id;
 
       // Completa o profile criado pelo trigger (profile é GLOBAL → sem clinic_id).
-      // O username fica NULL — definido depois em Perfis de Acesso.
       const { error: profileError } = await svc
         .from("profiles")
         .update({
           full_name: d.full_name,
           role: d.role,
           phone: d.phone || null,
+          username: d.username,
         })
         .eq("id", userId);
 
       if (profileError) {
         await svc.auth.admin.deleteUser(userId);
-        return { error: "Não foi possível salvar os dados do profissional." };
+        return { error: "Não foi possível salvar os dados do perfil." };
       }
 
       // Membership na clínica ativa (papel POR clínica).
@@ -347,8 +359,12 @@ export async function createProfessional(
 /** Schema para criação da equipe administrativa (com login e senha) */
 const createAdminSchema = baseSchema.extend({
   active: z.enum(["true", "false"]).optional(),
-  login_email: z.string().trim().min(1, "O login (e-mail) é obrigatório.").email("Login deve ser um e-mail válido."),
+  username: z.string().trim().min(3, "O usuário de login deve ter ao menos 3 caracteres."),
   password: z.string().trim().min(6, "A senha deve ter no mínimo 6 caracteres."),
+  confirm_password: z.string(),
+}).refine((data) => data.password === data.confirm_password, {
+  message: "As senhas não coincidem.",
+  path: ["confirm_password"],
 });
 
 /**
@@ -367,16 +383,21 @@ export async function createAdminProfessional(
   const d = parsed.data;
   const ativo = d.active ? d.active === "true" : true;
 
-  if (isDemoMode()) return { ok: true };
 
   try {
     return await withTenantService(async ({ svc, clinicId }) => {
-      // Cria a conta Auth COM o login e senha fornecidos
+      // Parse custom role
+      const [parsedBaseRole, parsedCargoId] = d.role.split(":");
+      const finalRole = parsedBaseRole || "recepcao";
+      const cargoId = parsedCargoId || null;
+
+      // Cria a conta Auth COM o login (username) e senha fornecidos
+      const synthEmail = `${d.username}@agicare.local`;
       const { data: created, error: authError } = await svc.auth.admin.createUser({
-        email: d.login_email, // Este é o e-mail de login real
+        email: synthEmail,
         password: d.password,
         email_confirm: true,
-        user_metadata: { full_name: d.full_name, role: d.role, username: d.login_email },
+        user_metadata: { full_name: d.full_name, role: finalRole, username: d.username },
       });
 
       if (authError || !created?.user) {
@@ -390,9 +411,9 @@ export async function createAdminProfessional(
         .from("profiles")
         .update({
           full_name: d.full_name,
-          role: d.role,
+          role: finalRole,
           phone: d.phone || null,
-          username: d.login_email,
+          username: d.username,
         })
         .eq("id", userId);
 
@@ -405,7 +426,8 @@ export async function createAdminProfessional(
       const { error: memberError } = await svc.from("clinic_members").insert({
         clinic_id: clinicId,
         user_id: userId,
-        role: d.role,
+        role: finalRole,
+        cargo_id: cargoId,
         active: true,
       });
       
@@ -462,7 +484,6 @@ export async function updateProfessional(
   }
   const d = parsed.data;
 
-  if (isDemoMode()) return { ok: true };
 
   try {
     return await withTenantService(async ({ svc, clinicId }) => {
@@ -494,15 +515,27 @@ export async function updateProfessional(
         return { error: "Não foi possível atualizar o profissional." };
       }
 
+      // Parse custom role
+      const [parsedBaseRole, parsedCargoId] = d.role.split(":");
+      const finalRole = parsedBaseRole || "recepcao";
+      const cargoId = parsedCargoId || null;
+
       // profiles é GLOBAL (1:1 com auth.users) → sem filtro de clinic_id.
       const { error: profileError } = await svc
         .from("profiles")
-        .update({ full_name: d.full_name, role: d.role, phone: d.phone || null })
+        .update({ full_name: d.full_name, role: finalRole, phone: d.phone || null })
         .eq("id", prof.profile_id);
 
       if (profileError) {
         return { error: "Não foi possível atualizar os dados do profissional." };
       }
+
+      // Atualiza também o membership na clínica (para cargo_id e role)
+      await svc
+        .from("clinic_members")
+        .update({ role: finalRole, cargo_id: cargoId })
+        .eq("user_id", prof.profile_id)
+        .eq("clinic_id", clinicId);
 
       // Substitui o credenciamento de convênio (0070).
       const credErr = await replaceCredentials(svc, clinicId, id, d.credentials);

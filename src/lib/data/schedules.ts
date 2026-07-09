@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 /** Escala de horários (grade de atendimento) já formatada p/ a UI. */
 export type Escala = {
@@ -158,13 +157,6 @@ function parseRecurringBlocks(
  * especialidade → descrição.
  */
 export async function listSchedules(filtro?: EscalaFiltro): Promise<Escala[]> {
-  if (isDemoMode()) {
-    return MOCK.filter(
-      (e) =>
-        (!filtro?.specialty || e.specialty === filtro.specialty) &&
-        (!filtro?.professionalId || e.professionalId === filtro.professionalId),
-    );
-  }
 
   const supabase = await createClient();
   let query = supabase

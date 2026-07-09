@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 export type LabStatus = "em_andamento" | "pendente" | "finalizado";
 
@@ -88,7 +87,6 @@ const MOCK: CasoLab[] = [
 
 /** Lista casos do laboratório: do banco quando configurado, mock no modo demo. */
 export async function listLabCases(): Promise<CasoLab[]> {
-  if (isDemoMode()) return MOCK;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -223,7 +221,6 @@ export function formatLabBRL(value: number): string {
 
 /** Lista o financeiro dos casos: do banco quando configurado, mock no modo demo. */
 export async function listLabFinance(): Promise<LabFinanceRow[]> {
-  if (isDemoMode()) return MOCK_FINANCE;
 
   const supabase = await createClient();
   const { data, error } = await supabase

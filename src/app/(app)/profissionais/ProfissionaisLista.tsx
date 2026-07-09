@@ -253,13 +253,24 @@ export function ProfissionaisLista({
                         </span>
                       )}
                     </Button>
-                    <Link
-                      href={aba === "administrativa" ? "/profissionais/novo-admin" : "/profissionais/novo"}
-                      className={LINK_BTN_MD}
-                    >
-                      <Plus className="h-4 w-4" />
-                      {aba === "administrativa" ? "Novo Administrativo" : "Novo Profissional"}
-                    </Link>
+                    {aba === "clinica" && (
+                      <Link
+                        href="/profissionais/novo"
+                        className={LINK_BTN_MD}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Novo Profiss. Saúde
+                      </Link>
+                    )}
+                    {aba === "administrativa" && (
+                      <Link
+                        href="/profissionais/novo-admin"
+                        className={LINK_BTN_MD}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Novo Administrativo
+                      </Link>
+                    )}
                   </>
                 )}
               </div>

@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { isDemoMode } from "@/lib/supabase/config";
 import {
   withTenantService,
   TenantAuthError,
@@ -32,7 +31,6 @@ export async function criarCargo(input: NovoCargoInput): Promise<ActionState> {
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
-  if (isDemoMode()) return { ok: true };
   const d = parsed.data;
   try {
     return await withTenantService(async ({ svc, clinicId }) => {
@@ -70,7 +68,6 @@ export async function atribuirCargo(input: AtribuirCargoInput): Promise<ActionSt
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
-  if (isDemoMode()) return { ok: true };
   const { userId, value } = parsed.data;
 
   try {
@@ -147,9 +144,7 @@ export async function definirSenha(input: {
   userId: string;
   newPassword: string;
 }): Promise<ActionState> {
-  if (isDemoMode()) {
-    return { error: "Definição de senha indisponível no modo demonstração." };
-  }
+
 
   // Política de senha vigente da clínica (mesma da troca self-service).
   const settings = await getSettings();
@@ -205,9 +200,7 @@ export async function definirUsuario(input: {
   userId: string;
   username: string;
 }): Promise<ActionState> {
-  if (isDemoMode()) {
-    return { error: "Definição de usuário indisponível no modo demonstração." };
-  }
+
 
   const schema = z.object({
     userId: z.string().uuid("Usuário inválido."),
@@ -270,3 +263,26 @@ export async function definirUsuario(input: {
     return { error: "Não foi possível definir o usuário." };
   }
 }
+
+// ── Apagar cargo personalizado ──────────────────────────────────
+export async function excluirCargo(cargoId: string): Promise<ActionState> {
+  if (!cargoId) return { error: "Cargo inválido." };
+  try {
+    return await withTenantService(async ({ svc, clinicId }) => {
+      const { error } = await svc
+        .from("cargos")
+        .delete()
+        .eq("id", cargoId)
+        .eq("clinic_id", clinicId);
+      if (error) {
+        return { error: "Não foi possível excluir o cargo." };
+      }
+      revalidar();
+      return { ok: true };
+    });
+  } catch (e) {
+    if (e instanceof TenantAuthError) return { error: e.message };
+    return { error: "Não foi possível excluir o cargo." };
+  }
+}
+

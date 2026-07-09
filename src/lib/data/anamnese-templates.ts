@@ -11,7 +11,6 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { ESPECIALIDADES_ANAMNESE } from "@/lib/clinico/anamnese-config";
 import {
   type AnamneseField,
@@ -66,7 +65,6 @@ function coerceFields(raw: unknown): AnamneseField[] | null {
 export async function getAnamneseTemplate(
   specialty: string,
 ): Promise<AnamneseTemplate> {
-  if (isDemoMode()) return fallbackTemplate(specialty);
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -110,9 +108,6 @@ async function assinarLousaImagem(
 export async function listAnamneseTemplates(): Promise<AnamneseTemplate[]> {
   const especialidades = ESPECIALIDADES_ANAMNESE.map((e) => e.value);
 
-  if (isDemoMode()) {
-    return especialidades.map((s) => fallbackTemplate(s));
-  }
 
   const supabase = await createClient();
   const { data, error } = await supabase

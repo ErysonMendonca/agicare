@@ -99,18 +99,11 @@ function fluxoDoStatus(
   }
 }
 
-/** Opções do filtro de status (valor = statusRaw do banco). */
 const STATUS_OPCOES = [
   { value: "todos", label: "Todos os Status" },
   { value: "aguardando", label: "Aguardando" },
   { value: "na_recepcao", label: "Na recepção" },
-  { value: "aguardando_atendimento", label: "Aguardando atendimento" },
-  { value: "triagem", label: "Em Triagem" },
-  { value: "chamado", label: "Chamado" },
-  { value: "em_atendimento", label: "Em Atendimento" },
-  { value: "aguardando_pagamento", label: "Aguardando Pagamento" },
-  { value: "finalizado", label: "Finalizado" },
-  { value: "desistencia", label: "Desistência" },
+  { value: "aguardando_pagamento", label: "Check-out (Pagamento)" },
 ];
 
 export function FilaClient({
@@ -141,9 +134,9 @@ export function FilaClient({
   /** Modelos de triagem por especialidade (gestor pode customizar). */
   triageTemplates?: TriageTemplate[];
   kpis?: {
-    aguardando: number;
-    chamados: number;
-    emAtendimento: number;
+    checkin: number;
+    emEspera: number;
+    checkout: number;
     total: number;
   };
   /** Dia exibido (yyyy-mm-dd). A fila já vem filtrada por este dia no servidor. */
@@ -196,6 +189,7 @@ export function FilaClient({
   const termo = query.trim().toLowerCase();
 
   const filaFiltrada = useMemo(() => {
+    if (statusFiltro === "agendado") return [];
     return fila
       .filter((item) => {
         const casaTexto =
@@ -210,10 +204,9 @@ export function FilaClient({
       .sort((a, b) => compararFila(a, b, ordenacao));
   }, [fila, termo, statusFiltro, ordenacao]);
 
-  // Agendados só aparecem quando o filtro está em "todos" (não têm status de fila);
-  // a busca textual continua valendo.
+  // Agendados aparecem em "todos" ou quando o filtro é explicitamente "agendado".
   const agendadosFiltrados = useMemo(() => {
-    if (statusFiltro !== "todos") return [];
+    if (statusFiltro !== "todos" && statusFiltro !== "agendado") return [];
     return agendados
       .filter(
         (item) => termo === "" || item.paciente.toLowerCase().includes(termo),
@@ -261,39 +254,39 @@ export function FilaClient({
         <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <FadeInUp>
             <StatCard
+              icon={<User className="h-5 w-5" />}
+              value={String(kpis.checkin)}
+              label="Check-in Pendente"
+              tone="info"
+              onClick={() => toggleStatus("agendado")}
+              active={statusFiltro === "agendado"}
+            />
+          </FadeInUp>
+          <FadeInUp>
+            <StatCard
               icon={<Clock className="h-5 w-5" />}
-              value={String(kpis.aguardando)}
-              label="Aguardando"
+              value={String(kpis.emEspera)}
+              label="Em Espera (Recepção)"
               tone="info"
-              onClick={() => toggleStatus("aguardando")}
-              active={statusFiltro === "aguardando"}
+              onClick={() => toggleStatus("na_recepcao")}
+              active={statusFiltro === "na_recepcao" || statusFiltro === "aguardando"}
             />
           </FadeInUp>
           <FadeInUp>
             <StatCard
-              icon={<PhoneCall className="h-5 w-5" />}
-              value={String(kpis.chamados)}
-              label="Chamados"
-              tone="info"
-              onClick={() => toggleStatus("chamado")}
-              active={statusFiltro === "chamado"}
-            />
-          </FadeInUp>
-          <FadeInUp>
-            <StatCard
-              icon={<Users className="h-5 w-5" />}
-              value={String(kpis.emAtendimento)}
-              label="Em Atendimento"
-              tone="info"
-              onClick={() => toggleStatus("em_atendimento")}
-              active={statusFiltro === "em_atendimento"}
+              icon={<CreditCard className="h-5 w-5" />}
+              value={String(kpis.checkout)}
+              label="Check-out (Pagamento)"
+              tone="warn"
+              onClick={() => toggleStatus("aguardando_pagamento")}
+              active={statusFiltro === "aguardando_pagamento"}
             />
           </FadeInUp>
           <FadeInUp>
             <StatCard
               icon={<Users className="h-5 w-5" />}
               value={String(kpis.total)}
-              label="Total"
+              label="Total na Recepção"
               tone="neutral"
               onClick={() => setStatusFiltro("todos")}
               active={statusFiltro === "todos"}

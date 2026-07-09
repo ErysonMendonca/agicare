@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 
 // ════════════════════════════════════════════════════════════════
@@ -115,7 +114,6 @@ export async function getAccessLogs(opts?: {
   limit?: number;
 }): Promise<AccessLogRow[]> {
   const limit = opts?.limit ?? 100;
-  if (isDemoMode()) return DEMO_ACCESS.slice(0, limit);
 
   // Reforço de autorização no servidor (além do RLS admin-only).
   if (!(await isGestor())) return [];
@@ -155,7 +153,6 @@ export async function getAccessLogs(opts?: {
  * Admin-only; resiliente caso a tabela/coluna `created_by` ainda não exista.
  */
 export async function getConsentLogs(): Promise<ConsentLogRow[]> {
-  if (isDemoMode()) return DEMO_CONSENT;
 
   if (!(await isGestor())) return [];
 

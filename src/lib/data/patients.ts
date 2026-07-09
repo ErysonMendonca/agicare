@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 
 export type Paciente = {
@@ -30,7 +29,6 @@ const MOCK: Paciente[] = [
 
 /** Lista pacientes: do banco quando configurado, mock no modo demo. */
 export async function listPatients(): Promise<Paciente[]> {
-  if (isDemoMode()) return MOCK;
 
   const supabase = await createClient();
   // select('*') é resiliente a colunas ausentes (cardiac/active vêm de migrations
@@ -146,7 +144,6 @@ const DEMO_EDITAVEL: PacienteEditavel = {
 export async function getPatientEditavel(
   id: string,
 ): Promise<PacienteEditavel | null> {
-  if (isDemoMode()) return DEMO_EDITAVEL;
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -391,7 +388,6 @@ const DEMO_FICHA: FichaPaciente = {
  * ausentes — cada fonte falha "para vazio" sem derrubar a ficha.
  */
 export async function getPatientFicha(id: string): Promise<FichaPaciente | null> {
-  if (isDemoMode()) return DEMO_FICHA;
 
   const supabase = await createClient();
 

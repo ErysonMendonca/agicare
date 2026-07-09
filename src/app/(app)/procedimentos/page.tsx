@@ -11,7 +11,6 @@ import { listProfessionals } from "@/lib/data/professionals";
 import { listStockProducts } from "@/lib/data/stock";
 import { loadProcedureRelations } from "@/lib/data/procedure-relations";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 import { RestritoGestor } from "@/components/app/RestritoGestor";
 import {
@@ -105,7 +104,6 @@ const DEMO_PROCEDURES: ProcedureRow[] = [
  * Mock no modo demo; banco quando configurado (RLS staff).
  */
 async function listProcedureRows(): Promise<ProcedureRow[]> {
-  if (isDemoMode()) return DEMO_PROCEDURES;
 
   const supabase = await createClient();
   const { data, error } = await supabase

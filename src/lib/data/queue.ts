@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getMyProfessional } from "@/lib/permissions";
 import { getRole } from "@/lib/auth";
 import { type Status } from "@/components/ui/Badge";
@@ -253,11 +252,6 @@ export async function listQueue(opts?: {
   specialty?: string | null;
   date?: string | null;
 }): Promise<FilaItem[]> {
-  if (isDemoMode()) {
-    return opts?.specialty
-      ? MOCK.filter((m) => m.especialidade === opts.specialty)
-      : MOCK;
-  }
 
   const supabase = await createClient();
   let query = supabase
@@ -365,10 +359,6 @@ export async function listQueue(opts?: {
  * Busca uma única entrada da fila pelo ID: do banco quando configurado, mock no modo demo.
  */
 export async function getQueueItem(id: string): Promise<FilaItem | null> {
-  if (isDemoMode()) {
-    const item = MOCK.find((m) => m.id === id) || MOCK_AGENDADOS.find((m) => m.id === id);
-    return item ?? null;
-  }
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -493,11 +483,6 @@ export async function listAgendadosHoje(opts?: {
   /** Dia a consultar (YYYY-MM-DD). Sem valor → hoje. */
   date?: string | null;
 }): Promise<FilaItem[]> {
-  if (isDemoMode()) {
-    return opts?.specialty
-      ? MOCK_AGENDADOS.filter((m) => m.especialidade === opts.specialty)
-      : MOCK_AGENDADOS;
-  }
 
   try {
     const supabase = await createClient();

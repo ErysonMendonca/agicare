@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { getMySpecialty } from "@/lib/data/prontuario";
@@ -48,7 +47,6 @@ export async function gerarAnamnese(input: AnamneseInput): Promise<ActionState> 
   if (!d.consentAtendimento)
     return { error: "É necessário registrar o consentimento para atendimento." };
 
-  if (isDemoMode()) return { ok: true };
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };

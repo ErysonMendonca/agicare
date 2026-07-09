@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 /** Rótulos dos campos da evolução, na ordem de impressão. */
 export const EVOLUCAO_CAMPOS = [
@@ -64,7 +63,6 @@ const DEMO_EVOLUCOES: EvolucaoCard[] = [
  * O conteúdo estruturado é gravado com rótulos pelo registrarEvolucao.
  */
 export async function listEvolucoes(patientId: string): Promise<EvolucaoCard[]> {
-  if (isDemoMode()) return DEMO_EVOLUCOES;
 
   const supabase = await createClient();
   const { data, error } = await supabase

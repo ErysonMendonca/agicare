@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser, getRole } from "@/lib/auth";
 import { getMyProfessionalId } from "@/lib/permissions";
 import { requireClinic } from "@/lib/tenant";
@@ -25,7 +24,6 @@ async function updateQueueStatus(
   id: string,
   patch: Record<string, unknown>,
 ): Promise<ActionState> {
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -52,7 +50,6 @@ async function stampQueueTime(
   id: string,
   field: "called_at" | "started_at",
 ): Promise<void> {
-  if (isDemoMode()) return;
   try {
     const supabase = await createClient();
     // Erro (ex.: coluna ausente pré-0029) é silenciado: marco é best-effort.
@@ -75,7 +72,6 @@ async function stampQueueTime(
  * que já foi persistido na fila. RLS de appointments (clinic_id) cobre o escopo.
  */
 async function stampAppointmentCheckIn(appointmentId: string): Promise<void> {
-  if (isDemoMode()) return;
   try {
     const supabase = await createClient();
     await supabase
@@ -104,11 +100,9 @@ export async function atenderPaciente(id: string): Promise<ActionState> {
 
   // O atendimento clínico (→ em_atendimento) é do MÉDICO (admin como gestor).
   // Recepção não inicia atendimento — reforço além do gate de UI.
-  if (!isDemoMode()) {
-    const role = await getRole();
-    if (role !== "medico" && role !== "admin") {
-      return { error: "Apenas o médico pode iniciar o atendimento." };
-    }
+  const role = await getRole();
+  if (role !== "medico" && role !== "admin") {
+    return { error: "Apenas o médico pode iniciar o atendimento." };
   }
 
   // REIVINDICAÇÃO: se o paciente está só por especialidade (professional_id
@@ -116,29 +110,27 @@ export async function atenderPaciente(id: string): Promise<ActionState> {
   // dos outros médicos da mesma especialidade. O `.is("professional_id", null)`
   // garante que NÃO rouba um paciente já atribuído a outro profissional; e
   // conferimos a corrida (dois médicos clicando ao mesmo tempo).
-  if (!isDemoMode()) {
-    const myProfId = await getMyProfessionalId();
-    if (myProfId) {
-      const supabase = await createClient();
-      const { data: claimed } = await supabase
+  const myProfId = await getMyProfessionalId();
+  if (myProfId) {
+    const supabase = await createClient();
+    const { data: claimed } = await supabase
+      .from("queue_entries")
+      .update({ professional_id: myProfId })
+      .eq("id", parsed.data)
+      .is("professional_id", null)
+      .select("id");
+    // Não reivindicou (0 linhas): ou já é dele, ou outro médico assumiu.
+    if (!claimed || claimed.length === 0) {
+      const { data: cur } = await supabase
         .from("queue_entries")
-        .update({ professional_id: myProfId })
+        .select("professional_id")
         .eq("id", parsed.data)
-        .is("professional_id", null)
-        .select("id");
-      // Não reivindicou (0 linhas): ou já é dele, ou outro médico assumiu.
-      if (!claimed || claimed.length === 0) {
-        const { data: cur } = await supabase
-          .from("queue_entries")
-          .select("professional_id")
-          .eq("id", parsed.data)
-          .maybeSingle();
-        const dono = (cur?.professional_id as string | null) ?? null;
-        if (dono && dono !== myProfId) {
-          return {
-            error: "Paciente já está sendo atendido por outro profissional.",
-          };
-        }
+        .maybeSingle();
+      const dono = (cur?.professional_id as string | null) ?? null;
+      if (dono && dono !== myProfId) {
+        return {
+          error: "Paciente já está sendo atendido por outro profissional.",
+        };
       }
     }
   }
@@ -226,15 +218,7 @@ export async function checkInTotem(
   }
   const data = parsed.data;
 
-  if (isDemoMode()) {
-    // Sem banco no modo demo: senha sequencial fictícia (3 dígitos).
-    const seq = Math.floor(Math.random() * 900) + 100;
-    return {
-      ok: true,
-      ticketCode: genTicketCode(data.priority, seq),
-      queueEntryId: "demo",
-    };
-  }
+
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -410,7 +394,6 @@ export async function salvarAtendimento(
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const d = parsed.data;
 
-  if (isDemoMode()) return { ok: true };
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };

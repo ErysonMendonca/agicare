@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getActiveClinicId } from "@/lib/tenant";
 import { rotuloBase, type Cargo, type Usuario } from "@/lib/data/usuarios.shared";
 
@@ -21,7 +20,6 @@ const MOCK_USUARIOS: Usuario[] = [
 
 /** Cargos personalizados da clínica ativa. */
 export async function listCargos(): Promise<Cargo[]> {
-  if (isDemoMode()) return MOCK_CARGOS;
   const clinicId = await getActiveClinicId();
   if (!clinicId) return [];
   const supabase = await createClient();
@@ -43,7 +41,6 @@ export async function listCargos(): Promise<Cargo[]> {
  * cargo personalizado (rótulo). Admin-only na prática (a tela é admin).
  */
 export async function listUsuarios(): Promise<Usuario[]> {
-  if (isDemoMode()) return MOCK_USUARIOS;
   const clinicId = await getActiveClinicId();
   if (!clinicId) return [];
   const supabase = await createClient();

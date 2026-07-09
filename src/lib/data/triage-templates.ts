@@ -10,7 +10,6 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { ESPECIALIDADES_ANAMNESE } from "@/lib/clinico/anamnese-config";
 import {
   type TriageField,
@@ -38,7 +37,6 @@ type TemplateRow = {
 export async function getTriageTemplate(
   specialty: string,
 ): Promise<TriageTemplate> {
-  if (isDemoMode()) return fallbackTriageTemplate(specialty);
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -64,9 +62,6 @@ export async function getTriageTemplate(
 export async function listTriageTemplates(): Promise<TriageTemplate[]> {
   const especialidades = ESPECIALIDADES_ANAMNESE.map((e) => e.value);
 
-  if (isDemoMode()) {
-    return especialidades.map((s) => fallbackTriageTemplate(s));
-  }
 
   const supabase = await createClient();
   const { data, error } = await supabase

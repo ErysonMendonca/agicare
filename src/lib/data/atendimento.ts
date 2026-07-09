@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getActiveClinicId } from "@/lib/tenant";
 
 /** Procedimento do catálogo (para o médico escolher). */
@@ -30,7 +29,6 @@ const MOCK_CATALOGO: ProcedimentoCatalogo[] = [
 
 /** Catálogo de procedimentos ativos (id + nome + preço). */
 export async function listCatalogoProcedimentos(): Promise<ProcedimentoCatalogo[]> {
-  if (isDemoMode()) return MOCK_CATALOGO;
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("procedures")
@@ -53,9 +51,7 @@ export async function listCatalogoProcedimentos(): Promise<ProcedimentoCatalogo[
 export async function getAtendimentoAtivo(
   patientId: string,
 ): Promise<AtendimentoAtivo | null> {
-  if (isDemoMode()) {
-    return { queueEntryId: "mock-q1", statusRaw: "em_atendimento", atendimentoCodigo: "100001" };
-  }
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("queue_entries")
@@ -77,14 +73,7 @@ export async function getAtendimentoAtivo(
 export async function listProcedimentosAtendimento(
   queueEntryId: string,
 ): Promise<{ itens: ProcedimentoExecutado[]; total: number; totalLabel: string }> {
-  if (isDemoMode()) {
-    const itens = [
-      { id: "e1", nome: "Consulta Cardiológica", valor: 350 },
-      { id: "e2", nome: "Eletrocardiograma", valor: 120 },
-    ];
-    const total = itens.reduce((s, i) => s + i.valor, 0);
-    return { itens, total, totalLabel: fmt(total) };
-  }
+
   const clinicId = await getActiveClinicId();
   const supabase = await createClient();
   let query = supabase

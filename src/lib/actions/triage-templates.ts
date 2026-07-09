@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
 import type { TriageField } from "@/lib/data/triage-templates.shared";
@@ -56,9 +55,7 @@ export async function upsertTriageTemplate(
   specialty: string,
   fields: TriageField[],
 ): Promise<ActionState> {
-  if (isDemoMode()) {
-    return { error: "Edição indisponível no modo demonstração." };
-  }
+
 
   if (!(await isGestor())) {
     return { error: "Sem permissão para editar templates de triagem." };

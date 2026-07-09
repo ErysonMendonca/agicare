@@ -1,14 +1,18 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, Save, Info } from "lucide-react";
+
+import { ShieldCheck, Save, Info, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { Modal } from "@/components/ui/Modal";
+import { Input } from "@/components/ui/Input";
 import { savePermissions } from "@/lib/actions/permissions";
+import { excluirCargo, criarCargo } from "@/lib/actions/usuarios";
 import {
   MODULES,
   MODULE_LABELS,
@@ -17,9 +21,8 @@ import {
   type PermissionRow,
   type Scope,
 } from "@/lib/permissions.shared";
-import { UserCog, ShieldCheck as ShieldTab } from "lucide-react";
-import { UsuariosSection } from "./UsuariosSection";
-import type { Usuario, Cargo } from "@/lib/data/usuarios.shared";
+import { UserCog, Plus } from "lucide-react";
+import type { Cargo } from "@/lib/data/usuarios.shared";
 
 /** Papéis geridos aqui (paciente NÃO entra como usuário — removido). */
 type ManagedRole = "admin" | "medico" | "recepcao";
@@ -67,20 +70,29 @@ function flatten(matrix: Matrix): PermissionRow[] {
 
 export function PermissoesClient({
   initialRows,
-  usuarios,
   cargos,
 }: {
   initialRows: PermissionRow[];
-  usuarios: Usuario[];
   cargos: Cargo[];
 }) {
   const [matrix, setMatrix] = useState<Matrix>(() => buildMatrix(initialRows));
-  const [activeRole, setActiveRole] = useState<ManagedRole>("admin");
-  const [view, setView] = useState<"perfis" | "usuarios">("perfis");
+  const [selectedOption, setSelectedOption] = useState<string>("medico");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
+  const activeRole = selectedOption.split(":")[0] as ManagedRole;
   const isAdminTab = activeRole === "admin";
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeRole]);
+
+  const ITEMS_PER_PAGE = 5;
+  const totalPages = Math.ceil(MODULES.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedModules = MODULES.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const setCanView = (module: ModuleSlug, canView: boolean) => {
     setMatrix((prev) => ({
@@ -101,6 +113,25 @@ export function PermissoesClient({
       },
     }));
   };
+  const current = matrix[activeRole];
+  const allChecked = MODULES.every((mod) => current[mod].canView);
+
+
+  const handleToggleAll = (checked: boolean) => {
+    setMatrix((prev) => {
+      const updatedRoleMatrix = { ...prev[activeRole] };
+      MODULES.forEach((mod) => {
+        updatedRoleMatrix[mod] = {
+          ...updatedRoleMatrix[mod],
+          canView: checked,
+        };
+      });
+      return {
+        ...prev,
+        [activeRole]: updatedRoleMatrix,
+      };
+    });
+  };
 
   const handleSave = () => {
     const rows = flatten(matrix);
@@ -115,7 +146,39 @@ export function PermissoesClient({
     });
   };
 
-  const current = matrix[activeRole];
+  const handleExcluirCargo = (cargoId: string, nome: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o cargo "${nome}"?`)) return;
+    startTransition(async () => {
+      const state = await excluirCargo(cargoId);
+      if (state?.ok) {
+        toast.success(`Cargo "${nome}" excluído com sucesso.`);
+        router.refresh();
+      } else if (state?.error) {
+        toast.error(state.error);
+      }
+    });
+  };
+
+  const handleCriarCargo = (formData: FormData) => {
+    const name = formData.get("name") as string;
+    const base_role = formData.get("base_role") as ManagedRole;
+    if (!name.trim()) {
+      toast.error("O nome do cargo é obrigatório.");
+      return;
+    }
+    
+    startTransition(async () => {
+      const state = await criarCargo({ name, base_role });
+      if (state?.ok) {
+        toast.success("Cargo criado com sucesso!");
+        setIsModalOpen(false);
+        router.refresh();
+      } else {
+        toast.error(state?.error || "Erro ao criar cargo.");
+      }
+    });
+  };
+
   const activeMeta = useMemo(
     () => ROLES.find((r) => r.role === activeRole)!,
     [activeRole],
@@ -125,63 +188,37 @@ export function PermissoesClient({
     <>
       <PageHeader
         title="Perfis de Acesso"
-        subtitle="Defina o que cada papel vê no sistema, o escopo dos dados, e gerencie os usuários (cargos e senhas)."
+        subtitle="Defina o que cada papel vê no sistema, o escopo dos dados, e gerencie as credenciais deles."
       />
 
-      {/* Abas de nível superior: Perfis × Usuários */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setView("perfis")}
-          className={
-            view === "perfis"
-              ? "inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-white"
-              : "inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-muted hover:text-ink"
-          }
+      <div className="mt-6">
+      {/* Select de papel */}
+      <div className="mb-6 max-w-xs">
+        <label htmlFor="active-role-select" className="mb-2 block text-sm font-medium text-ink">
+          Selecione o perfil para configurar:
+        </label>
+        <Select
+          id="active-role-select"
+          value={selectedOption}
+          onChange={(e) => setSelectedOption(e.target.value)}
         >
-          <ShieldTab className="h-4 w-4" /> Perfis de Acesso
-        </button>
-        <button
-          type="button"
-          onClick={() => setView("usuarios")}
-          className={
-            view === "usuarios"
-              ? "inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-white"
-              : "inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-4 py-2 text-sm font-medium text-muted hover:text-ink"
-          }
-        >
-          <UserCog className="h-4 w-4" /> Usuários
-        </button>
-      </div>
-
-      {view === "usuarios" && (
-        <UsuariosSection usuarios={usuarios} cargos={cargos} />
-      )}
-
-      {view === "perfis" && (
-        <>
-      {/* Abas por papel */}
-      <div
-        className="mb-6 flex flex-wrap gap-2"
-        role="tablist"
-        aria-label="Papéis"
-      >
-        {ROLES.map(({ role, label }) => (
-          <button
-            key={role}
-            type="button"
-            role="tab"
-            aria-selected={activeRole === role}
-            onClick={() => setActiveRole(role)}
-            className={
-              activeRole === role
-                ? "rounded-full bg-brand-500 px-4 py-1.5 text-sm font-medium text-white shadow-sm"
-                : "rounded-full px-4 py-1.5 text-sm font-medium text-muted hover:bg-canvas hover:text-ink"
-            }
-          >
-            {label}
-          </button>
-        ))}
+          <optgroup label="Perfis base">
+            {ROLES.filter(({ role }) => role !== "admin").map(({ role, label }) => (
+              <option key={role} value={role}>
+                {label}
+              </option>
+            ))}
+          </optgroup>
+          {cargos.length > 0 && (
+            <optgroup label="Cargos personalizados">
+              {cargos.map((c) => (
+                <option key={c.id} value={`${c.baseRole}:${c.id}`}>
+                  {c.nome}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </Select>
       </div>
 
       <Card>
@@ -210,6 +247,24 @@ export function PermissoesClient({
             </div>
           )}
 
+          {/* Opção Marcar Todos */}
+          <div className="mb-3 flex items-center justify-end gap-2 px-1">
+            <input
+              id="select-all-modules"
+              type="checkbox"
+              checked={allChecked}
+              disabled={isAdminTab}
+              onChange={(e) => handleToggleAll(e.target.checked)}
+              className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-100 disabled:cursor-not-allowed"
+            />
+            <label
+              htmlFor="select-all-modules"
+              className="text-xs font-semibold text-muted hover:text-ink cursor-pointer select-none"
+            >
+              Marcar todos os módulos
+            </label>
+          </div>
+
           {/* Grade de módulos */}
           <div className="overflow-hidden rounded-xl border border-line">
             {/* Cabeçalho da grade */}
@@ -220,7 +275,7 @@ export function PermissoesClient({
             </div>
 
             <ul className="divide-y divide-line">
-              {MODULES.map((module) => {
+              {paginatedModules.map((module) => {
                 const perm = current[module];
                 const checkboxId = `view-${activeRole}-${module}`;
                 const scopeId = `scope-${activeRole}-${module}`;
@@ -267,6 +322,75 @@ export function PermissoesClient({
                 );
               })}
             </ul>
+
+            {/* Controles de Paginação */}
+            <div className="flex items-center justify-between border-t border-line bg-muted-surface px-4 py-3 sm:px-6">
+              <div className="flex flex-1 justify-between sm:hidden">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Próximo
+                </Button>
+              </div>
+              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs text-muted">
+                    Mostrando <span className="font-semibold text-ink">{startIndex + 1}</span> a{" "}
+                    <span className="font-semibold text-ink">
+                      {Math.min(startIndex + ITEMS_PER_PAGE, MODULES.length)}
+                    </span>{" "}
+                    de <span className="font-semibold text-ink">{MODULES.length}</span> módulos
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Anterior
+                  </Button>
+                  {Array.from({ length: totalPages }).map((_, i) => {
+                    const page = i + 1;
+                    return (
+                      <Button
+                        key={page}
+                        type="button"
+                        variant={currentPage === page ? "primary" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                      >
+                        {page}
+                      </Button>
+                    );
+                  })}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Próximo
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </CardBody>
       </Card>
@@ -282,8 +406,88 @@ export function PermissoesClient({
           {pending ? "Salvando..." : "Salvar alterações"}
         </Button>
       </div>
-        </>
-      )}
+      </div>
+
+      <Card className="mt-6">
+        <CardBody>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-ink">Cargos Personalizados Cadastrados</h3>
+            <Button type="button" variant="primary" size="sm" onClick={() => setIsModalOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Cadastrar Cargo
+            </Button>
+          </div>
+          
+          {cargos.length > 0 ? (
+            <div className="overflow-hidden rounded-xl border border-line">
+              <ul className="divide-y divide-line">
+                {cargos.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <span className="text-sm font-medium text-ink">{c.nome}</span>
+                      <span className="ml-2 text-xs text-muted">
+                        (herda de {c.baseRole === "medico" ? "Médico" : c.baseRole === "recepcao" ? "Recepção" : "Administrador"})
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted hover:text-red-600"
+                      onClick={() => handleExcluirCargo(c.id, c.nome)}
+                      disabled={pending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-line p-8 text-center">
+              <p className="text-sm text-muted">Nenhum cargo personalizado cadastrado ainda.</p>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      <Modal
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Cadastrar Novo Cargo"
+        subtitle="Crie um cargo personalizado e escolha de qual perfil ele herda as permissões."
+      >
+        <form action={handleCriarCargo} className="space-y-4">
+          <Input
+            id="name"
+            name="name"
+            label="Nome do Cargo"
+            placeholder="Ex.: Gerente Financeiro"
+            required
+          />
+          <Select
+            id="base_role"
+            name="base_role"
+            label="Herda permissões de:"
+            required
+            defaultValue="recepcao"
+          >
+            {ROLES.map((r) => (
+              <option key={r.role} value={r.role}>
+                {r.label}
+              </option>
+            ))}
+          </Select>
+          <div className="pt-4 flex justify-end gap-2 border-t border-line mt-6">
+            <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" disabled={pending}>
+              {pending ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }

@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 export type Documento = {
   id: string;
@@ -79,7 +78,6 @@ const DEMO_DOCUMENTOS: Documento[] = [
 
 /** Lista atestados e altas emitidos para o paciente. */
 export async function listDocumentos(patientId: string): Promise<Documento[]> {
-  if (isDemoMode()) return DEMO_DOCUMENTOS;
 
   const supabase = await createClient();
   const { data, error } = await supabase

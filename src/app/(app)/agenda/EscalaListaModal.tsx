@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CalendarRange, Pencil, Plus } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { CalendarRange, Pencil, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -124,35 +124,50 @@ export function EscalaListaModal({
     [escalas, especialidade, diaSemana, termo],
   );
 
+  const POR_PAGINA = 3;
+  const [pagina, setPagina] = useState(1);
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const inicio = (paginaSegura - 1) * POR_PAGINA;
+  const visiveis = filtradas.slice(inicio, inicio + POR_PAGINA);
+
+  useEffect(() => {
+    setPagina(1);
+  }, [busca, especialidade, data]);
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       title="Escalas de Horários"
       subtitle="Visualize e edite as grades de atendimento da clínica"
-      className="max-w-3xl"
+      className="max-w-5xl"
       footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            Fechar
-          </Button>
-          <Button variant="primary" onClick={onNova}>
-            <Plus className="h-4 w-4" />
-            Nova Escala
-          </Button>
-        </>
+        <Button variant="ghost" onClick={onClose}>
+          Fechar
+        </Button>
       }
     >
       {/* Filtros */}
       <div className="mb-4 space-y-3">
-        <Input
-          id="escala-busca"
-          type="search"
-          label="Buscar"
-          placeholder="Buscar por descrição ou especialidade..."
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
+        <div className="flex flex-col">
+          <div className="mb-1.5 flex items-center justify-between">
+            <label htmlFor="escala-busca" className="text-sm font-medium text-ink">
+              Buscar
+            </label>
+            <Button variant="primary" size="sm" onClick={onNova}>
+              <Plus className="h-4 w-4" />
+              Nova Escala
+            </Button>
+          </div>
+          <Input
+            id="escala-busca"
+            type="search"
+            placeholder="Buscar por descrição ou especialidade..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+        </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Select
             label="Especialidade"
@@ -198,44 +213,93 @@ export function EscalaListaModal({
           </p>
         </div>
       ) : (
-        <ul className="space-y-2">
-          {filtradas.map((e) => (
-            <li
-              key={e.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-semibold text-ink">
-                    {e.description}
-                  </span>
-                  {!e.active && <Badge status="danger">Inativa</Badge>}
-                </div>
-                <p className="mt-0.5 truncate text-xs text-muted">
-                  {[e.specialty, e.professionalNome].filter(Boolean).join(" · ") ||
-                    "Sem especialidade"}
-                </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  {resumoDias(e.weekdays) || "Sem dias"} · {e.startTime}–{e.endTime}{" "}
-                  · {e.slotMinutes} min
-                </p>
-                <p className="mt-0.5 flex items-center gap-1 text-xs text-muted">
-                  <CalendarRange className="h-3.5 w-3.5 shrink-0" />
-                  Vigência: {resumoVigencia(e.startDate, e.endDate)}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onEditar(e)}
-                aria-label={`Editar escala ${e.description}`}
+        <>
+          <ul className="space-y-2">
+            {visiveis.map((e) => (
+              <li
+                key={e.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3"
               >
-                <Pencil className="h-4 w-4" />
-                Editar
-              </Button>
-            </li>
-          ))}
-        </ul>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-semibold text-ink">
+                      {e.description}
+                    </span>
+                    {!e.active && <Badge status="danger">Inativa</Badge>}
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-muted">
+                    {[e.specialty, e.professionalNome].filter(Boolean).join(" · ") ||
+                      "Sem especialidade"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {resumoDias(e.weekdays) || "Sem dias"} · {e.startTime}–{e.endTime}{" "}
+                    · {e.slotMinutes} min
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-muted">
+                    <CalendarRange className="h-3.5 w-3.5 shrink-0" />
+                    Vigência: {resumoVigencia(e.startDate, e.endDate)}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onEditar(e)}
+                  aria-label={`Editar escala ${e.description}`}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Editar
+                </Button>
+              </li>
+            ))}
+          </ul>
+          {filtradas.length > 0 && (
+            <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
+              <p className="text-xs text-muted">
+                Mostrando {inicio + 1} a{" "}
+                {Math.min(inicio + POR_PAGINA, filtradas.length)} de{" "}
+                {filtradas.length} {filtradas.length === 1 ? "escala" : "escalas"}
+              </p>
+              {totalPaginas > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                    disabled={paginaSegura === 1}
+                    aria-label="Página anterior"
+                    className="rounded-lg border border-line p-2 text-muted transition-colors hover:bg-muted-surface disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setPagina(n)}
+                      aria-label={`Página ${n}`}
+                      aria-current={n === paginaSegura ? "page" : undefined}
+                      className={
+                        n === paginaSegura
+                          ? "h-9 min-w-9 rounded-lg bg-brand-500 px-2 text-sm font-medium text-white"
+                          : "h-9 min-w-9 rounded-lg border border-line px-2 text-sm font-medium text-muted transition-colors hover:bg-muted-surface hover:text-ink"
+                      }
+                    >
+                      {n}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                    disabled={paginaSegura === totalPaginas}
+                    aria-label="Próxima página"
+                    className="rounded-lg border border-line p-2 text-muted transition-colors hover:bg-muted-surface disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </Modal>
   );

@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinico } from "@/lib/auth";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
@@ -35,7 +34,6 @@ export async function criarPedidoExame(
   const parsed = criarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };
@@ -73,7 +71,6 @@ export async function atualizarStatusExame(
   const parsed = statusSchema.safeParse({ id, status, patientId });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };
@@ -115,7 +112,6 @@ export async function enviarResultadoExameEmail(
   const parsed = enviarResultadoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };

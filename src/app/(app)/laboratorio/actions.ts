@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinico } from "@/lib/auth";
 import { type LabEtapa, type LabStatus } from "@/lib/data/lab";
 
@@ -42,7 +41,6 @@ export async function moverEtapaLab(
   const auth = await requireClinico();
   if ("error" in auth) return { error: auth.error };
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase

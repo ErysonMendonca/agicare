@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
 import type { AnamneseField } from "@/lib/data/anamnese-templates.shared";
@@ -52,10 +51,6 @@ export async function upsertAnamneseTemplate(
   fields: AnamneseField[],
   lousaImagePath?: string | null,
 ): Promise<ActionState> {
-  if (isDemoMode()) {
-    return { error: "Edição indisponível no modo demonstração." };
-  }
-
   if (!(await isGestor())) {
     return { error: "Sem permissão para editar templates de anamnese." };
   }

@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
 import { type FilaItem } from "@/lib/data/queue";
 
@@ -99,7 +98,6 @@ export type Resumo = {
 
 /** Especialidade do profissional logado (default do Prontuário). Null = todas. */
 export async function getMySpecialty(): Promise<string | null> {
-  if (isDemoMode()) return null;
   const current = await getCurrentUser();
   if (!current) return null;
   const supabase = await createClient();
@@ -142,7 +140,7 @@ export async function listAtendimentosPorData(
   dateISO: string,
   opts?: { specialty?: string | null },
 ): Promise<FilaItem[]> {
-  if (isDemoMode() || !dateISO) return [];
+  if (!dateISO) return [];
 
   try {
     const supabase = await createClient();
@@ -302,7 +300,6 @@ const DEMO_RESUMO: Resumo = {
 
 /** Resumo 360º do paciente para o prontuário. Resiliente à migration 0004. */
 export async function getResumo(patientId: string): Promise<Resumo | null> {
-  if (isDemoMode()) return DEMO_RESUMO;
 
   const supabase = await createClient();
 

@@ -455,7 +455,7 @@ export function EscalaHorariosModal({
         editMode ? "Editar Escala de Horários" : "Configuração de Escala de Horários"
       }
       subtitle="Defina a grade de atendimento de uma especialidade"
-      className="max-w-3xl"
+      className="max-w-5xl"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
@@ -522,9 +522,22 @@ export function EscalaHorariosModal({
             onChange={(e) => setEncaixe(Number(e.target.value))}
           />
           <Select
-            label={tipo === "Procedimento" || tipo === "Exame" ? "Especialidade" : "Especialidade *"}
+            label="Tipo de Escala"
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+          >
+            {TIPOS.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </Select>
+          <Select
+            label="Especialidade *"
             value={especialidade}
-            onChange={(e) => setEspecialidade(e.target.value)}
+            onChange={(e) => {
+              setEspecialidade(e.target.value);
+              setProfissionalId(""); // clear on change
+            }}
+            required
           >
             <option value="">Selecione a especialidade</option>
             {listaEspecialidades.map((e) => (
@@ -537,6 +550,7 @@ export function EscalaHorariosModal({
             label="Profissional"
             value={profissionalId}
             onChange={(e) => setProfissionalId(e.target.value)}
+            disabled={!especialidade}
           >
             <option value="">Selecione o profissional (opcional)</option>
             {(especialidade
@@ -546,15 +560,6 @@ export function EscalaHorariosModal({
               <option key={p.id} value={p.id}>
                 {p.nome}
               </option>
-            ))}
-          </Select>
-          <Select
-            label="Tipo de Escala"
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value)}
-          >
-            {TIPOS.map((t) => (
-              <option key={t}>{t}</option>
             ))}
           </Select>
           <p className="text-xs text-muted sm:col-span-2">

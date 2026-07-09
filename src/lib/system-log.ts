@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
 import { getActiveClinicId } from "@/lib/tenant";
 
@@ -51,7 +50,6 @@ type LogActionEntry = {
 export async function logAction(entry: LogActionEntry): Promise<void> {
   try {
     // Sem backend real (protótipo navegável) não há o que auditar.
-    if (isDemoMode()) return;
 
     const current = await getCurrentUser();
     if (!current) return;

@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { isDemoMode, isSupabaseConfigured } from './config'
+import { isSupabaseConfigured } from './config'
 
 /**
  * Atualiza/renova a sessão do Supabase a cada request e aplica um redirecionamento
@@ -10,10 +10,7 @@ import { isDemoMode, isSupabaseConfigured } from './config'
  * A autorização real (papel/role) deve ser reforçada nos Server Components/Route Handlers.
  */
 export async function updateSession(request: NextRequest) {
-  // Modo demo (apenas fora de produção): protótipo navegável sem gate de auth.
-  if (isDemoMode()) {
-    return NextResponse.next({ request })
-  }
+
 
   // Fail-closed: sem Supabase configurado em produção, bloqueia rotas protegidas.
   if (!isSupabaseConfigured()) {

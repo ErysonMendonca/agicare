@@ -68,7 +68,7 @@ export function Modal({
           />
           <motion.div
             className={cn(
-              "relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface shadow-xl",
+              "relative z-10 max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface shadow-xl",
               className,
             )}
             initial={{ opacity: 0, scale: 0.96, y: 8 }}

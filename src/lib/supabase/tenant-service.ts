@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getCurrentUser } from '@/lib/auth'
 import { getActiveClinicId, DEMO_CLINIC_ID } from '@/lib/tenant'
-import { isDemoMode } from '@/lib/supabase/config'
 
 /**
  * withTenantService — uso de SERVICE-ROLE com isolamento MANUAL de tenant.
@@ -54,7 +53,7 @@ export async function withTenantService<T>(
   // Em demo não há sessão real, mas o protótipo opera como "admin da clínica demo".
   const adminUserId = current?.userId ?? 'demo-user'
 
-  if (!isDemoMode() && !current) {
+  if (!current) {
     throw new TenantAuthError('Sessão expirada.')
   }
 
@@ -67,7 +66,7 @@ export async function withTenantService<T>(
   const svc = createServiceClient()
 
   // (c) admin ATIVO na clínica ativa. Em demo, libera (clínica demo).
-  if (!isDemoMode()) {
+  
     const { data: membership, error } = await svc
       .from('clinic_members')
       .select('role')
@@ -82,11 +81,10 @@ export async function withTenantService<T>(
     if (!membership || membership.role !== 'admin') {
       throw new TenantAuthError('Você não tem permissão de administrador nesta clínica.')
     }
-  }
 
   return fn({
     svc,
-    clinicId: isDemoMode() ? DEMO_CLINIC_ID : clinicId,
+    clinicId: clinicId,
     adminUserId,
   })
 }

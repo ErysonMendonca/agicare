@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor, getCurrentUser } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
 
@@ -206,7 +205,6 @@ export async function createProcedure(
   const d = parsed.data;
   const margem = calcMargem(d);
 
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -299,7 +297,6 @@ export async function updateProcedure(
   if (!code) return { error: "Código obrigatório." };
   const margem = calcMargem(d);
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -343,7 +340,6 @@ export async function deleteProcedure(id: string): Promise<ActionState> {
 
   if (!(await isGestor())) return { error: "Acesso restrito ao gestor." };
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -371,7 +367,6 @@ export async function duplicateProcedure(id: string): Promise<ActionState> {
 
   if (!(await isGestor())) return { error: "Acesso restrito ao gestor." };
 
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -492,7 +487,6 @@ export async function registrarExecucao(id: string): Promise<ActionState> {
 
   if (!(await isGestor())) return { error: "Acesso restrito ao gestor." };
 
-  if (isDemoMode()) return { ok: true };
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };

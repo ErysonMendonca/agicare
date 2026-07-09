@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import {
   STATUS_MAP,
   type SolicitacaoProduto,
@@ -69,7 +68,6 @@ const MOCK: SolicitacaoProduto[] = [
  * RLS escopa por clínica; qualquer staff enxerga. Em demo, retorna o MOCK.
  */
 export async function listSolicitacoes(): Promise<SolicitacaoProduto[]> {
-  if (isDemoMode()) return MOCK;
 
   const supabase = await createClient();
   const { data, error } = await supabase

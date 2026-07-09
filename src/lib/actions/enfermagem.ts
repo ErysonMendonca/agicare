@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
 
@@ -61,7 +60,6 @@ export async function registrarAfericao(
   input: AfericaoInput,
 ): Promise<ActionState> {
   if (!input.patient_id) return { error: "Selecione o paciente." };
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -95,7 +93,6 @@ export async function registrarAnotacao(
 ): Promise<ActionState> {
   const parsed = anotacaoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -130,7 +127,6 @@ export async function checarCuidado(
 ): Promise<ActionState> {
   const parsed = checagemSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -157,7 +153,6 @@ export async function reaprazarCuidado(
 ): Promise<ActionState> {
   const parsed = reaprazarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -185,7 +180,6 @@ export async function registrarLancamentoHidrico(
 ): Promise<ActionState> {
   const parsed = lancamentoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -204,7 +198,6 @@ export async function registrarLancamentoHidrico(
 
 export async function fecharBalancoHidrico(id: string): Promise<ActionState> {
   if (!id) return { error: "Ciclo inválido." };
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -230,7 +223,6 @@ export async function registrarEvolucao(
 ): Promise<ActionState> {
   const parsed = evolucaoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
   const clinicId = await requireClinic();
@@ -262,7 +254,6 @@ export async function registrarEscala(
 ): Promise<ActionState> {
   const parsed = escalaSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
   const clinicId = await requireClinic();
@@ -295,7 +286,6 @@ export async function registrarProcedimento(
 ): Promise<ActionState> {
   const parsed = procedimentoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
   const clinicId = await requireClinic();
@@ -330,7 +320,6 @@ export async function registrarSae(
 ): Promise<ActionState> {
   const parsed = saeSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
   const clinicId = await requireClinic();

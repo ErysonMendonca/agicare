@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { type ModuleSlug } from "@/lib/permissions.shared";
 
 /** Variação percentual de um KPI (mês atual vs. mês anterior). */
@@ -121,7 +120,6 @@ function lastSixMonths() {
  * "Consultas" é o total de agendamentos do mês; "Retornos" é o subconjunto.
  */
 export async function getConsultasRetornos(): Promise<ConsultasRetornos> {
-  if (isDemoMode()) return DEMO_SERIES;
 
   const supabase = await createClient();
   const buckets = lastSixMonths();
@@ -186,7 +184,6 @@ function ocupacaoDe(rows: { status: string }[]): number {
  * atual vs. anterior (CALCULADA, não mais hardcoded). Fallback no demo.
  */
 export async function getDashboardKpis(): Promise<DashboardKpis> {
-  if (isDemoMode()) return DEMO;
 
   const supabase = await createClient();
 
@@ -295,7 +292,6 @@ const DEMO_RECEITA: ReceitaMensal = {
  * Fallback demo. Em erro/sem dados: zeros (resiliente).
  */
 export async function getReceitaMensal(): Promise<ReceitaMensal> {
-  if (isDemoMode()) return DEMO_RECEITA;
 
   const supabase = await createClient();
   const buckets = lastSixMonths();
@@ -322,6 +318,8 @@ export async function getReceitaMensal(): Promise<ReceitaMensal> {
   return { labels: buckets.map((b) => b.label), valores };
 }
 
+import { listAgendadosHoje } from "./queue";
+
 /**
  * Contadores reais para badges do MENU (fila aguardando, estoque crítico).
  * Exportado aqui para o orquestrador ligar no nav/layout (não editamos nav.ts).
@@ -334,20 +332,22 @@ export type MenuCounters = {
   aguardandoPagamento: number;
   /** Itens de estoque críticos (saldo < mínimo/2). */
   estoqueCriticos: number;
+  /** Pacientes agendados para hoje que ainda não fizeram check-in. */
+  checkinPendentes: number;
 };
 
 const DEMO_COUNTERS: MenuCounters = {
   filaAguardando: 3,
   aguardandoPagamento: 1,
   estoqueCriticos: 2,
+  checkinPendentes: 2,
 };
 
 export async function getMenuCounters(): Promise<MenuCounters> {
-  if (isDemoMode()) return DEMO_COUNTERS;
 
   const supabase = await createClient();
 
-  const [fila, pagamento, estoque] = await Promise.all([
+  const [fila, pagamento, estoque, agendados] = await Promise.all([
     supabase
       .from("queue_entries")
       .select("*", { count: "exact", head: true })
@@ -359,10 +359,12 @@ export async function getMenuCounters(): Promise<MenuCounters> {
       .eq("status", "aguardando_pagamento"),
     // Saldo/mínimo crus: o "crítico" é derivado (saldo < mínimo*0.5).
     supabase.from("stock_products").select("quantity, min_quantity"),
+    listAgendadosHoje(),
   ]);
 
   const filaAguardando = fila.count ?? 0;
   const aguardandoPagamento = pagamento.count ?? 0;
+  const checkinPendentes = agendados.length;
 
   const produtos = (estoque.data ?? []) as {
     quantity: number | null;
@@ -374,7 +376,7 @@ export async function getMenuCounters(): Promise<MenuCounters> {
     return minimo > 0 && saldo < minimo * 0.5;
   }).length;
 
-  return { filaAguardando, aguardandoPagamento, estoqueCriticos };
+  return { filaAguardando, aguardandoPagamento, estoqueCriticos, checkinPendentes };
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -447,7 +449,6 @@ function fmtDateBR(d: string): string {
  * Cada item carrega o `module` p/ o layout filtrar pelo papel (canView).
  */
 export async function getNotificacoes(): Promise<Notificacao[]> {
-  if (isDemoMode()) return DEMO_NOTIFICACOES;
 
   const supabase = await createClient();
   const notifs: Notificacao[] = [];

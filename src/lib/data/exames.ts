@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import type {
   ExamCategoria,
   ExamStatus,
@@ -72,7 +71,6 @@ const DEMO_EXAMES: ExamOrder[] = [
  * Resiliente: erro/sem permissão → lista vazia (não derruba a seção).
  */
 export async function listExamOrders(patientId: string): Promise<ExamOrder[]> {
-  if (isDemoMode()) return DEMO_EXAMES;
 
   const supabase = await createClient();
   const { data, error } = await supabase

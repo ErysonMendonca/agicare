@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 import { getCurrentUser } from "@/lib/auth";
 import { canView } from "@/lib/permissions";
@@ -14,7 +13,6 @@ export type ActionState = { error?: string; ok?: boolean } | undefined;
 /** Gate de módulo server-side (espelha requireView da página). RLS de staff não
  * checa a matriz de permissões — reforçamos aqui p/ toda Server Action. */
 async function guardModulo(): Promise<{ error: string } | null> {
-  if (isDemoMode()) return null;
   if (!(await canView("solicitacoes"))) {
     return { error: "Acesso negado ao módulo de Solicitações." };
   }
@@ -55,7 +53,6 @@ export async function criarSolicitacao(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const negado = await guardModulo();
   if (negado) return negado;
@@ -136,7 +133,6 @@ const idSchema = z.string().uuid("Solicitação inválida.");
 /** Marca a solicitação como ATENDIDA (só se estiver pendente). Estoque/staff. */
 export async function atenderSolicitacao(id: string): Promise<ActionState> {
   if (!idSchema.safeParse(id).success) return { error: "Solicitação inválida." };
-  if (isDemoMode()) return { ok: true };
 
   const negado = await guardModulo();
   if (negado) return negado;
@@ -169,7 +165,6 @@ export async function atenderSolicitacao(id: string): Promise<ActionState> {
 /** Cancela a solicitação (só se estiver pendente). */
 export async function cancelarSolicitacao(id: string): Promise<ActionState> {
   if (!idSchema.safeParse(id).success) return { error: "Solicitação inválida." };
-  if (isDemoMode()) return { ok: true };
 
   const negado = await guardModulo();
   if (negado) return negado;

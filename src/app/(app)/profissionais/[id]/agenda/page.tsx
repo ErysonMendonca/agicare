@@ -10,6 +10,7 @@ import {
   CalendarClock,
   User,
   Plus,
+  UserPlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
@@ -89,7 +90,7 @@ export default async function AgendaProfissionalPage({
           <StatCard
             icon={<CalendarDays className="h-5 w-5" />}
             value={kpis.total}
-            label="Total de Agendamentos"
+            label="Total"
             tone="neutral"
           />
         </FadeInUp>
@@ -103,17 +104,17 @@ export default async function AgendaProfissionalPage({
         </FadeInUp>
         <FadeInUp>
           <StatCard
-            icon={<CheckCircle2 className="h-5 w-5" />}
-            value={kpis.confirmados}
-            label="Confirmados"
-            tone="success"
+            icon={<UserPlus className="h-5 w-5" />}
+            value={kpis.emFila}
+            label="Em fila"
+            tone="neutral"
           />
         </FadeInUp>
         <FadeInUp>
           <StatCard
             icon={<Activity className="h-5 w-5" />}
             value={kpis.emAtendimento}
-            label="Em Atendimento"
+            label="Em atendimento"
             tone="info"
           />
         </FadeInUp>

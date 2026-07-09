@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 
 /**
@@ -189,7 +188,7 @@ function mapXyz(r: any): ProductXyz {
 export async function getProdutoChildren(
   productId: string,
 ): Promise<ProdutoChildren> {
-  if (isDemoMode() || !productId) return { ...EMPTY };
+  if (!productId) return { ...EMPTY };
 
   const supabase = await createClient();
   // Filtro clinic_id explícito (defesa em profundidade, além da RLS) — coerente

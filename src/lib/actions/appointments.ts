@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 import { enviarNotificacao } from "@/lib/integrations/notifications";
 import { logAction } from "@/lib/system-log";
@@ -232,7 +231,6 @@ export async function createAppointment(
   const endsAt = addMinutes(startsAt, d.slot_minutes);
 
   const protocol = gerarProtocolo();
-  if (isDemoMode()) return { ok: true, protocol };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -282,7 +280,6 @@ async function updateAppointment(
   id: string,
   patch: Record<string, unknown>,
 ): Promise<AgendaActionState> {
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase.from("appointments").update(patch).eq("id", id);
@@ -317,6 +314,57 @@ export async function cancelAppointment(
   return res;
 }
 
+/** Altera o status manualmente de um agendamento (Ex: pelo Administrador) */
+export async function changeAppointmentStatus(
+  id: string,
+  newStatus: string,
+): Promise<AgendaActionState> {
+  const parsed = idSchema.safeParse(id);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  
+  const res = await updateAppointment(parsed.data, { status: newStatus });
+  if (res?.ok) {
+    await logAction({
+      action: "update",
+      module: "agenda",
+      summary: `Alterou status do agendamento para ${newStatus}`,
+      entity: "appointment",
+      entityId: parsed.data,
+    });
+  }
+  return res;
+}
+
+/** 
+ * Apaga TODOS os agendamentos da clínica. Apenas para o Administrador.
+ * Esvazia queue_entries e medical_records associados para garantir que nada trave a exclusão.
+ */
+export async function deleteAllAppointments(): Promise<AgendaActionState> {
+  const supabase = await createClient();
+  
+  // Limpa as tabelas filhas (caso o ON DELETE SET NULL mantenha lixo)
+  await supabase.from("queue_entries").delete().not("id", "is", null);
+  await supabase.from("medical_records").delete().not("id", "is", null);
+
+  const { error } = await supabase.from("appointments").delete().not("id", "is", null);
+  
+  if (error) {
+    console.error("Erro ao apagar todos os agendamentos:", error);
+    return { error: "Erro interno ao apagar os agendamentos. Verifique as dependências." };
+  }
+  
+  await logAction({
+    action: "delete",
+    module: "agenda",
+    summary: "Apagou TODOS os agendamentos do sistema",
+    entity: "appointment",
+    entityId: "all",
+  });
+  
+  revalidateAgenda();
+  return { ok: true };
+}
+
 const remarcarSchema = z.object({
   id: idSchema,
   date: z.string().min(1, "Informe a nova data."),
@@ -336,14 +384,6 @@ export async function remarcarAppointment(
   // Não permite remarcar para um horário que já passou.
   if (horarioNoPassado(d.date, d.time)) {
     return { error: "Não é possível remarcar para um horário que já passou." };
-  }
-
-  if (isDemoMode()) {
-    return await updateAppointment(d.id, {
-      starts_at: startsAt,
-      ends_at: addMinutes(startsAt, d.slot_minutes),
-      status: "agendado",
-    });
   }
 
   const supabase = await createClient();
@@ -698,7 +738,6 @@ export async function createSchedule(
     return { error: "A data final deve ser igual ou posterior à inicial." };
   }
   const code = `ESC-${String(Math.floor(1000 + Math.random() * 9000))}`;
-  if (isDemoMode()) return { ok: true, protocol: code };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -780,7 +819,6 @@ export async function updateSchedule(
     return { error: "A data final deve ser igual ou posterior à inicial." };
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
@@ -873,7 +911,6 @@ export async function listBlocks(
   dateISO: string,
 ): Promise<Bloqueio[]> {
   if (!professionalId || !dateISO) return [];
-  if (isDemoMode()) return [];
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -906,7 +943,6 @@ export async function createBlock(
   const parsed = blockSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
   const supabase = await createClient();
@@ -939,7 +975,6 @@ export async function removeBlock(id: string): Promise<AgendaActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -994,20 +1029,6 @@ export async function enviarComprovante(
         ? "whatsappResults"
         : "smsTwoHoursBefore";
 
-  if (isDemoMode()) {
-    // Em demo não há banco/provider: apenas resolve o status que ocorreria
-    // (respeitando os toggles padrão de notificação).
-    await enviarNotificacao({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      canal: d.channel as any,
-      destino: d.to || "demo@local",
-      template: "comprovante_agendamento",
-      payload: { protocolo: d.protocol },
-      protocol: d.protocol,
-      evento,
-    });
-    return { ok: true };
-  }
 
   // Sem destino não há como enviar nem auditar com sentido.
   if (!d.to) {
@@ -1157,13 +1178,7 @@ export async function listSlots(
 ): Promise<SlotGrid> {
   if (!professionalId || !dateISO) return { slots: [], slotMinutes: 30 };
 
-  if (isDemoMode()) {
-    const ocupados = new Set(["09:00", "10:30", "11:00", "14:30", "16:00"]);
-    return {
-      slots: gradePadrao().map((hora) => ({ hora, ocupado: ocupados.has(hora) })),
-      slotMinutes: 30,
-    };
-  }
+
 
   const supabase = await createClient();
   const weekday = new Date(`${dateISO}T00:00:00`).getDay(); // 0=Dom..6=Sáb
@@ -1270,18 +1285,7 @@ export async function listOcupacao(
   if (!professionalId || !dateISO || horas.length === 0) {
     return horas.map((hora) => ({ hora, ocupado: false }));
   }
-  if (isDemoMode()) {
-    const ocupados = new Map<string, string>([
-      ["09:00", "Maria Silva"],
-      ["10:30", "João Pereira"],
-      ["14:30", "Ana Souza"],
-    ]);
-    return horas.map((hora) => ({
-      hora,
-      ocupado: ocupados.has(hora),
-      paciente: ocupados.get(hora),
-    }));
-  }
+
 
   const supabase = await createClient();
   const dayStart = toIso(dateISO, "00:00");
@@ -1333,13 +1337,7 @@ export async function listSlotsBySpecialty(
 ): Promise<SlotGrid> {
   if (typeof specialty !== "string" || !dateISO) return { slots: [], slotMinutes: 30 };
 
-  if (isDemoMode()) {
-    const ocupados = new Set(["09:00", "11:00", "15:00"]);
-    return {
-      slots: gradePadrao().map((hora) => ({ hora, ocupado: ocupados.has(hora) })),
-      slotMinutes: 30,
-    };
-  }
+
 
   const supabase = await createClient();
   const weekday = new Date(`${dateISO}T00:00:00`).getDay();

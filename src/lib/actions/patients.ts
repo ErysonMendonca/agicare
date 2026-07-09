@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
@@ -29,7 +28,6 @@ export async function createPatient(
   }
 
   // Em modo demo não há banco — apenas simula sucesso.
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
   const clinicId = await requireClinic();

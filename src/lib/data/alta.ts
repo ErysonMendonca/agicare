@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 // ════════════════════════════════════════════════════════════════
 // Catálogos da ALTA (motivo + detalhe). Reusam public.attendance_options
@@ -30,7 +29,6 @@ export async function listAltaCatalogos(): Promise<{
   motivos: MotivoAlta[];
   detalhes: DetalheAlta[];
 }> {
-  if (isDemoMode()) return { motivos: DEMO_MOTIVOS, detalhes: DEMO_DETALHES };
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -99,8 +97,6 @@ export async function listAltaCatalogosConfig(): Promise<{
   motivos: MotivoAltaCfg[];
   detalhes: DetalheAltaCfg[];
 }> {
-  if (isDemoMode())
-    return { motivos: DEMO_MOTIVOS_CFG, detalhes: DEMO_DETALHES_CFG };
 
   const supabase = await createClient();
   const { data, error } = await supabase

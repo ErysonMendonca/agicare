@@ -6,11 +6,14 @@ import { listSchedules } from "@/lib/data/schedules";
 import { listProcedures } from "@/lib/data/procedures";
 import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { requireView } from "@/lib/permissions";
+import { getRole } from "@/lib/auth";
 import { AgendaActions } from "./AgendaActions";
 import { AgendaList } from "./AgendaList";
 
 export default async function AgendaPage() {
   await requireView("agenda");
+  const role = await getRole();
+  const isAdmin = role === "admin";
   const [
     atendimentos,
     pacientes,
@@ -42,6 +45,7 @@ export default async function AgendaPage() {
             escalas={escalas}
             procedimentos={procedimentos}
             especialidades={especialidades}
+            isAdmin={isAdmin}
           />
         }
       />

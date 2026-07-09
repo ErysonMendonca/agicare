@@ -60,14 +60,18 @@ export default async function FilaPage({
     listProfissionaisVinculo(),
   ]);
 
-  const aguardando = fila.filter((i) => 
-    i.status.label === "Aguardando" || i.status.label === "Aguardando atendimento"
-  ).length;
-  const chamados = fila.filter((i) => i.status.label === "Chamado").length;
-  const emAtendimento = fila.filter(
-    (i) => i.status.label === "Em atendimento",
-  ).length;
-  const total = fila.length;
+  // 1. Filtrar a fila para exibir APENAS etapas do processo do recepcionista
+  const filaRecepcionista = fila.filter((i) =>
+    ["aguardando", "na_recepcao", "aguardando_pagamento"].includes(i.statusRaw)
+  );
+
+  // 2. Atualizar os KPIs para refletir a nova visão da recepção
+  const kpis = {
+    checkin: agendados.length,
+    emEspera: filaRecepcionista.filter((i) => ["aguardando", "na_recepcao"].includes(i.statusRaw)).length,
+    checkout: filaRecepcionista.filter((i) => i.statusRaw === "aguardando_pagamento").length,
+    total: agendados.length + filaRecepcionista.length,
+  };
 
   return (
     <>
@@ -77,13 +81,13 @@ export default async function FilaPage({
       />
 
       <FilaClient
-        fila={fila}
+        fila={filaRecepcionista}
         agendados={agendados}
         stages={stages}
         attendanceOptions={attendanceOptions}
         profissionais={profissionais}
         triageTemplates={triageTemplates}
-        kpis={{ aguardando, chamados, emAtendimento, total }}
+        kpis={kpis}
         dataSelecionada={dataSelecionada}
         isHoje={isHoje}
         todoPeriodo={todoPeriodo}

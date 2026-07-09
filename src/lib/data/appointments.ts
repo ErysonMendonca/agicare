@@ -1,16 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getViewScope, getMyProfessionalId } from "@/lib/permissions";
 import { type Status } from "@/components/ui/Badge";
 
-/** Status crus da tabela `appointments`. */
 export type AppointmentStatus =
   | "agendado"
-  | "confirmado"
-  | "em_atendimento"
+  | "aguardando_recepcao"
+  | "em_atendimento_recepcao"
+  | "aguardando_profissional"
+  | "em_atendimento_profissional"
+  | "checkout"
   | "concluido"
   | "cancelado"
-  | "faltou";
+  | "faltou"
+  | "confirmado" // Maintained for legacy compatibility during runtime
+  | "em_atendimento"; // Maintained for legacy compatibility during runtime
 
 export type Atendimento = {
   id: string;
@@ -39,7 +42,7 @@ export type Atendimento = {
 export type AppointmentKpis = {
   total: number;
   agendados: number;
-  confirmados: number;
+  emFila: number;
   emAtendimento: number;
   finalizados: number;
 };
@@ -47,21 +50,31 @@ export type AppointmentKpis = {
 /** Rótulos legíveis por status. */
 const STATUS_LABEL: Record<AppointmentStatus, string> = {
   agendado: "Agendado",
-  confirmado: "Confirmado",
-  em_atendimento: "Em Atendimento",
+  aguardando_recepcao: "Aguardando atendimento recepcionista",
+  em_atendimento_recepcao: "Sendo atendido pela Recepção",
+  aguardando_profissional: "Aguardando atendimento profissional",
+  em_atendimento_profissional: "Em atendimento do profissional",
+  checkout: "Check-out",
   concluido: "Finalizado",
   cancelado: "Cancelado",
   faltou: "Faltou",
+  confirmado: "Confirmado", // Legacy
+  em_atendimento: "Em Atendimento", // Legacy
 };
 
 /** Status → variante do Badge (conforme brief). */
 const STATUS_BADGE: Record<AppointmentStatus, Status> = {
   agendado: "wait",
-  confirmado: "ok",
-  em_atendimento: "active",
+  aguardando_recepcao: "wait",
+  em_atendimento_recepcao: "active",
+  aguardando_profissional: "wait",
+  em_atendimento_profissional: "active",
+  checkout: "warn",
   concluido: "ok",
   cancelado: "danger",
   faltou: "danger",
+  confirmado: "ok", // Legacy
+  em_atendimento: "active", // Legacy
 };
 
 /** Formata um timestamptz em data/hora pt-BR. */
@@ -145,7 +158,6 @@ const MOCK: Atendimento[] = (
 
 /** Lista atendimentos: do banco quando configurado, mock no modo demo. */
 export async function listAppointments(): Promise<Atendimento[]> {
-  if (isDemoMode()) return MOCK;
 
   const supabase = await createClient();
   let query = supabase
@@ -220,8 +232,13 @@ export function countByStatus(items: Atendimento[]): AppointmentKpis {
   return {
     total: items.length,
     agendados: items.filter((i) => i.status === "agendado").length,
-    confirmados: items.filter((i) => i.status === "confirmado").length,
-    emAtendimento: items.filter((i) => i.status === "em_atendimento").length,
+    emFila: items.filter(
+      (i) =>
+        i.status === "aguardando_recepcao" ||
+        i.status === "em_atendimento_recepcao" ||
+        i.status === "aguardando_profissional"
+    ).length,
+    emAtendimento: items.filter((i) => i.status === "em_atendimento_profissional").length,
     finalizados: items.filter((i) => i.status === "concluido").length,
   };
 }

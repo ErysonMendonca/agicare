@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import {
   type RelatoriosFiltros,
   buildBuckets,
@@ -129,7 +128,6 @@ export async function getRelatoriosData(
   gestor: boolean,
   filtros: RelatoriosFiltros = {},
 ): Promise<RelatoriosData> {
-  if (isDemoMode()) return gestor ? DEMO : { ...DEMO, ...FINANCEIRO_NULO };
 
   const supabase = await createClient();
   const buckets = buildBuckets(filtros);
@@ -373,7 +371,6 @@ const UTILIZACAO_DEMO: UtilizacaoAtendimentoBI = {
 export async function getUtilizacaoAtendimentoBI(
   filtros: RelatoriosFiltros = {},
 ): Promise<UtilizacaoAtendimentoBI> {
-  if (isDemoMode()) return UTILIZACAO_DEMO;
 
   const supabase = await createClient();
   const colunas = Object.values(UTILIZACAO_COLUNAS);

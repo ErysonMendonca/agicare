@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/app/ThemeProvider";
-import { ThemeScript, BrandVars } from "@/components/app/WhiteLabel";
+import { ThemeScript } from "@/components/app/ThemeScript";
+import { BrandVars } from "@/components/app/WhiteLabel";
 import { getSettings, type BrandingSettings } from "@/lib/data/settings";
 
 const inter = Inter({
@@ -48,7 +49,6 @@ export default async function RootLayout({
     <html
       lang="pt-BR"
       className={`${inter.variable} h-full antialiased`}
-      // O ThemeScript ajusta a classe `.dark` antes da hidratação.
       suppressHydrationWarning
     >
       <body className="min-h-full">

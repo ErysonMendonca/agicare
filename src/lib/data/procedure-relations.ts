@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 /**
  * Vínculos e orientações de um procedimento (abas B/C/E), para pré-preencher o
@@ -39,7 +38,7 @@ const VAZIO: ProcedureRelations = {
 export async function loadProcedureRelations(
   procedureIds: string[],
 ): Promise<Record<string, ProcedureRelations>> {
-  if (isDemoMode() || procedureIds.length === 0) return {};
+  if (procedureIds.length === 0) return {};
 
   const supabase = await createClient();
 

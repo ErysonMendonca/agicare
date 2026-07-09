@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 /** Anexo de anamnese (lousa) pronto para exibição. */
 export type AnamneseLousa = {
@@ -28,7 +27,6 @@ function fmtDataHora(iso: string | null): string {
  * Resiliente a erro → retorna []. Em demo, devolve [].
  */
 export async function listLousas(patientId: string): Promise<AnamneseLousa[]> {
-  if (isDemoMode()) return [];
 
   const supabase = await createClient();
   const { data, error } = await supabase

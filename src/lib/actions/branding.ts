@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
 
@@ -37,7 +36,6 @@ export async function uploadLogo(formData: FormData): Promise<UploadLogoResult> 
   }
 
   // Sem backend (demo): cliente usa o data URL de preview.
-  if (isDemoMode()) return {};
 
   const supabase = await createClient();
   const clinicId = await requireClinic();

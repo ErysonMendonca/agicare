@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 // ════════════════════════════════════════════════════════════════
 // Data layer do histórico de notificações disparadas (notification_log,
@@ -90,7 +89,6 @@ const DEMO_LOG: NotificationLogItem[] = [
 export async function listNotificationLog(
   limit = 50,
 ): Promise<NotificationLogItem[]> {
-  if (isDemoMode()) return DEMO_LOG.slice(0, limit);
 
   try {
     const supabase = await createClient();

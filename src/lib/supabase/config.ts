@@ -12,17 +12,4 @@ export function isSupabaseConfigured(): boolean {
   return true;
 }
 
-/**
- * Modo demo: ativo SOMENTE fora de produção e sem Supabase configurado.
- * Segurança: em produção, a ausência de chaves NÃO libera o app (fail-closed) —
- * produção exige Supabase configurado.
- */
-export function isDemoMode(): boolean {
-  return !isSupabaseConfigured() && process.env.NODE_ENV !== "production";
-}
 
-/** Usuário fictício usado no modo demo (sem Supabase). */
-export const DEMO_USER = {
-  name: "Dr. João Silva",
-  role: "Médico",
-};

@@ -1,5 +1,4 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 
 // ════════════════════════════════════════════════════════════════
@@ -128,10 +127,7 @@ export async function getSystemLogs(
   const limit = f.limit ?? 50;
   const offset = f.offset ?? 0;
 
-  if (isDemoMode()) {
-    const rows = DEMO_ROWS.slice(offset, offset + limit);
-    return { rows, total: DEMO_ROWS.length };
-  }
+
 
   // Gate de segurança: só admin. É a fronteira antes do service-role.
   if (!(await isGestor())) return { rows: [], total: 0 };
@@ -224,25 +220,7 @@ export async function getSystemLogFilterOptions(): Promise<{
 }> {
   const empty = { modules: [], actions: [], actors: [], clinics: [] };
 
-  if (isDemoMode()) {
-    return {
-      modules: Array.from(new Set(DEMO_ROWS.map((r) => r.module))),
-      actions: Array.from(new Set(DEMO_ROWS.map((r) => r.action))),
-      actors: Array.from(
-        new Map(
-          DEMO_ROWS.map((r) => [r.actorName, r.actorName]),
-        ).keys(),
-      ).map((name, i) => ({ id: `demo-actor-${i}`, name })),
-      clinics: Array.from(
-        new Map(
-          DEMO_ROWS.filter((r) => r.clinicId).map((r) => [
-            r.clinicId as string,
-            r.clinicName ?? "—",
-          ]),
-        ).entries(),
-      ).map(([id, name]) => ({ id, name })),
-    };
-  }
+
 
   if (!(await isGestor())) return empty;
 

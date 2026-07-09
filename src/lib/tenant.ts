@@ -1,7 +1,6 @@
 import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { isDemoMode } from '@/lib/supabase/config'
 
 /**
  * Contexto de TENANT (clínica ativa) — fiação de aplicação do multitenant.
@@ -44,7 +43,6 @@ export function multitenantSchemaMissing(
 
 /** Multitenant está provisionado no banco? (probe em clinic_members; cache por request). */
 export const isMultitenantProvisioned = cache(async (): Promise<boolean> => {
-  if (isDemoMode()) return false
   const supabase = await createClient()
   const { error } = await supabase.from('clinic_members').select('clinic_id').limit(1)
   return !multitenantSchemaMissing(error)
@@ -60,7 +58,6 @@ export const isMultitenantProvisioned = cache(async (): Promise<boolean> => {
  * `cache()` deduplica a chamada por request (é consultada em vários pontos).
  */
 export const getActiveClinicId = cache(async (): Promise<string | null> => {
-  if (isDemoMode()) return DEMO_CLINIC_ID
 
   const supabase = await createClient()
   const {
@@ -91,9 +88,6 @@ export const getActiveClinicId = cache(async (): Promise<string | null> => {
  * Só retornamos lista vazia quando ela é legítima (sem sessão / sem membership).
  */
 export const getMyClinics = cache(async (): Promise<MyClinic[]> => {
-  if (isDemoMode()) {
-    return [{ id: DEMO_CLINIC_ID, name: 'Clínica Padrão', role: 'admin' }]
-  }
 
   const supabase = await createClient()
   const {

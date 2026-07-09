@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 export type Procedimento = {
   codigo: string;
@@ -95,7 +94,6 @@ const MOCK: Procedimento[] = [
 
 /** Lista procedimentos: do banco quando configurado, mock no modo demo. */
 export async function listProcedures(): Promise<Procedimento[]> {
-  if (isDemoMode()) return MOCK;
 
   const supabase = await createClient();
   const { data, error } = await supabase

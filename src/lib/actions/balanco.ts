@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 
 // ════════════════════════════════════════════════════════════════
@@ -35,7 +34,6 @@ export async function abrirCicloBalanco(
 ): Promise<ActionState> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const clinicId = await requireClinic();
   const supabase = await createClient();

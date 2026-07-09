@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
@@ -33,8 +33,11 @@ import { AgendaItemActions } from "./AgendaItemActions";
 /** Opções de status do filtro (rótulos pt-BR alinhados ao data layer). */
 const STATUS_OPCOES: { value: AppointmentStatus; label: string }[] = [
   { value: "agendado", label: "Agendado" },
-  { value: "confirmado", label: "Confirmado" },
-  { value: "em_atendimento", label: "Em Atendimento" },
+  { value: "aguardando_recepcao", label: "Aguardando atendimento recepcionista" },
+  { value: "em_atendimento_recepcao", label: "Sendo atendido pela Recepção" },
+  { value: "aguardando_profissional", label: "Aguardando atendimento profissional" },
+  { value: "em_atendimento_profissional", label: "Em atendimento do profissional" },
+  { value: "checkout", label: "Check-out" },
   { value: "concluido", label: "Finalizado" },
   { value: "cancelado", label: "Cancelado" },
   { value: "faltou", label: "Faltou" },
@@ -54,22 +57,21 @@ export function AgendaList({
   kpis: {
     total: number;
     agendados: number;
-    confirmados: number;
+    emFila: number;
     emAtendimento: number;
     finalizados: number;
   };
 }) {
   const [busca, setBusca] = useState("");
-  const [data, setData] = useState("");
+  // YYYY-MM-DD local
+  const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  const [data, setData] = useState(hoje);
   const [profissional, setProfissional] = useState("");
   const [status, setStatus] = useState("");
 
-  // Clicar numa KPI filtra a tabela pelo status; clicar na ativa (ou na Total)
-  // limpa o filtro. Compartilha o MESMO estado do Select de status.
   const toggleStatus = (valor: string) =>
     setStatus((atual) => (atual === valor ? "" : valor));
 
-  // Profissionais que aparecem na agenda (nomes presentes nos atendimentos).
   const profissionaisOpcoes = useMemo(() => {
     const nomes = Array.from(
       new Set(atendimentos.map((a) => a.profissional).filter((n) => n && n !== "—")),
@@ -88,10 +90,29 @@ export function AgendaList({
       }
       if (data && a.dataISO !== data) return false;
       if (profissional && a.profissional !== profissional) return false;
-      if (status && a.status !== status) return false;
+      if (status) {
+        if (status === "em_fila") {
+          if (a.status !== "aguardando_recepcao" && a.status !== "em_atendimento_recepcao" && a.status !== "aguardando_profissional") return false;
+        } else if (status === "em_atendimento") {
+          if (a.status !== "em_atendimento_profissional") return false;
+        } else if (a.status !== status) {
+          return false;
+        }
+      }
       return true;
     });
   }, [atendimentos, busca, data, profissional, status]);
+
+  const POR_PAGINA = 5;
+  const [pagina, setPagina] = useState(1);
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const inicio = (paginaSegura - 1) * POR_PAGINA;
+  const visiveis = filtrados.slice(inicio, inicio + POR_PAGINA);
+
+  useEffect(() => {
+    setPagina(1);
+  }, [busca, data, profissional, status]);
 
   return (
     <>
@@ -100,7 +121,7 @@ export function AgendaList({
           <StatCard
             icon={<CalendarDays className="h-5 w-5" />}
             value={kpis.total}
-            label="Total de Agendamentos"
+            label="Total"
             tone="neutral"
             onClick={() => setStatus("")}
             active={status === ""}
@@ -118,19 +139,19 @@ export function AgendaList({
         </FadeInUp>
         <FadeInUp>
           <StatCard
-            icon={<CheckCircle2 className="h-5 w-5" />}
-            value={kpis.confirmados}
-            label="Confirmados"
-            tone="success"
-            onClick={() => toggleStatus("confirmado")}
-            active={status === "confirmado"}
+            icon={<UserPlus className="h-5 w-5" />}
+            value={kpis.emFila}
+            label="Em fila"
+            tone="neutral"
+            onClick={() => toggleStatus("em_fila")}
+            active={status === "em_fila"}
           />
         </FadeInUp>
         <FadeInUp>
           <StatCard
             icon={<Activity className="h-5 w-5" />}
             value={kpis.emAtendimento}
-            label="Em Atendimento"
+            label="Em atendimento"
             tone="info"
             onClick={() => toggleStatus("em_atendimento")}
             active={status === "em_atendimento"}
@@ -219,7 +240,7 @@ export function AgendaList({
               </div>
             ) : (
               <ul className="divide-y divide-line">
-                {filtrados.map((a) => (
+                {visiveis.map((a) => (
                   <li
                     key={a.id}
                     className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
@@ -264,6 +285,32 @@ export function AgendaList({
                   </li>
                 ))}
               </ul>
+            )}
+            
+            {filtrados.length > POR_PAGINA && (
+              <div className="flex items-center justify-between border-t border-line px-5 py-3">
+                <p className="text-sm text-muted">
+                  Mostrando {inicio + 1} a {Math.min(inicio + POR_PAGINA, filtrados.length)} de {filtrados.length} agendamentos
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={paginaSegura === 1}
+                    onClick={() => setPagina((p) => p - 1)}
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={paginaSegura === totalPaginas}
+                    onClick={() => setPagina((p) => p + 1)}
+                  >
+                    Próxima
+                  </Button>
+                </div>
+              </div>
             )}
           </Card>
         </FadeInUp>

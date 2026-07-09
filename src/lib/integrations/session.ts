@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { isDemoMode, isSupabaseConfigured } from '@/lib/supabase/config'
+import { isSupabaseConfigured } from '@/lib/supabase/config'
 
 /**
  * Política de SESSÃO e de SENHA — helpers de segurança (escopo: hardening).
@@ -95,7 +95,7 @@ export function stampActivity(
 export async function fetchSessionTimeoutMinutes(
   request: NextRequest,
 ): Promise<number | null> {
-  if (isDemoMode() || !isSupabaseConfigured()) return null
+  if (!isSupabaseConfigured()) return null
   try {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

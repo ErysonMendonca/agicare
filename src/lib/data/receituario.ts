@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getPatientEditavel } from "@/lib/data/patients";
 
 export type Receituario = {
@@ -39,7 +38,6 @@ const DEMO_RECEITUARIOS: Receituario[] = [
 export async function listReceituarios(
   patientId: string,
 ): Promise<Receituario[]> {
-  if (isDemoMode()) return DEMO_RECEITUARIOS;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -91,7 +89,6 @@ const DEMO_ENDERECO: PacienteEndereco = {
 export async function getPacienteEndereco(
   patientId: string,
 ): Promise<PacienteEndereco> {
-  if (isDemoMode()) return DEMO_ENDERECO;
 
   const p = await getPatientEditavel(patientId);
   if (!p) return { endereco: "", bairro: "", cidade: "", uf: "", cep: "" };

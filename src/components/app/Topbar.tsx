@@ -47,6 +47,7 @@ export function Topbar({
     filaAguardando: number;
     aguardandoPagamento: number;
     estoqueCriticos: number;
+    checkinPendentes?: number;
   };
   /** Notificações reais já filtradas por permissão (estoque/fila/faturas). */
   notificacoes?: Notificacao[];

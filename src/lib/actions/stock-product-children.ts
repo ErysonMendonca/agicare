@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 import { logAction } from "@/lib/system-log";
 
@@ -29,7 +28,6 @@ const UUID =
  * criar/excluir o produto inteiro.
  */
 async function gate(): Promise<{ clinicId: string } | { error: string }> {
-  if (isDemoMode()) return { error: "Indisponível em modo demonstração." };
   const clinicId = await requireClinic();
   return { clinicId };
 }

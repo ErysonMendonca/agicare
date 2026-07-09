@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
 import { getActiveClinicId } from "@/lib/tenant";
 
@@ -39,27 +38,7 @@ export type MyAccount = {
 
 export async function getMyAccount(): Promise<MyAccount | null> {
   // Modo demo: mock coerente para o protótipo navegável sem backend.
-  if (isDemoMode()) {
-    return {
-      userId: "00000000-0000-0000-0000-0000000000de",
-      role: "medico",
-      username: "joao.silva",
-      full_name: "Dr. João Silva",
-      social_name: "João Silva",
-      birth_date: "1985-04-12",
-      sex: "Masculino",
-      phone: "(11) 98888-7777",
-      contactEmail: "joao.silva@agicare.local",
-      cep: "01310-100",
-      address: "Av. Paulista",
-      address_number: "1000",
-      complement: "Conj. 52",
-      neighborhood: "Bela Vista",
-      city: "São Paulo",
-      state: "SP",
-      hasProfessional: true,
-    };
-  }
+
 
   const current = await getCurrentUser();
   if (!current) return null;

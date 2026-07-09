@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { isDemoMode } from "@/lib/supabase/config";
 import {
   getMyClinics,
   isMultitenantProvisioned,
@@ -52,7 +51,6 @@ export async function signIn(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  if (isDemoMode()) redirect("/dashboard");
 
   const usuario = String(formData.get("usuario") ?? "").trim();
   const password = String(formData.get("senha") ?? "");
@@ -150,7 +148,6 @@ export async function selectClinic(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  if (isDemoMode()) redirect("/dashboard");
 
   const clinicId = String(formData.get("clinicId") ?? "").trim();
   if (!clinicId) return { error: "Selecione uma clínica." };
@@ -166,9 +163,7 @@ export async function selectClinic(
 
 /** Logout e volta para a tela de login. */
 export async function signOut(): Promise<void> {
-  if (!isDemoMode()) {
-    const supabase = await createClient();
-    await supabase.auth.signOut();
-  }
+  const supabase = await createClient();
+  await supabase.auth.signOut();
   redirect("/");
 }

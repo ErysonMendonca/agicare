@@ -223,11 +223,14 @@ function CamposProfissional({
             defaultValue={defaults.professional_type ?? ""}
           >
             <option value="">Selecione...</option>
-            {tiposProfissional.map((t) => (
-              <option key={t.id} value={t.value}>
-                {t.label}
-              </option>
-            ))}
+            {tiposProfissional
+              .slice()
+              .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"))
+              .map((t) => (
+                <option key={t.id} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
           </Select>
           <Select
             id={`${prefixo}-especialidade`}
@@ -236,11 +239,14 @@ function CamposProfissional({
             defaultValue={especialidadeAtual}
           >
             <option value="">Selecione...</option>
-            {especialidades.map((e) => (
-              <option key={e.id} value={e.value}>
-                {e.label}
-              </option>
-            ))}
+            {especialidades
+              .slice()
+              .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"))
+              .map((e) => (
+                <option key={e.id} value={e.value}>
+                  {e.label}
+                </option>
+              ))}
             {especialidadeLegada && (
               <option value={especialidadeAtual}>{especialidadeAtual}</option>
             )}
@@ -416,6 +422,40 @@ function CamposProfissional({
         </div>
       </Secao>
 
+      {/* ── Acesso ───────────────────────────────────────────────── */}
+      {!mostrarStatus && (
+        <Secao titulo="Acesso">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <Input
+              id={`${prefixo}-login`}
+              name="username"
+              type="text"
+              label="Login (Usuário)"
+              placeholder="joao.silva"
+              autoComplete="off"
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 mt-5">
+            <Input
+              id={`${prefixo}-senha`}
+              name="password"
+              type="password"
+              label="Senha"
+              placeholder="••••••••"
+              autoComplete="new-password"
+            />
+            <Input
+              id={`${prefixo}-senha-confirma`}
+              name="confirm_password"
+              type="password"
+              label="Confirmar Senha"
+              placeholder="••••••••"
+              autoComplete="new-password"
+            />
+          </div>
+        </Secao>
+      )}
+
       {/* ── Credenciais de Convênio ─────────────────────────────── */}
       <Secao titulo="Credenciais de Convênio">
         {/* Passa as credenciais serializadas para o Action no lado do server */}
@@ -567,7 +607,7 @@ export function ProfissionalForm({
   }, [state, router, profissional]);
 
   return (
-    <Card className="max-w-5xl">
+    <Card className="w-full">
       <form action={formAction}>
         <CardBody className="p-8">
           <CamposProfissional

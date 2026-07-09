@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 // ════════════════════════════════════════════════════════════════
 // Catálogo de Especialidades (attendance_options, category='especialidade').
@@ -52,7 +51,6 @@ const DEMO_ESPECIALIDADES: Especialidade[] = [
  * sort_order. Em modo demo devolve exemplos hardcoded.
  */
 export async function listEspecialidades(): Promise<Especialidade[]> {
-  if (isDemoMode()) return DEMO_ESPECIALIDADES;
 
   const supabase = await createClient();
   const { data, error } = await supabase

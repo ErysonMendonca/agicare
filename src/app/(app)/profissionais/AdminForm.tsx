@@ -16,14 +16,16 @@ import {
 } from "@/lib/actions/professionals";
 import type { ProfissionalEdit } from "@/lib/data/professionals";
 import type { AttendanceOption } from "@/lib/data/attendance-options.shared";
+import type { Cargo } from "@/lib/data/usuarios.shared";
 
 /** Valores padrão dos campos do formulário (vazios = novo cadastro). */
 type FormDefaults = Partial<ProfissionalEdit>;
 
-// Cargos/Papéis disponíveis para equipe administrativa
+// Cargos/Papéis disponíveis para equipe administrativa (conforme Perfis de Acesso)
 const PAPEIS_ADMIN = [
+  { value: "admin", label: "Administrador" },
+  { value: "medico", label: "Médico" },
   { value: "recepcao", label: "Recepção" },
-  { value: "admin", label: "Administração / Gestão" },
 ];
 
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
@@ -42,11 +44,13 @@ function CamposAdmin({
   mostrarStatus,
   departamentos,
   isEdit,
+  cargos,
 }: {
   defaults: FormDefaults;
   mostrarStatus: boolean;
   departamentos: AttendanceOption[];
   isEdit: boolean;
+  cargos: Cargo[];
 }) {
   const [telefone, setTelefone] = useState(defaults.phone ?? "");
   const [documento, setDocumento] = useState(defaults.document ?? "");
@@ -55,6 +59,17 @@ function CamposAdmin({
     const limpo = v.replace(/\D/g, "");
     setDocumento(formatCpf(limpo));
   }
+
+  // Combina papéis base e cargos personalizados
+  const perfisOpcoes = [
+    ...PAPEIS_ADMIN.map((p) => ({ value: `${p.value}:`, label: p.label })),
+    ...cargos.map((c) => ({ value: `${c.baseRole}:${c.id}`, label: c.nome })),
+  ];
+
+  // Identifica o valor selecionado por padrão
+  const defaultRoleValue = defaults.cargoId
+    ? `${defaults.role}:${defaults.cargoId}`
+    : `${defaults.role ?? "recepcao"}:`;
 
   return (
     <div className="space-y-8">
@@ -114,49 +129,54 @@ function CamposAdmin({
       {/* ── 2. Dados Profissionais ───────────────────────── */}
       <Secao titulo="Departamento e Cargo">
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <Select
+          <Input
             id="department"
             name="department"
+            type="text"
             label="Departamento"
+            placeholder="Ex.: Financeiro"
             defaultValue={defaults.department ?? ""}
             required
-          >
-            <option value="" disabled>Selecione um departamento</option>
-            {departamentos.map((d) => (
-              <option key={d.value} value={d.value}>
-                {d.label}
-              </option>
-            ))}
-          </Select>
-
-          <Select
-            id="role"
-            name="role"
-            label="Cargo no Sistema"
-            defaultValue={defaults.role ?? "recepcao"}
+          />
+          <Input
+            id="job_title"
+            name="job_title"
+            type="text"
+            label="Cargo"
+            placeholder="Ex.: Gerente Financeiro"
+            defaultValue={defaults.job_title ?? ""}
             required
-          >
-            {PAPEIS_ADMIN.map((p) => (
-              <option key={p.value} value={p.value}>
-                {p.label}
-              </option>
-            ))}
-          </Select>
+          />
         </div>
       </Secao>
 
       {/* ── 3. Dados de Acesso (Login/Senha) ───────────────────────── */}
       {!isEdit && (
         <Secao titulo="Credenciais de Acesso">
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <Input
-              id="login_email"
-              name="login_email"
-              type="email"
-              label="Login (E-mail)"
-              placeholder="E-mail para acesso"
+              id="username"
+              name="username"
+              type="text"
+              label="Login (Usuário)"
+              placeholder="joao.silva"
               required
             />
+            <Select
+              id="role"
+              name="role"
+              label="Perfil de acesso (Dentro do sistema)"
+              defaultValue={defaultRoleValue}
+              required
+            >
+              {perfisOpcoes.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 mt-5">
             <Input
               id="password"
               name="password"
@@ -165,6 +185,34 @@ function CamposAdmin({
               placeholder="Mínimo de 6 caracteres"
               required
             />
+            <Input
+              id="confirm_password"
+              name="confirm_password"
+              type="password"
+              label="Confirmar Senha"
+              placeholder="••••••••"
+              required
+            />
+          </div>
+        </Secao>
+      )}
+      
+      {isEdit && (
+        <Secao titulo="Perfil de Acesso">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <Select
+              id="role"
+              name="role"
+              label="Perfil de acesso (Dentro do sistema)"
+              defaultValue={defaultRoleValue}
+              required
+            >
+              {perfisOpcoes.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </Select>
           </div>
         </Secao>
       )}
@@ -199,9 +247,11 @@ function CamposAdmin({
 export function AdminForm({
   profissional,
   departamentos,
+  cargos,
 }: {
   profissional?: ProfissionalEdit;
   departamentos: AttendanceOption[];
+  cargos: Cargo[];
 }) {
   const router = useRouter();
   const isEdit = !!profissional;
@@ -228,7 +278,7 @@ export function AdminForm({
   }, [state, isEdit, router]);
 
   return (
-    <Card className="mx-auto max-w-4xl">
+    <Card className="w-full">
       <form action={formAction}>
         <CardBody className="p-6 sm:p-8">
           <CamposAdmin
@@ -236,6 +286,7 @@ export function AdminForm({
             mostrarStatus={isEdit}
             departamentos={departamentos}
             isEdit={isEdit}
+            cargos={cargos}
           />
         </CardBody>
 

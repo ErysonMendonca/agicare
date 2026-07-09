@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinico } from "@/lib/auth";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { getActiveClinicId, DEMO_CLINIC_ID } from "@/lib/tenant";
@@ -45,10 +44,7 @@ export async function criarPedidoProtetico(
   const d = parsed.data;
   const dueDate = prazoEmDias(d.urgent ? 5 : 10);
 
-  // Modo demo: simula sucesso com um id representativo (sem persistir).
-  if (isDemoMode()) {
-    return { ok: true, orderId: `demo-prot-${Date.now()}`, clinicId: DEMO_CLINIC_ID };
-  }
+
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };
@@ -115,7 +111,6 @@ export async function registrarArquivoProtetico(
 
   const d = parsed.data;
 
-  if (isDemoMode()) return { ok: true };
 
   const guard = await requireClinico();
   if ("error" in guard) return { error: guard.error };

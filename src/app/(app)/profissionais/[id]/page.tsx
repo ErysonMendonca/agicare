@@ -3,6 +3,7 @@ import { requireView } from "@/lib/permissions";
 import { PageHeader } from "@/components/app/PageHeader";
 import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { getProfessionalById } from "@/lib/data/professionals";
+import { listCargos } from "@/lib/data/usuarios";
 import { ProfissionalForm } from "../ProfissionalForm";
 import { AdminForm } from "../AdminForm";
 
@@ -26,6 +27,7 @@ export default async function EditarProfissionalPage({
   const especialidades = options["especialidade"] || [];
   const tiposProfissional = options["tipo_profissional"] || [];
   const departamentos = options["departamento"] || [];
+  const cargos = await listCargos();
 
   const isAdmin = !PAPEIS_CLINICOS.includes(profissional.role);
 
@@ -41,6 +43,7 @@ export default async function EditarProfissionalPage({
         <AdminForm
           profissional={profissional}
           departamentos={departamentos}
+          cargos={cargos}
         />
       ) : (
         <ProfissionalForm

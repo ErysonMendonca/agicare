@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { getCurrentUser, getRole } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
 import { getAttendanceFlow } from "@/lib/data/attendance-flow";
@@ -82,7 +81,6 @@ export async function salvarTriagem(
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const d = parsed.data;
 
-  if (isDemoMode()) return { ok: true };
 
   const gate = await ensureStaff();
   if ("error" in gate) return gate;
@@ -149,7 +147,6 @@ export async function iniciarTriagem(id: string): Promise<ActionState> {
   const parsed = idSchema.safeParse(id);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  if (isDemoMode()) return { ok: true };
 
   const gate = await ensureStaff();
   if ("error" in gate) return gate;

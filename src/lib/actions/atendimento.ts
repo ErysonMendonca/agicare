@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { requireClinic } from "@/lib/tenant";
 import { getCurrentUser, getRole } from "@/lib/auth";
 import {
@@ -56,7 +55,6 @@ export async function registrarProcedimento(input: {
     .object({ queueEntryId: uuid, procedureId: uuid })
     .safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
   const negado = await guardMedico();
   if (negado) return { error: negado };
 
@@ -102,7 +100,6 @@ export async function registrarProcedimento(input: {
 /** Médico: remove um procedimento registrado (antes de finalizar). */
 export async function removerProcedimento(id: string): Promise<ActionState> {
   if (!uuid.safeParse(id).success) return { error: "Registro inválido." };
-  if (isDemoMode()) return { ok: true };
   const negado = await guardMedico();
   if (negado) return { error: negado };
   const clinicId = await requireClinic();
@@ -139,7 +136,6 @@ export async function finalizarAtendimento(
   queueEntryId: string,
 ): Promise<ActionState> {
   if (!uuid.safeParse(queueEntryId).success) return { error: "Atendimento inválido." };
-  if (isDemoMode()) return { ok: true };
   const negado = await guardMedico();
   if (negado) return { error: negado };
   const clinicId = await requireClinic();
@@ -210,7 +206,6 @@ export type FecharInput = z.input<typeof fecharSchema>;
 export async function fecharAtendimento(input: FecharInput): Promise<ActionState> {
   const parsed = fecharSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
-  if (isDemoMode()) return { ok: true };
 
   const role = await getRole();
   if (role !== "recepcao" && role !== "admin") {

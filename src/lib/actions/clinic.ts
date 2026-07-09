@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getCurrentUser } from "@/lib/auth";
-import { isDemoMode } from "@/lib/supabase/config";
 import { DEMO_CLINIC_ID, multitenantSchemaMissing } from "@/lib/tenant";
 
 /**
@@ -43,13 +42,7 @@ export async function setActiveClinic(clinicId: string): Promise<SetClinicState>
   }
   const targetClinicId = parsed.data.clinicId;
 
-  // Modo demo: só existe a clínica demo; não há app_metadata para gravar.
-  if (isDemoMode()) {
-    if (targetClinicId !== DEMO_CLINIC_ID) {
-      return { error: "Clínica inválida." };
-    }
-    return { ok: true, refresh: false };
-  }
+
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };

@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 
 export type CidCode = { id: string; code: string; description: string };
 
@@ -13,7 +12,6 @@ const DEMO_CID_CODES: CidCode[] = [
 
 /** Lista o catálogo global de CIDs ativos, ordenado por código. */
 export async function listCidCodes(): Promise<CidCode[]> {
-  if (isDemoMode()) return DEMO_CID_CODES;
 
   const supabase = await createClient();
   const { data, error } = await supabase

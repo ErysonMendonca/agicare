@@ -25,7 +25,6 @@ import {
   addAttendanceOption,
   updateAttendanceOption,
   removeAttendanceOption,
-  reorderAttendanceOptions,
 } from "@/lib/actions/attendance-options";
 
 const CATEGORIA = "especialidade";
@@ -82,12 +81,15 @@ export function EspecialidadesConfig({
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    if (!termo) return lista;
-    return lista.filter(
-      (e) =>
-        e.label.toLowerCase().includes(termo) ||
-        (e.description ?? "").toLowerCase().includes(termo),
-    );
+    let result = lista;
+    if (termo) {
+      result = lista.filter(
+        (e) =>
+          e.label.toLowerCase().includes(termo) ||
+          (e.description ?? "").toLowerCase().includes(termo),
+      );
+    }
+    return result.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   }, [lista, busca]);
 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
@@ -193,50 +195,6 @@ export function EspecialidadesConfig({
     });
   }
 
-  // ── Drag-and-drop (reordenação) ────────────────────────────────
-  // Só habilita quando não há busca ativa (a ordem visível == ordem real).
-  function onDragStart(id: string) {
-    if (buscando) return;
-    setDragId(id);
-  }
-
-  function onDragOver(ev: DragEvent, id: string) {
-    if (buscando || dragId === null) return;
-    ev.preventDefault();
-    setOverId(id);
-  }
-
-  function onDrop(alvoId: string) {
-    if (buscando || dragId === null || dragId === alvoId) {
-      setDragId(null);
-      setOverId(null);
-      return;
-    }
-    const origem = lista.findIndex((e) => e.id === dragId);
-    const destino = lista.findIndex((e) => e.id === alvoId);
-    if (origem < 0 || destino < 0) return;
-
-    const nova = [...lista];
-    const [movido] = nova.splice(origem, 1);
-    nova.splice(destino, 0, movido);
-    // Renumera sortOrder para refletir a nova ordem (1-based).
-    const renumerada = nova.map((e, i) => ({ ...e, sortOrder: i + 1 }));
-    setLista(renumerada);
-    setDragId(null);
-    setOverId(null);
-
-    const ordemIds = renumerada.map((e) => e.id);
-    startTransition(async () => {
-      const res = await reorderAttendanceOptions(CATEGORIA, ordemIds);
-      if (res.error) {
-        toast.error(res.error);
-        setLista(especialidades);
-        return;
-      }
-      refresh();
-    });
-  }
-
   return (
     <Card>
       <CardBody>
@@ -277,7 +235,6 @@ export function EspecialidadesConfig({
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-line bg-muted-surface text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                <th className="w-28 px-4 py-3">Ordem</th>
                 <th className="px-4 py-3">Especialidade</th>
                 <th className="px-4 py-3">Descrição</th>
                 <th className="w-28 px-4 py-3">Status</th>
@@ -295,41 +252,11 @@ export function EspecialidadesConfig({
                       key={e.id}
                       layout
                       initial={{ opacity: 0 }}
-                      animate={{ opacity: arrastando ? 0.4 : 1 }}
+                      animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.15 }}
-                      draggable={!buscando}
-                      onDragStart={() => onDragStart(e.id)}
-                      onDragOver={(ev) => onDragOver(ev, e.id)}
-                      onDrop={() => onDrop(e.id)}
-                      onDragEnd={() => {
-                        setDragId(null);
-                        setOverId(null);
-                      }}
-                      className={`border-b border-line last:border-0 transition-colors ${
-                        alvo ? "bg-brand-50" : "hover:bg-muted-surface/60"
-                      }`}
+                      className="border-b border-line last:border-0 transition-colors hover:bg-muted-surface/60"
                     >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            aria-label={`Arrastar para reordenar ${e.label}`}
-                            title={
-                              buscando
-                                ? "Limpe a busca para reordenar"
-                                : "Arraste para reordenar"
-                            }
-                            disabled={buscando}
-                            className="cursor-grab text-muted transition-colors hover:text-ink active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            <GripVertical className="h-4 w-4" />
-                          </button>
-                          <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-md border border-line bg-white px-1.5 text-xs font-semibold text-ink">
-                            {posicao}
-                          </span>
-                        </div>
-                      </td>
                       <td className="px-4 py-3 font-semibold text-ink">
                         {e.label}
                       </td>
@@ -371,7 +298,7 @@ export function EspecialidadesConfig({
               {visiveis.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={4}
                     className="px-4 py-12 text-center text-sm text-muted"
                   >
                     {buscando

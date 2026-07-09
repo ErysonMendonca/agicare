@@ -3,7 +3,6 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { isDemoMode } from "@/lib/supabase/config";
 import { isGestor } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
 import { sanitizeStages } from "@/lib/data/attendance-flow.shared";
@@ -99,7 +98,6 @@ export async function salvarConfiguracoes(
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  if (isDemoMode()) return { ok: true };
 
   const d = parsed.data;
 
@@ -223,7 +221,6 @@ export async function salvarFluxo(
   // Normaliza: ordem canônica + força etapas obrigatórias.
   const stages = sanitizeStages(parsed.data.stages);
 
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const clinicId = await requireClinic();
@@ -261,7 +258,6 @@ export async function salvarFluxo(
  */
 export async function executarBackup(): Promise<ActionState> {
   if (!(await isGestor())) return { error: "Acesso restrito ao gestor." };
-  if (isDemoMode()) return { ok: true };
 
   const supabase = await createClient();
   const { data } = await supabase
