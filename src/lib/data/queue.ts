@@ -271,13 +271,17 @@ export async function listQueue(opts?: {
     query = query.gte("created_at", startISO).lt("created_at", endISO);
   }
 
-  // Fila do MÉDICO: quem tem vínculo de profissional vê a fila da SUA
-  // especialidade (ou pacientes SEM especialidade, "livres gerais", p/ não sumir
-  // da fila de ninguém) e só os SEM profissional atribuído ou já atribuídos a
-  // ELE (após atender = reivindicar). Admin/recepção (sem vínculo, ou admin
-  // explícito) não filtram — veem a fila inteira.
+  // Fila do MÉDICO: ele vê a fila da SUA especialidade (ou pacientes SEM
+  // especialidade, "livres gerais", p/ não sumir da fila de ninguém) e só os
+  // SEM profissional atribuído ou já atribuídos a ELE (após atender =
+  // reivindicar). Admin e recepção veem a fila inteira.
+  //
+  // O gate é o PAPEL, não a existência de vínculo em `professionals`: desde que
+  // o cadastro de profissional administrativo passou a gravar `profile_id`, a
+  // recepcionista também tem linha lá. Filtrar por vínculo escondia dela todo
+  // paciente já atribuído a um médico — ela via a fila vazia.
   const [me, role] = await Promise.all([getMyProfessional(), getRole()]);
-  if (me && role !== "admin") {
+  if (me && role === "medico") {
     const UUID_RE =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     // Especialidade: a dele OU nula. Valor entre aspas (JSON) → seguro no filtro
