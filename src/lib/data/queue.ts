@@ -23,6 +23,9 @@ export type FilaItem = {
   /** Convênio do CADASTRO do paciente (patients.convenio) — preenche o modal de
    * Dados de Atendimento. null quando o paciente não tem convênio no cadastro. */
   convenioCadastro?: string | null;
+  /** Data de nascimento do paciente (patients.birth_date) — decide se a seção
+   * "Responsável" do atendimento nasce como "O MESMO" (maior de idade). */
+  pacienteNascimento?: string | null;
   /**
    * Tipo de Atendimento vindo do agendamento (appointments.reason:
    * Consulta/Retorno/Exame/Procedimento). null quando avulso/sem agendamento.
@@ -364,7 +367,7 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
   const { data, error } = await supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, reason), patients(convenio), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, reason), patients(convenio, birth_date), professionals(profiles(full_name))",
     )
     .eq("id", id)
     .single();
@@ -389,6 +392,8 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
   const tipoAtendimento = (agendamento?.reason as string | null) ?? null;
   const pacienteRow = Array.isArray(r.patients) ? r.patients[0] : r.patients;
   const convenioCadastro = (pacienteRow?.convenio as string | null) ?? null;
+  const pacienteNascimento =
+    (pacienteRow?.birth_date as string | null) ?? null;
 
   return {
     id: r.id as string,
@@ -407,6 +412,7 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
     medico: profile?.full_name ?? "—",
     convenio: r.insurance ?? "—",
     convenioCadastro,
+    pacienteNascimento,
     tipoAtendimento,
     status: mapStatus(statusRaw),
     statusRaw,
@@ -554,7 +560,9 @@ export async function listAgendadosHoje(opts?: {
           especialidade:
             professional?.specialty ?? (r.specialty as string | null) ?? "—",
           medico: profProfile?.full_name ?? "—",
-          convenio: "—",
+          // Agendado ainda não tem insurance na fila; exibe o convênio da FICHA
+          // do paciente (patients.convenio) tanto no card quanto no check-in.
+          convenio: patient?.convenio ?? "—",
           convenioCadastro: patient?.convenio ?? null,
           tipoAtendimento: (r.reason as string | null) ?? null,
           status: mapStatus("agendado"),

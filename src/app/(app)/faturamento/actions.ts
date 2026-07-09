@@ -7,8 +7,10 @@ import { isGestor } from "@/lib/auth";
 import { gerarLoteTissXML, type GuiaXML } from "@/lib/faturamento-tiss";
 import {
   getCheckoutData,
+  getCheckoutSalvo,
   avaliarGuiaTiss,
   type ItemCheckout,
+  type CheckoutSalvo,
   type TissGuideStatus,
 } from "@/lib/data/billing";
 
@@ -78,6 +80,20 @@ export async function carregarItensCheckout(
   return { itens: data.itens };
 }
 
+/**
+ * Carrega o check-out REAL já gravado de um evento faturado (itens + forma +
+ * desconto/acréscimo/total/data) para VISUALIZAR/IMPRIMIR o recibo e para
+ * EDITAR (reabrir a conferência pré-preenchida). Não escreve nada.
+ */
+export async function carregarCheckoutSalvo(
+  eventCode: string,
+): Promise<{ recibo: CheckoutSalvo | null }> {
+  const parsed = idSchema.safeParse(eventCode);
+  if (!parsed.success) return { recibo: null };
+  const recibo = await getCheckoutSalvo(parsed.data);
+  return { recibo };
+}
+
 /** Revalida as rotas afetadas por mudanças no faturamento. */
 function revalidateFaturamento() {
   revalidatePath("/faturamento");
@@ -109,21 +125,26 @@ export async function registrarCheckout(
 
   const supabase = await createClient();
 
-  // Localiza o evento pelo código de negócio.
+  // Localiza o evento pelo código de negócio (traz os ajustes já gravados).
   const { data: evt, error: evtErr } = await supabase
     .from("billable_events")
-    .select("id, amount")
+    .select("id, amount, discount, surcharge")
     .eq("code", eventCode)
     .maybeSingle();
 
   if (evtErr) return { error: evtErr.message };
   if (!evt) return { error: "Evento faturável não encontrado." };
 
+  // Não-gestor não altera ajustes: PRESERVA o desconto/acréscimo já gravado
+  // (ex.: recepção editando um evento que o gestor abateu) em vez de zerar.
+  const descontoFinal = gestor ? desconto : Number(evt.discount ?? 0);
+  const acrescimoFinal = gestor ? acrescimo : Number(evt.surcharge ?? 0);
+
   // A recepção conferiu os itens (e possivelmente adicionou manuais).
   const itensReais = parsed.data.itens;
 
   const subtotal = itensReais.reduce((acc, i) => acc + i.valor * i.qtd, 0);
-  const netAmount = Math.max(0, subtotal - desconto + acrescimo);
+  const netAmount = Math.max(0, subtotal - descontoFinal + acrescimoFinal);
 
   // Regrava os itens conferidos (limpa anteriores → idempotente por evento).
   await supabase.from("billing_items").delete().eq("event_id", evt.id);
@@ -140,7 +161,7 @@ export async function registrarCheckout(
   }));
 
   // Desconto/acréscimo viram itens de ajuste (auditável) + colunas no evento.
-  if (desconto > 0) {
+  if (descontoFinal > 0) {
     linhas.push({
       event_id: evt.id,
       kind: "tuss",
@@ -148,11 +169,11 @@ export async function registrarCheckout(
       code: "DESC",
       description: "Desconto aplicado no check-out",
       quantity: 1,
-      unit_price: -desconto,
-      amount: -desconto,
+      unit_price: -descontoFinal,
+      amount: -descontoFinal,
     });
   }
-  if (acrescimo > 0) {
+  if (acrescimoFinal > 0) {
     linhas.push({
       event_id: evt.id,
       kind: "tuss",
@@ -160,8 +181,8 @@ export async function registrarCheckout(
       code: "ACRE",
       description: "Acréscimo aplicado no check-out",
       quantity: 1,
-      unit_price: acrescimo,
-      amount: acrescimo,
+      unit_price: acrescimoFinal,
+      amount: acrescimoFinal,
     });
   }
 
@@ -193,8 +214,8 @@ export async function registrarCheckout(
     .update({
       kind: forma,
       status: "faturado",
-      discount: desconto,
-      surcharge: acrescimo,
+      discount: descontoFinal,
+      surcharge: acrescimoFinal,
       net_amount: netAmount,
       payment_method: forma === "particular" ? (pagamento ?? "pix") : null,
       checked_out_at: new Date().toISOString(),

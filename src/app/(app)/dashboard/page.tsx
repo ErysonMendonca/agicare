@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   Users,
   CalendarDays,
@@ -18,23 +19,36 @@ import {
   getDashboardKpis,
   getConsultasRetornos,
   getReceitaMensal,
+  getPeriodConfig,
 } from "@/lib/data/dashboard";
 import { listAppointments } from "@/lib/data/appointments";
 import { listStockProducts } from "@/lib/data/stock";
 import { listBillableEvents } from "@/lib/data/billing";
 import { isGestor } from "@/lib/auth";
+import { PeriodSelector } from "./PeriodSelector";
 
 type AlertaTone = "danger" | "warn" | "info";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  // Next.js 16: searchParams é assíncrono.
+  searchParams: Promise<{ period?: string; de?: string; ate?: string }>;
+}) {
+  const sp = await searchParams;
+  const { current: curWindow, previous: prevWindow } = getPeriodConfig(
+    sp.period || "30d",
+    sp.de,
+    sp.ate,
+  );
+
   const gestor = await isGestor();
   const [kpis, serie, receita, atendimentos, estoque, faturas] =
     await Promise.all([
-      getDashboardKpis(),
-      getConsultasRetornos(),
-      // Receita real só é carregada quando o usuário é gestor (dado financeiro).
+      getDashboardKpis(curWindow, prevWindow),
+      getConsultasRetornos(curWindow),
       gestor
-        ? getReceitaMensal()
+        ? getReceitaMensal(curWindow)
         : Promise.resolve({ labels: [] as string[], valores: [] as number[] }),
       listAppointments(),
       listStockProducts(),
@@ -44,7 +58,8 @@ export default async function DashboardPage() {
   // Receita em milhares (R$ mil) para o gráfico de barras.
   const receitaMil = receita.valores.map((v) => Math.round(v / 1000));
 
-  const proximas = atendimentos.slice(0, 4);
+  const totalAtendimentos = atendimentos.length;
+  const proximas = atendimentos.slice(0, 5);
 
   // Central de Alertas em 3 níveis (vermelho/laranja/azul).
   const alertas: { tone: AlertaTone; text: string }[] = [
@@ -82,6 +97,15 @@ export default async function DashboardPage() {
       <PageHeader
         title="Dashboard"
         subtitle="Visão geral dos indicadores e métricas da clínica"
+        actions={
+          <Suspense
+            fallback={
+              <div className="h-9 w-52 animate-pulse rounded-lg bg-muted/20" />
+            }
+          >
+            <PeriodSelector />
+          </Suspense>
+        }
       />
 
       <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -202,16 +226,18 @@ export default async function DashboardPage() {
       </Stagger>
 
       <Stagger className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <FadeInUp className="lg:col-span-2">
-          <Card className="min-w-0 p-5">
+        <FadeInUp className="lg:col-span-2 flex flex-col">
+          <Card className="flex-1 min-w-0 p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-semibold text-ink">Próximas Consultas</h3>
-              <Link
-                href="/agenda"
-                className="text-sm font-medium text-brand-600 hover:text-brand-700"
-              >
-                Ver agenda completa
-              </Link>
+              {totalAtendimentos > 5 && (
+                <Link
+                  href="/agenda"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-brand-500 bg-white px-3 text-xs font-medium text-brand-600 transition-colors hover:bg-brand-50"
+                >
+                  Ver mais agendamentos
+                </Link>
+              )}
             </div>
             <ul className="divide-y divide-line">
               {proximas.length === 0 && (
@@ -249,8 +275,8 @@ export default async function DashboardPage() {
           </Card>
         </FadeInUp>
 
-        <FadeInUp>
-          <Card className="min-w-0 p-5">
+        <FadeInUp className="flex flex-col">
+          <Card className="flex-1 min-w-0 p-5">
             <h3 className="mb-4 font-semibold text-ink">Alertas</h3>
             <ul className="space-y-3">
               {alertas.length === 0 && (
@@ -258,7 +284,7 @@ export default async function DashboardPage() {
                   Nenhum alerta no momento.
                 </li>
               )}
-              {alertas.map((a, i) => (
+              {alertas.slice(0, 5).map((a, i) => (
                 <li key={i} className="flex items-start gap-3">
                   <AlertCircle
                     className={`mt-0.5 h-5 w-5 shrink-0 ${alertaCor[a.tone]}`}

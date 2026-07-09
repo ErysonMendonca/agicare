@@ -71,6 +71,8 @@ export type Profissional = {
   especialidade: string;
   crm: string;
   cargo: string;
+  /** Departamento (equipe administrativa) — vazio quando não informado. */
+  departamento: string;
   email: string;
   telefone: string;
   ativo: boolean;
@@ -130,6 +132,7 @@ const MOCK: Profissional[] = [
     especialidade: "Cardiologia",
     crm: "CRM/SP 123456",
     cargo: "Médico",
+    departamento: "",
     email: "joao.oliveira@clinica.com",
     telefone: "(11) 98765-4321",
     ativo: true,
@@ -155,6 +158,7 @@ const MOCK: Profissional[] = [
     especialidade: "Ortopedia",
     crm: "CRM/SP 234567",
     cargo: "Médico",
+    departamento: "",
     email: "ana.costa@clinica.com",
     telefone: "(11) 98765-4322",
     ativo: true,
@@ -180,6 +184,7 @@ const MOCK: Profissional[] = [
     especialidade: "Dermatologia",
     crm: "CRM/SP 345678",
     cargo: "Médico",
+    departamento: "",
     email: "carlos.mendes@clinica.com",
     telefone: "(11) 98765-4323",
     ativo: true,
@@ -205,6 +210,7 @@ const MOCK: Profissional[] = [
     especialidade: "Enfermagem",
     crm: "COREN/SP 456789",
     cargo: "Enfermagem",
+    departamento: "",
     email: "mariana.lima@clinica.com",
     telefone: "(11) 98765-4324",
     ativo: true,
@@ -316,7 +322,7 @@ export async function listProfessionals(): Promise<Profissional[]> {
   const { data, error } = await supabase
     .from("professionals")
     .select(
-      "id, profile_id, specialty, council_reg, active, email, cep, address, address_number, complement, neighborhood, city, state, notes, " +
+      "id, profile_id, specialty, council_reg, active, email, department, job_title, cep, address, address_number, complement, neighborhood, city, state, notes, " +
         "person_type, document, social_name, birth_date, sex, gender, mother_name, race, birthplace, nationality, cns, cnes, " +
         "council_number, council_name, council_uf, council_expiry, professional_type, " +
         "professional_insurance_credentials(convenio, vigencia, convenio_code, lab_code, tiss_login, tiss_password, recebe_eletivo, recebe_urgencia, recebe_internacao, xml_tag, cpf_or_convenio_code), " +
@@ -336,6 +342,8 @@ export async function listProfessionals(): Promise<Profissional[]> {
     council_reg: S;
     active: boolean | null;
     email: S;
+    department: S;
+    job_title: S;
     cep: S;
     address: S;
     address_number: S;
@@ -382,7 +390,10 @@ export async function listProfessionals(): Promise<Profissional[]> {
       nome: perfil?.full_name ?? "—",
       especialidade: r.specialty ?? "—",
       crm: r.council_reg ?? "—",
-      cargo: rotuloCargo(role),
+      // Cargo em texto livre (equipe administrativa); cai no rótulo do papel
+      // quando não informado (equipe clínica não usa job_title).
+      cargo: r.job_title || rotuloCargo(role),
+      departamento: r.department ?? "",
       email: r.email ?? "",
       telefone: perfil?.phone ?? "—",
       ativo: !!r.active,
@@ -424,6 +435,8 @@ export async function listProfessionals(): Promise<Profissional[]> {
         council_uf: (r.council_uf as string | null) ?? "",
         council_expiry: (r.council_expiry as string | null) ?? "",
         professional_type: (r.professional_type as string | null) ?? "",
+        department: r.department ?? "",
+        job_title: r.job_title ?? "",
         credentials: (Array.isArray(r.professional_insurance_credentials)
           ? r.professional_insurance_credentials
           : []

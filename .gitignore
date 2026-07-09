@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Scripts temporários de desenvolvimento (não versionar)
+scratch/

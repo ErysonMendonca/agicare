@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { salvarAtendimento } from "@/lib/actions/queue";
 import { type FilaItem } from "@/lib/data/queue";
+import { ehMenor } from "@/app/(app)/pacientes/pacienteForm.shared";
 import { useConfirm } from "@/lib/store/confirm";
 import type {
   AttendanceOption,
@@ -104,7 +105,11 @@ export function AtendimentoClient({
   });
   const [plano, setPlano] = useState("");
   const isParticular = /particular/i.test(convenio);
-  const [oMesmo, setOMesmo] = useState(false);
+  // Paciente maior de idade → o responsável já nasce como "O MESMO" (não precisa
+  // preencher). Menor de idade → seção do responsável começa aberta para preencher.
+  const [oMesmo, setOMesmo] = useState(
+    () => !ehMenor(item.pacienteNascimento ?? undefined),
+  );
   const [respNome, setRespNome] = useState("");
   const [gestante, setGestante] = useState(false);
 

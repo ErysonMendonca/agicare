@@ -15,6 +15,9 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  Eye,
+  Pencil,
+  Printer,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -65,6 +68,18 @@ export function FaturamentoClient({
 }) {
   const [aba, setAba] = useState<Aba>("eventos");
   const [selected, setSelected] = useState<Evento | null>(null);
+  // Modo do modal de check-out: conferir (pendente) | editar | visualizar |
+  // imprimir (registro já faturado).
+  const [modo, setModo] = useState<
+    "conferir" | "editar" | "visualizar" | "imprimir"
+  >("conferir");
+  const abrir = (
+    evt: Evento,
+    m: "conferir" | "editar" | "visualizar" | "imprimir",
+  ) => {
+    setModo(m);
+    setSelected(evt);
+  };
 
   // Filtros client-side: operam sobre os eventos já carregados via props.
   const [busca, setBusca] = useState("");
@@ -313,14 +328,38 @@ export function FaturamentoClient({
                         </div>
                       </div>
 
-                      {evt.faturavel && (
+                      {evt.faturavel ? (
                         <Button
                           className="flex-none lg:self-start"
-                          onClick={() => setSelected(evt)}
+                          onClick={() => abrir(evt, "conferir")}
                         >
                           <ClipboardCheck className="h-4 w-4" /> Conferir Check-out
                         </Button>
-                      )}
+                      ) : evt.statusRaw === "faturado" ? (
+                        <div className="flex flex-none flex-wrap gap-2 lg:self-start">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => abrir(evt, "visualizar")}
+                          >
+                            <Eye className="h-4 w-4" /> Visualizar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => abrir(evt, "editar")}
+                          >
+                            <Pencil className="h-4 w-4" /> Editar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => abrir(evt, "imprimir")}
+                          >
+                            <Printer className="h-4 w-4" /> Imprimir
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   </Card>
                 </FadeInUp>
@@ -345,6 +384,7 @@ export function FaturamentoClient({
           evento={selected}
           gestor={gestor}
           procedimentos={procedimentos}
+          modo={modo}
           open={!!selected}
           onClose={() => setSelected(null)}
         />

@@ -67,6 +67,70 @@ const brl = (n: number) =>
     ? (n / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "K"
     : n.toLocaleString("pt-BR", { maximumFractionDigits: 0 }));
 
+/** Janela de datas (início/fim) para filtrar consultas. */
+export type DateWindow = { start: Date; end: Date };
+
+/**
+ * Converte uma chave de período + datas custom em janelas (atual + anterior).
+ * A janela anterior tem a mesma duração da atual, posicionada imediatamente antes.
+ */
+export function getPeriodConfig(
+  period: string,
+  de?: string,
+  ate?: string,
+): { current: DateWindow; previous: DateWindow } {
+  const now = new Date();
+  let currentStart: Date;
+  let currentEnd: Date;
+
+  switch (period) {
+    case "30d":
+      currentStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      currentEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      break;
+    case "this_month":
+      currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      break;
+    case "last_month":
+      currentStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      currentEnd = new Date(now.getFullYear(), now.getMonth(), 1);
+      break;
+    case "90d":
+      currentStart = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      currentEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      break;
+    case "12m":
+      currentStart = new Date(
+        now.getFullYear() - 1,
+        now.getMonth(),
+        now.getDate(),
+      );
+      currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      break;
+    case "custom":
+      currentStart = de
+        ? new Date(de + "T00:00:00")
+        : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      currentEnd = ate ? new Date(ate + "T23:59:59") : now;
+      break;
+    default:
+      currentStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      currentEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  // Período anterior: mesma duração, imediatamente antes do atual.
+  const duration = currentEnd.getTime() - currentStart.getTime();
+  const previousStart = new Date(currentStart.getTime() - duration);
+  const previousEnd = new Date(currentStart.getTime());
+
+  return {
+    current: { start: currentStart, end: currentEnd },
+    previous: { start: previousStart, end: previousEnd },
+  };
+}
+
+
 /** Séries do gráfico "Atendimentos Mensais" (últimos 6 meses). */
 export type ConsultasRetornos = {
   labels: string[];
@@ -96,6 +160,28 @@ const DEMO_SERIES: ConsultasRetornos = {
   retornos: [95, 105, 100, 118, 145, 160],
 };
 
+/** Buckets a partir de uma DateWindow (quebra em meses). Com ano no label para evitar duplicatas. */
+function buildBucketsFromWindow(window: DateWindow) {
+  const buckets: { year: number; month: number; label: string }[] = [];
+  const start = new Date(window.start.getFullYear(), window.start.getMonth(), 1);
+  const end = new Date(window.end.getFullYear(), window.end.getMonth() + 1, 1);
+  let y = start.getFullYear();
+  let m = start.getMonth();
+  while (y < end.getFullYear() || (y === end.getFullYear() && m < end.getMonth())) {
+    buckets.push({
+      year: y,
+      month: m,
+      label: `${MESES_ABBR[m]}/${String(y).slice(-2)}`,
+    });
+    m += 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+  }
+  return buckets;
+}
+
 /** Buckets dos últimos 6 meses (índice 0 = mais antigo). */
 function lastSixMonths() {
   const now = new Date();
@@ -119,10 +205,12 @@ function lastSixMonths() {
  * Logo, só pacientes recorrentes (com mais de 1 appointment) geram retornos.
  * "Consultas" é o total de agendamentos do mês; "Retornos" é o subconjunto.
  */
-export async function getConsultasRetornos(): Promise<ConsultasRetornos> {
+export async function getConsultasRetornos(
+  window?: DateWindow,
+): Promise<ConsultasRetornos> {
 
   const supabase = await createClient();
-  const buckets = lastSixMonths();
+  const buckets = window ? buildBucketsFromWindow(window) : lastSixMonths();
   const windowStart = new Date(buckets[0].year, buckets[0].month, 1);
 
   // patient_id + starts_at de TODOS os agendamentos: precisamos do histórico
@@ -183,7 +271,10 @@ function ocupacaoDe(rows: { status: string }[]): number {
  * KPIs do dashboard a partir do banco (contagens reais) + variação % do mês
  * atual vs. anterior (CALCULADA, não mais hardcoded). Fallback no demo.
  */
-export async function getDashboardKpis(): Promise<DashboardKpis> {
+export async function getDashboardKpis(
+  curWindow?: DateWindow,
+  prevWindow?: DateWindow,
+): Promise<DashboardKpis> {
 
   const supabase = await createClient();
 
@@ -192,8 +283,8 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
   const endHoje = new Date();
   endHoje.setHours(23, 59, 59, 999);
 
-  const cur = monthRange(0);
-  const prev = monthRange(-1);
+  const cur = curWindow ?? monthRange(0);
+  const prev = prevWindow ?? monthRange(-1);
 
   const [
     pac,
@@ -291,10 +382,12 @@ const DEMO_RECEITA: ReceitaMensal = {
  * GESTOR-ONLY (a página já restringe o render); aqui apenas agregamos valores.
  * Fallback demo. Em erro/sem dados: zeros (resiliente).
  */
-export async function getReceitaMensal(): Promise<ReceitaMensal> {
+export async function getReceitaMensal(
+  window?: DateWindow,
+): Promise<ReceitaMensal> {
 
   const supabase = await createClient();
-  const buckets = lastSixMonths();
+  const buckets = window ? buildBucketsFromWindow(window) : lastSixMonths();
   const windowStart = new Date(buckets[0].year, buckets[0].month, 1);
 
   const { data } = await supabase

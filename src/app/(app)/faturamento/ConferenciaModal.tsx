@@ -21,7 +21,11 @@ import { cn } from "@/lib/utils";
 import { EmBreve } from "@/components/ui/EmBreve";
 import { qrToSvg } from "@/lib/integrations/qrcode";
 import { type Evento, type ItemCheckout } from "@/lib/data/billing";
-import { registrarCheckout, carregarItensCheckout } from "./actions";
+import {
+  registrarCheckout,
+  carregarItensCheckout,
+  carregarCheckoutSalvo,
+} from "./actions";
 
 type Forma = "particular" | "convenio" | "empresa";
 type Pagamento = "pix" | "cartao" | "boleto";
@@ -49,15 +53,20 @@ export function ConferenciaModal({
   evento,
   gestor,
   procedimentos,
+  modo = "conferir",
   open,
   onClose,
 }: {
   evento: Evento;
   gestor: boolean;
   procedimentos: any[];
+  /** conferir (pendente) | editar (regrava) | visualizar/imprimir (recibo read-only). */
+  modo?: "conferir" | "editar" | "visualizar" | "imprimir";
   open: boolean;
   onClose: () => void;
 }) {
+  // Recibo já gravado (visualizar/imprimir/editar). Somente-leitura mostra direto.
+  const somenteLeitura = modo === "visualizar" || modo === "imprimir";
   const [forma, setForma] = useState<Forma>(
     evento.tipo === "Particular" ? "particular" : "convenio",
   );
@@ -80,20 +89,55 @@ export function ConferenciaModal({
   const [novoItemProcedimento, setNovoItemProcedimento] = useState("");
   const [novoItemValor, setNovoItemValor] = useState("");
 
-  // Carrega os itens REAIS conferidos do atendimento ao abrir o modal.
+  // Data + total exibidos no recibo: os gravados (check-out salvo) ou os da
+  // conferência nova. `totalSalvo` é o net_amount autoritativo (read-only).
+  const [dataRecibo, setDataRecibo] = useState<string | null>(null);
+  const [totalSalvo, setTotalSalvo] = useState<number | null>(null);
+
+  // Carrega os itens: conferência nova (procedimentos do atendimento) OU o
+  // check-out já gravado (editar/visualizar/imprimir → itens+forma+ajustes reais).
   useEffect(() => {
     let ativo = true;
-    carregarItensCheckout(evento.codigo, evento.servico, evento.valorNumerico)
-      .then((res) => {
-        if (ativo) setItens(res.itens);
-      })
-      .finally(() => {
-        if (ativo) setCarregando(false);
-      });
+    const carregar =
+      modo === "conferir"
+        ? carregarItensCheckout(
+            evento.codigo,
+            evento.servico,
+            evento.valorNumerico,
+          ).then((res) => {
+            if (ativo) setItens(res.itens);
+          })
+        : carregarCheckoutSalvo(evento.codigo).then(({ recibo }) => {
+            if (!ativo || !recibo) return;
+            setItens(recibo.itens);
+            setForma(recibo.forma);
+            if (recibo.pagamento)
+              setPagamento(recibo.pagamento as Pagamento);
+            setDesconto(String(recibo.desconto));
+            setAcrescimo(String(recibo.acrescimo));
+            setDataRecibo(recibo.data);
+            setTotalSalvo(recibo.total);
+            // Repopula os dados da NF (pagador empresa) p/ não zerar ao salvar.
+            setNfNumero(recibo.nfNumero);
+            setNfEmissao(recibo.nfEmissao);
+            setNfVencimento(recibo.nfVencimento);
+            setNfPrazos(recibo.nfPrazos);
+          });
+    carregar.finally(() => {
+      if (ativo) setCarregando(false);
+    });
     return () => {
       ativo = false;
     };
-  }, [evento.codigo, evento.servico, evento.valorNumerico]);
+  }, [evento.codigo, evento.servico, evento.valorNumerico, modo]);
+
+  // Auto-impressão quando aberto em modo "imprimir".
+  useEffect(() => {
+    if (modo !== "imprimir" || carregando) return;
+    const t = setTimeout(() => imprimirRecibo(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modo, carregando]);
 
   const subtotal = itens.reduce((acc, i) => acc + i.valor * i.qtd, 0);
   const descontoNum = Math.max(0, Number(desconto.replace(",", ".")) || 0);
@@ -120,6 +164,34 @@ export function ConferenciaModal({
   }
 
   const [sucesso, setSucesso] = useState(false);
+
+  /**
+   * Imprime o recibo numa janela dedicada (copia os estilos da página), sem
+   * trocar o DOM da app nem recarregar — preserva o estado da tela de faturamento.
+   */
+  function imprimirRecibo() {
+    const printContent = document.getElementById("recibo-print");
+    if (!printContent) return;
+    const win = window.open("", "_blank", "width=820,height=720");
+    if (!win) {
+      toast.error("Habilite pop-ups para imprimir o recibo.");
+      return;
+    }
+    const estilos = Array.from(
+      document.querySelectorAll('link[rel="stylesheet"], style'),
+    )
+      .map((n) => n.outerHTML)
+      .join("");
+    win.document.write(
+      `<!doctype html><html><head><meta charset="utf-8"><title>Recibo · ${evento.codigo}</title>${estilos}</head><body>${printContent.innerHTML}</body></html>`,
+    );
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 300);
+  }
 
   function handleConfirmar() {
     startTransition(async () => {
@@ -150,7 +222,7 @@ export function ConferenciaModal({
     });
   }
 
-  if (sucesso) {
+  if (sucesso || somenteLeitura) {
     return (
       <Modal
         open={open}
@@ -163,18 +235,7 @@ export function ConferenciaModal({
             <Button variant="ghost" onClick={onClose}>
               Fechar
             </Button>
-            <Button
-              onClick={() => {
-                const printContent = document.getElementById("recibo-print");
-                if (printContent) {
-                  const originalContent = document.body.innerHTML;
-                  document.body.innerHTML = printContent.innerHTML;
-                  window.print();
-                  document.body.innerHTML = originalContent;
-                  window.location.reload();
-                }
-              }}
-            >
+            <Button onClick={imprimirRecibo}>
               <Printer className="h-4 w-4" />
               Imprimir Recibo
             </Button>
@@ -189,7 +250,7 @@ export function ConferenciaModal({
           <div className="space-y-2 text-sm mb-6">
             <p><strong>Paciente:</strong> {evento.paciente}</p>
             <p><strong>Atendimento:</strong> {evento.codigo}</p>
-            <p><strong>Data:</strong> {new Date().toLocaleDateString("pt-BR")}</p>
+            <p><strong>Data:</strong> {dataRecibo ?? new Date().toLocaleDateString("pt-BR")}</p>
           </div>
           <table className="w-full text-sm mb-6 border-collapse">
             <thead>
@@ -201,8 +262,13 @@ export function ConferenciaModal({
             <tbody>
               {itens.map((i, idx) => (
                 <tr key={idx} className="border-b border-line">
-                  <td className="py-2">{i.descricao}</td>
-                  <td className="text-right py-2">{formatBRL(i.valor)}</td>
+                  <td className="py-2">
+                    {i.descricao}
+                    {i.qtd > 1 ? ` (×${i.qtd})` : ""}
+                  </td>
+                  <td className="text-right py-2">
+                    {formatBRL(i.valor * i.qtd)}
+                  </td>
                 </tr>
               ))}
               {descontoNum > 0 && (
@@ -221,7 +287,13 @@ export function ConferenciaModal({
             <tfoot>
               <tr>
                 <td className="font-bold py-2">TOTAL PAGO</td>
-                <td className="text-right font-bold py-2">{formatBRL(totalFinal)}</td>
+                <td className="text-right font-bold py-2">
+                  {formatBRL(
+                    somenteLeitura && totalSalvo != null
+                      ? totalSalvo
+                      : totalFinal,
+                  )}
+                </td>
               </tr>
             </tfoot>
           </table>
@@ -242,7 +314,7 @@ export function ConferenciaModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Conferência de Check-out"
+      title={modo === "editar" ? "Editar Check-out" : "Conferência de Check-out"}
       subtitle={`${evento.paciente} · ${evento.codigo}`}
       className="max-w-2xl"
       footer={
@@ -252,7 +324,7 @@ export function ConferenciaModal({
           </Button>
           <Button onClick={handleConfirmar} disabled={pending || carregando}>
             <CheckCircle2 className="h-4 w-4" />
-            Confirmar Check-out
+            {modo === "editar" ? "Salvar alterações" : "Confirmar Check-out"}
           </Button>
         </>
       }

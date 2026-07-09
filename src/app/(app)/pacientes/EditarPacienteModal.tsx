@@ -11,12 +11,21 @@ import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import {
   getPacienteEditavel,
+  getPacienteCatalogos,
   updatePaciente,
   type ActionState,
 } from "@/lib/actions/pacientes";
 import { isValidCPF } from "@/lib/cpf";
 import { isValidCNS } from "@/lib/cns";
-import { validarObrigatorios } from "./CadastroPacienteModal";
+import {
+  type AbaId,
+  type ViaCep,
+  ABA_DO_CAMPO,
+  validarTudo,
+  ehMenor,
+  convenioExigeCarteirinha,
+  OPCOES_ACOMODACAO,
+} from "./pacienteForm.shared";
 import type { PacienteEditavel } from "@/lib/data/patients";
 
 const ABAS = [
@@ -24,16 +33,6 @@ const ABAS = [
   { id: "contato", label: "Contato e Endereço", icon: MapPin },
   { id: "obito", label: "Histórico e Óbito", icon: HeartCrack },
 ] as const;
-
-type AbaId = (typeof ABAS)[number]["id"];
-
-type ViaCep = {
-  logradouro?: string;
-  bairro?: string;
-  localidade?: string;
-  uf?: string;
-  erro?: boolean;
-};
 
 /**
  * Modal CONTROLADO de edição do cadastro do paciente. Reusa o contrato/abas do
@@ -59,6 +58,8 @@ export function EditarPacienteModal({
   closeOnSave?: boolean;
 }) {
   const [paciente, setPaciente] = useState<PacienteEditavel | null>(null);
+  const [convenios, setConvenios] = useState<string[]>([]);
+  const [parentescos, setParentescos] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState<string | null>(null);
 
@@ -74,12 +75,17 @@ export function EditarPacienteModal({
     if (!patientId) return;
     let ativo = true;
     (async () => {
-      const res = await getPacienteEditavel(patientId);
+      const [res, cats] = await Promise.all([
+        getPacienteEditavel(patientId),
+        getPacienteCatalogos(),
+      ]);
       if (!ativo) return;
       if (res.error || !res.paciente) {
         setErroCarga(res.error ?? "Paciente não encontrado.");
       } else {
         setPaciente(res.paciente);
+        setConvenios(cats.convenios);
+        setParentescos(cats.parentescos);
       }
       setCarregando(false);
     })();
@@ -149,8 +155,12 @@ export function EditarPacienteModal({
         <EditarPacienteForm
           key={paciente.id}
           paciente={paciente}
+          convenios={convenios}
+          parentescos={parentescos}
           formAction={formAction}
-          erro={state?.error}
+          erro={state?.ok ? undefined : state?.error}
+          fieldErrors={state?.ok ? undefined : state?.fieldErrors}
+          dados={state?.ok ? undefined : state?.data}
           onCpfValidityChange={setCpfInvalido}
         />
       )}
@@ -165,41 +175,94 @@ export function EditarPacienteModal({
  */
 function EditarPacienteForm({
   paciente,
+  convenios,
+  parentescos,
   formAction,
   erro,
+  fieldErrors,
+  dados,
   onCpfValidityChange,
 }: {
   paciente: PacienteEditavel;
+  convenios: string[];
+  parentescos: string[];
   formAction: (formData: FormData) => void;
   erro?: string;
+  fieldErrors?: Record<string, string[]>;
+  dados?: Record<string, string>;
   onCpfValidityChange: (invalido: boolean) => void;
 }) {
   const [aba, setAba] = useState<AbaId>("pessoais");
 
-  const [usaSocial, setUsaSocial] = useState(!!paciente.social_name);
+  // Valor inicial: prioriza o eco preservado do servidor (`dados`) sobre o dado
+  // carregado do paciente, para não perder edições quando o salvamento falha.
+  const ini = (k: keyof PacienteEditavel & string) =>
+    dados?.[k] ?? (paciente[k] as string) ?? "";
 
-  const [cpf, setCpf] = useState(paciente.cpf);
+  // Erros por campo: validação de cliente (submit) + `fieldErrors` do servidor
+  // unificados neste estado, para que digitar no campo limpe a borda vermelha.
+  const [errosCliente, setErrosCliente] = useState<Record<string, string>>({});
+  const erroCampo = (name: string): string | undefined => errosCliente[name];
+  const limparErro = (name: string) =>
+    setErrosCliente((prev) => {
+      if (!prev[name]) return prev;
+      const resto = { ...prev };
+      delete resto[name];
+      return resto;
+    });
+
+  const [usaSocial, setUsaSocial] = useState(
+    !!(dados?.social_name ?? paciente.social_name),
+  );
+
+  const [cpf, setCpf] = useState(ini("cpf"));
   const cpfDigits = cpf.replace(/\D/g, "");
   const cpfInvalido = cpfDigits.length === 11 && !isValidCPF(cpf);
 
-  const [cns, setCns] = useState(paciente.cns);
+  const [cns, setCns] = useState(ini("cns"));
   const cnsDigits = cns.replace(/\D/g, "");
   const cnsInvalido = cnsDigits.length === 15 && !isValidCNS(cns);
 
-  const [convenio, setConvenio] = useState(paciente.convenio);
+  const [nascimento, setNascimento] = useState(ini("birth_date"));
+  const menor = ehMenor(nascimento);
+
+  const [convenio, setConvenio] = useState(ini("convenio"));
+  const ehSus = convenio.trim().toLowerCase() === "sus";
+  const ehParticular = convenio.trim().toLowerCase() === "particular";
+  const exigeCarteirinha = convenioExigeCarteirinha(convenio);
   const exigePlano =
     convenio.trim() !== "" &&
     convenio.toLowerCase() !== "sus" &&
     convenio.toLowerCase() !== "particular";
 
-  const [cep, setCep] = useState(paciente.cep);
-  const [endereco, setEndereco] = useState(paciente.address);
-  const [bairro, setBairro] = useState(paciente.district);
-  const [cidade, setCidade] = useState(paciente.city);
-  const [uf, setUf] = useState(paciente.uf);
+  const [cep, setCep] = useState(ini("cep"));
+  const [endereco, setEndereco] = useState(ini("address"));
+  const [bairro, setBairro] = useState(ini("district"));
+  const [cidade, setCidade] = useState(ini("city"));
+  const [uf, setUf] = useState(ini("uf"));
   const [buscandoCep, setBuscandoCep] = useState(false);
 
-  const [obito, setObito] = useState(!!paciente.death_date);
+  const [obito, setObito] = useState(!!(dados?.death_date ?? paciente.death_date));
+
+  // Preservação: os campos controlados mantêm o estado React quando o submit
+  // falha (o form é montado com `key={paciente.id}`, sem remontar no erro), e os
+  // não-controlados são restaurados pelo React via `defaultValue={ini(...)}` (que
+  // já reflete o eco `dados`). Só resta saltar para a etapa do 1º erro.
+  useEffect(() => {
+    if (!dados) return;
+    const primeiro = fieldErrors ? Object.keys(fieldErrors)[0] : undefined;
+    if (fieldErrors) {
+      const map: Record<string, string> = {};
+      for (const k in fieldErrors) {
+        const v = fieldErrors[k]?.[0];
+        if (v) map[k] = v;
+      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setErrosCliente(map);
+    }
+    if (primeiro) setAba(ABA_DO_CAMPO[primeiro] ?? "pessoais");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dados]);
 
   async function buscarCep(valor: string) {
     const limpo = valor.replace(/\D/g, "");
@@ -252,7 +315,15 @@ function EditarPacienteForm({
       <form
         id="form-edit-paciente"
         action={formAction}
-        onSubmit={(e) => validarObrigatorios(e, setAba)}
+        onSubmit={(e) => {
+          const { erros, primeiraAba } = validarTudo(new FormData(e.currentTarget));
+          if (primeiraAba) {
+            e.preventDefault();
+            setErrosCliente(erros);
+            setAba(primeiraAba);
+            toast.error("Há campos obrigatórios não preenchidos.");
+          }
+        }}
         className="space-y-4"
       >
         <input type="hidden" name="id" value={paciente.id} />
@@ -267,7 +338,9 @@ function EditarPacienteForm({
             name="full_name"
             label="Nome completo *"
             placeholder="Ex.: João Pedro Oliveira"
-            defaultValue={paciente.full_name}
+            defaultValue={ini("full_name")}
+            error={erroCampo("full_name")}
+            onChange={() => limparErro("full_name")}
           />
 
           <label className="flex items-center gap-2.5 text-sm text-ink">
@@ -285,7 +358,7 @@ function EditarPacienteForm({
               name="social_name"
               label="Nome social"
               placeholder="Como deseja ser chamado(a)"
-              defaultValue={paciente.social_name}
+              defaultValue={ini("social_name")}
             />
           )}
 
@@ -300,17 +373,17 @@ function EditarPacienteForm({
                 onChange={(e) => {
                   const v = e.target.value;
                   setCpf(v);
+                  limparErro("cpf");
                   onCpfValidityChange(
                     v.replace(/\D/g, "").length === 11 && !isValidCPF(v),
                   );
                 }}
-                aria-invalid={cpfInvalido}
+                error={
+                  cpfInvalido
+                    ? "CPF inválido (dígito verificador)."
+                    : erroCampo("cpf")
+                }
               />
-              {cpfInvalido && (
-                <p className="mt-1 text-xs text-red-600">
-                  CPF inválido (dígito verificador).
-                </p>
-              )}
             </div>
             <div>
               <CnsInput
@@ -319,14 +392,16 @@ function EditarPacienteForm({
                 label="CNS (Cartão SUS)"
                 placeholder="000 0000 0000 0000"
                 value={cns}
-                onChange={(e) => setCns(e.target.value)}
-                aria-invalid={cnsInvalido}
+                onChange={(e) => {
+                  setCns(e.target.value);
+                  limparErro("cns");
+                }}
+                error={
+                  cnsInvalido
+                    ? "CNS inválido (dígito verificador)."
+                    : erroCampo("cns")
+                }
               />
-              {cnsInvalido && (
-                <p className="mt-1 text-xs text-red-600">
-                  CNS inválido (dígito verificador).
-                </p>
-              )}
             </div>
           </div>
 
@@ -336,13 +411,20 @@ function EditarPacienteForm({
               name="birth_date"
               label="Data de nascimento *"
               type="date"
-              defaultValue={paciente.birth_date}
+              value={nascimento}
+              onChange={(e) => {
+                setNascimento(e.target.value);
+                limparErro("birth_date");
+              }}
+              error={erroCampo("birth_date")}
             />
             <Select
               id="ep-genero"
               name="gender"
               label="Gênero *"
-              defaultValue={paciente.gender}
+              defaultValue={ini("gender")}
+              error={erroCampo("gender")}
+              onChange={() => limparErro("gender")}
             >
               <option value="">Selecione</option>
               <option value="masculino">Masculino</option>
@@ -356,7 +438,7 @@ function EditarPacienteForm({
             name="mother_name"
             label="Nome da mãe"
             placeholder="Nome completo da mãe"
-            defaultValue={paciente.mother_name}
+            defaultValue={ini("mother_name")}
           />
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -365,13 +447,13 @@ function EditarPacienteForm({
               name="naturality"
               label="Naturalidade"
               placeholder="Cidade de nascimento"
-              defaultValue={paciente.naturality}
+              defaultValue={ini("naturality")}
             />
             <Input
               id="ep-nacional"
               name="nationality"
               label="Nacionalidade"
-              defaultValue={paciente.nationality || "Brasileira"}
+              defaultValue={ini("nationality") || "Brasileira"}
             />
           </div>
 
@@ -380,7 +462,7 @@ function EditarPacienteForm({
               id="ep-raca"
               name="race"
               label="Raça/cor"
-              defaultValue={paciente.race}
+              defaultValue={ini("race")}
             >
               <option value="">Selecione</option>
               {["Branca", "Preta", "Parda", "Amarela", "Indígena"].map((r) => (
@@ -392,7 +474,7 @@ function EditarPacienteForm({
               name="ethnicity"
               label="Etnia (se indígena)"
               placeholder="Ex.: Guarani"
-              defaultValue={paciente.ethnicity}
+              defaultValue={ini("ethnicity")}
             />
           </div>
 
@@ -401,7 +483,7 @@ function EditarPacienteForm({
               id="ep-civil"
               name="marital_status"
               label="Estado civil"
-              defaultValue={paciente.marital_status}
+              defaultValue={ini("marital_status")}
             >
               <option value="">Selecione</option>
               {[
@@ -418,7 +500,7 @@ function EditarPacienteForm({
               id="ep-sangue"
               name="blood_type"
               label="Tipo sanguíneo"
-              defaultValue={paciente.blood_type}
+              defaultValue={ini("blood_type")}
             >
               <option value="">Selecione</option>
               {["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"].map((t) => (
@@ -427,38 +509,145 @@ function EditarPacienteForm({
             </Select>
           </div>
 
-          <Input
-            id="ep-resp"
-            name="legal_guardian"
-            label="Representante legal (menores)"
-            placeholder="Nome do responsável"
-            defaultValue={paciente.legal_guardian}
-          />
+          {/* Representante legal — só p/ MENORES de idade. */}
+          {menor && (
+            <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-medium text-amber-800">
+                Paciente menor de idade — informe o representante legal.
+              </p>
+              <Input
+                id="ep-resp"
+                name="legal_guardian"
+                label="Nome do representante legal *"
+                placeholder="Nome completo do responsável"
+                defaultValue={ini("legal_guardian")}
+                error={erroCampo("legal_guardian")}
+                onChange={() => limparErro("legal_guardian")}
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <CpfInput
+                  id="ep-resp-cpf"
+                  name="responsavel_cpf"
+                  label="CPF do responsável *"
+                  placeholder="000.000.000-00"
+                  defaultValue={ini("responsavel_cpf")}
+                  error={erroCampo("responsavel_cpf")}
+                  onChange={() => limparErro("responsavel_cpf")}
+                />
+                <Select
+                  id="ep-resp-parentesco"
+                  name="responsavel_parentesco"
+                  label="Parentesco *"
+                  defaultValue={ini("responsavel_parentesco")}
+                  error={erroCampo("responsavel_parentesco")}
+                  onChange={() => limparErro("responsavel_parentesco")}
+                >
+                  <option value="" disabled>
+                    Selecione
+                  </option>
+                  {(parentescos.length
+                    ? parentescos
+                    : ["Pai", "Mãe", "Cônjuge", "Filho(a)", "Outro"]
+                  ).map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
+                </Select>
+                <TelefoneInput
+                  id="ep-resp-tel"
+                  name="responsavel_telefone"
+                  label="Telefone do responsável *"
+                  placeholder="(11) 90000-0000"
+                  defaultValue={ini("responsavel_telefone")}
+                  error={erroCampo("responsavel_telefone")}
+                  onChange={() => limparErro("responsavel_telefone")}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Input
+            <Select
               id="ep-conv"
               name="convenio"
               label="Convênio"
-              placeholder="SUS, Particular, Unimed..."
               value={convenio}
               onChange={(e) => setConvenio(e.target.value)}
-            />
-            <Input
-              id="ep-plano"
-              name="plan"
-              label={exigePlano ? "Plano (obrigatório)" : "Plano"}
-              placeholder="Ex.: Premium / Apartamento"
-              defaultValue={paciente.plan}
-              aria-required={exigePlano}
-            />
+            >
+              <option value="">Selecione (opcional)</option>
+              {(convenios.includes(convenio) || !convenio
+                ? convenios
+                : [convenio, ...convenios]
+              ).map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+            {/* Particular não tem plano — o campo some. */}
+            {!ehParticular && (
+              <Input
+                id="ep-plano"
+                name="plan"
+                label={exigePlano ? "Plano (obrigatório)" : "Plano"}
+                placeholder="Ex.: Premium / Apartamento"
+                defaultValue={ini("plan")}
+                aria-required={exigePlano}
+                error={erroCampo("plan")}
+              />
+            )}
           </div>
+
+          {ehSus && (
+            <p className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
+              Convênio SUS: a carteirinha é o <strong>CNS</strong> informado nos
+              dados pessoais.
+            </p>
+          )}
+
+          {exigeCarteirinha && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Input
+                id="ep-carteirinha"
+                name="convenio_carteirinha"
+                label="Nº da carteirinha *"
+                placeholder="Número da carteira do convênio"
+                defaultValue={ini("convenio_carteirinha")}
+                error={erroCampo("convenio_carteirinha")}
+                onChange={() => limparErro("convenio_carteirinha")}
+              />
+              <Input
+                id="ep-validade"
+                name="convenio_validade"
+                label="Validade da carteira"
+                type="date"
+                defaultValue={ini("convenio_validade")}
+              />
+              <Input
+                id="ep-titular"
+                name="convenio_titular"
+                label="Titular (se dependente)"
+                placeholder="Nome do titular do plano"
+                defaultValue={ini("convenio_titular")}
+              />
+              <Select
+                id="ep-acomodacao"
+                name="convenio_acomodacao"
+                label="Acomodação"
+                defaultValue={ini("convenio_acomodacao")}
+              >
+                <option value="">Selecione (opcional)</option>
+                {OPCOES_ACOMODACAO.map((a) => (
+                  <option key={a}>{a}</option>
+                ))}
+              </Select>
+            </div>
+          )}
 
           <Select
             id="ep-origem"
             name="origin"
             label="Origem / Como conheceu a clínica"
-            defaultValue={paciente.origin}
+            defaultValue={ini("origin")}
           >
             <option value="">Selecione (opcional)</option>
             {[
@@ -483,7 +672,9 @@ function EditarPacienteForm({
             name="phone"
             label="Telefone / Celular *"
             placeholder="(11) 90000-0000"
-            defaultValue={paciente.phone}
+            defaultValue={ini("phone")}
+            error={erroCampo("phone")}
+            onChange={() => limparErro("phone")}
           />
 
           <Input
@@ -492,7 +683,8 @@ function EditarPacienteForm({
             label="E-mail"
             type="email"
             placeholder="email@exemplo.com"
-            defaultValue={paciente.email}
+            defaultValue={ini("email")}
+            error={erroCampo("email")}
           />
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -561,7 +753,7 @@ function EditarPacienteForm({
                   name="death_date"
                   label="Data do óbito"
                   type="date"
-                  defaultValue={paciente.death_date}
+                  defaultValue={ini("death_date")}
                 />
                 <label htmlFor="ep-obito-causa" className="block">
                   <span className="mb-1.5 block text-sm font-medium text-ink">
@@ -573,7 +765,7 @@ function EditarPacienteForm({
                     rows={3}
                     className={inputTextarea}
                     placeholder="Causa do óbito (se conhecida)"
-                    defaultValue={paciente.death_cause}
+                    defaultValue={ini("death_cause")}
                   />
                 </label>
               </div>
