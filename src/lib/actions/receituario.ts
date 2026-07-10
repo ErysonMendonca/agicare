@@ -8,6 +8,7 @@ import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
 import { getPatientEditavel } from "@/lib/data/patients";
+import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 import { logAction } from "@/lib/system-log";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
@@ -59,12 +60,15 @@ export async function emitirReceituario(
   const paciente = await getPatientEditavel(d.patientId);
   if (!paciente) return { error: "Paciente não encontrado nesta clínica." };
 
+  // Vincula o receituário ao atendimento corrente do paciente (histórico por atendimento).
+  const ativo = await getAtendimentoAtivo(d.patientId);
   const { data: inserted, error } = await supabase
     .from("certificates")
     .insert({
       clinic_id: clinicId,
       patient_id: d.patientId,
       professional_id: professionalId,
+      queue_entry_id: ativo?.queueEntryId ?? null,
       kind: `receituario_${d.tipo}`,
       prescription_text: d.texto,
     })

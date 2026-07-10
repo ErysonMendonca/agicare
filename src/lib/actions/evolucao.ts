@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
+import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -125,10 +126,13 @@ export async function registrarEvolucao(input: EvolucaoInput): Promise<ActionSta
   }
 
   // 2) Evolução (texto).
+  // Vincula o registro ao atendimento corrente do paciente (histórico por atendimento).
+  const ativo = await getAtendimentoAtivo(d.patientId);
   const { error } = await supabase.from("medical_records").insert({
     clinic_id: clinicId,
     patient_id: d.patientId,
     professional_id: professionalId,
+    queue_entry_id: ativo?.queueEntryId ?? null,
     content: conteudo,
     created_at: recordedAt.toISOString(),
   });

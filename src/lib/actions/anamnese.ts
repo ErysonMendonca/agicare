@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { getMySpecialty } from "@/lib/data/prontuario";
+import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 import { chaveEspecialidade } from "@/lib/clinico/anamnese-config";
 import { requireClinic } from "@/lib/tenant";
 
@@ -72,10 +73,13 @@ export async function gerarAnamnese(input: AnamneseInput): Promise<ActionState> 
     return { error: "Profissional não encontrado para o usuário atual." };
 
   // 1) Anamnese.
+  // Vincula o documento ao atendimento corrente do paciente (histórico por atendimento).
+  const ativo = await getAtendimentoAtivo(d.patientId);
   const { error } = await supabase.from("anamneses").insert({
     clinic_id: clinicId,
     patient_id: d.patientId,
     professional_id: professionalId,
+    queue_entry_id: ativo?.queueEntryId ?? null,
     specialty: d.specialty,
     fields: d.fields,
     consent_given: d.consent,

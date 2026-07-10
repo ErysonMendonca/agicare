@@ -7,6 +7,7 @@ import { getCurrentUser, requireClinico } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
+import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 import { FREQUENCIAS } from "@/lib/data/prescricao";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
@@ -143,12 +144,15 @@ export async function criarPrescricao(input: PrescricaoInput): Promise<ActionSta
   const d = parsed.data;
 
   // 1) Prescrição.
+  // Vincula a prescrição ao atendimento corrente do paciente (histórico por atendimento).
+  const ativo = await getAtendimentoAtivo(d.patientId);
   const { data: presc, error: pErr } = await supabase
     .from("prescriptions")
     .insert({
       clinic_id: clinicId,
       patient_id: d.patientId,
       professional_id: professionalId,
+      queue_entry_id: ativo?.queueEntryId ?? null,
       notes: d.observacoes || null,
     })
     .select("id")

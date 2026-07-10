@@ -12,6 +12,7 @@ import {
   HeartPulse,
   ScrollText,
   History,
+  Clock,
   Smile,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ export function ClinicoNav({ patientId, userRole }: { patientId: string; userRol
 
   const tabs = [
     { href: base, label: "Resumo", icon: Activity, exact: true },
+    { href: `${base}/linha-do-tempo`, label: "Linha do Tempo", icon: Clock },
     { href: `${base}/anamnese`, label: "Anamnese", icon: ClipboardList },
     { href: `${base}/evolucao`, label: "Evolução", icon: Stethoscope },
     { href: `${base}/procedimento`, label: "Procedimento", icon: Syringe },
