@@ -114,7 +114,22 @@ export function DocumentosClient({
     setModal(null);
   }
 
+  /** Normaliza um CID p/ comparação: maiúsculo, sem espaço e sem ponto. */
+  const normCid = (s: string) =>
+    s.trim().toUpperCase().replace(/\s+/g, "").replace(/\./g, "");
+  /** true se o CID digitado existe no catálogo do admin (cidCodes). */
+  function cidNoCatalogo(input: string): boolean {
+    const alvo = normCid(input);
+    return cidCodes.some((c) => normCid(c.code) === alvo);
+  }
+  const MSG_CID_INVALIDO =
+    "CID-10 não encontrado no catálogo. Selecione um CID cadastrado em Configurações → Catálogo CID.";
+
   function salvarAtestado() {
+    if (atestado.cid10.trim() && !cidNoCatalogo(atestado.cid10)) {
+      toast.error(MSG_CID_INVALIDO);
+      return;
+    }
     startTransition(async () => {
       const res = await emitirAtestado({
         patientId,
@@ -166,6 +181,10 @@ export function DocumentosClient({
   function salvarAlta() {
     if (!alta.motivo) {
       toast.error("Selecione o motivo da alta.");
+      return;
+    }
+    if (alta.cid10.trim() && !cidNoCatalogo(alta.cid10)) {
+      toast.error(MSG_CID_INVALIDO);
       return;
     }
     startTransition(async () => {
