@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { isGestor } from "@/lib/auth";
-import { requireAction } from "@/lib/permissions";
+import { requireAction, can } from "@/lib/permissions";
 import { gerarLoteTissXML, type GuiaXML } from "@/lib/faturamento-tiss";
 import {
   getCheckoutData,
@@ -111,7 +111,8 @@ function revalidateFaturamento() {
  * materiais), persiste desconto/acréscimo e total líquido em billable_events,
  * define a forma (particular/convenio/empresa) e muda o status p/ faturado.
  * Os ajustes afetam apenas a cobrança — não tocam o prontuário.
- * Valores e ajustes são restritos ao gestor (também no servidor).
+ * Ajustar valores (desconto/acréscimo/item/valor) exige a permissão
+ * `faturamento_ajustes` (validada também no servidor).
  */
 export async function registrarCheckout(
   input: CheckoutInput,
@@ -125,11 +126,17 @@ export async function registrarCheckout(
   const { eventCode, forma, pagamento, desconto, acrescimo, empresa } =
     parsed.data;
 
-  // Gate financeiro server-side: só o gestor aplica desconto/acréscimo.
-  const gestor = await isGestor();
-  if (!gestor && (desconto > 0 || acrescimo > 0)) {
-    return { error: "Apenas o gestor pode aplicar descontos ou acréscimos." };
+  // Gate financeiro server-side (permissão editável `faturamento_ajustes`): cobre
+  // desconto, acréscimo, item manual e edição de valor. Admin sempre pode.
+  const podeAjustar = await can("faturamento_ajustes", "view");
+  if (!podeAjustar && (desconto > 0 || acrescimo > 0)) {
+    return {
+      error: "Você não tem permissão para aplicar descontos ou acréscimos.",
+    };
   }
+
+  // Reabertura de conta faturada permanece restrita ao gestor (ver abaixo).
+  const gestor = await isGestor();
 
 
   const supabase = await createClient();
@@ -154,13 +161,20 @@ export async function registrarCheckout(
     };
   }
 
-  // Não-gestor não altera ajustes: PRESERVA o desconto/acréscimo já gravado
-  // (ex.: recepção editando um evento que o gestor abateu) em vez de zerar.
-  const descontoFinal = gestor ? desconto : Number(evt.discount ?? 0);
-  const acrescimoFinal = gestor ? acrescimo : Number(evt.surcharge ?? 0);
+  // Sem permissão de ajuste: PRESERVA o desconto/acréscimo já gravado
+  // (ex.: editando um evento que já teve abatimento) em vez de zerar.
+  const descontoFinal = podeAjustar ? desconto : Number(evt.discount ?? 0);
+  const acrescimoFinal = podeAjustar ? acrescimo : Number(evt.surcharge ?? 0);
 
-  // A recepção conferiu os itens (e possivelmente adicionou manuais).
-  const itensReais = parsed.data.itens;
+  // ENFORCEMENT dos itens: quem PODE ajustar conferiu/editou os itens no modal
+  // (inclui item manual e valor editado) → confia no payload. Quem NÃO pode não
+  // pode injetar item manual nem alterar valor: recarrega os itens REAIS do
+  // atendimento no servidor e ignora o que veio do client.
+  let itensReais = parsed.data.itens;
+  if (!podeAjustar) {
+    const reais = await getCheckoutData(eventCode, "", Number(evt.amount ?? 0));
+    itensReais = reais.itens;
+  }
 
   const subtotal = itensReais.reduce((acc, i) => acc + i.valor * i.qtd, 0);
   const netAmount = Math.max(0, subtotal - descontoFinal + acrescimoFinal);

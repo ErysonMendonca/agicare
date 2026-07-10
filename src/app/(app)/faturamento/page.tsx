@@ -5,7 +5,7 @@ import {
   listTissBatches,
 } from "@/lib/data/billing";
 import { isGestor } from "@/lib/auth";
-import { requireView } from "@/lib/permissions";
+import { requireView, can } from "@/lib/permissions";
 import { FaturamentoClient } from "./FaturamentoClient";
 
 import { listProcedures } from "@/lib/data/procedures";
@@ -20,13 +20,15 @@ function formatBRL(value: number): string {
 
 export default async function FaturamentoPage() {
   await requireView("faturamento");
-  const [eventos, guias, lotes, gestor, procedimentos] = await Promise.all([
-    listBillableEvents(),
-    listTissGuides(),
-    listTissBatches(),
-    isGestor(),
-    listProcedures(),
-  ]);
+  const [eventos, guias, lotes, gestor, podeAjustar, procedimentos] =
+    await Promise.all([
+      listBillableEvents(),
+      listTissGuides(),
+      listTissBatches(),
+      isGestor(),
+      can("faturamento_ajustes", "view"),
+      listProcedures(),
+    ]);
 
   const total = eventos.length;
   const pendentes = eventos.filter((e) => e.status.tone === "warn").length;
@@ -46,6 +48,7 @@ export default async function FaturamentoPage() {
         guias={guias}
         lotes={lotes}
         gestor={gestor}
+        podeAjustar={podeAjustar}
         procedimentos={procedimentos}
         kpis={{ total, pendentes, faturados, glosados }}
         valorTotalLabel={formatBRL(valorTotal)}

@@ -51,14 +51,14 @@ const pagamentos: { id: Pagamento; label: string }[] = [
 
 export function ConferenciaModal({
   evento,
-  gestor,
+  podeAjustar,
   procedimentos,
   modo = "conferir",
   open,
   onClose,
 }: {
   evento: Evento;
-  gestor: boolean;
+  podeAjustar: boolean;
   procedimentos: any[];
   /** conferir (pendente) | editar (regrava) | visualizar/imprimir (recibo read-only). */
   modo?: "conferir" | "editar" | "visualizar" | "imprimir";
@@ -199,8 +199,8 @@ export function ConferenciaModal({
         eventCode: evento.codigo,
         forma,
         pagamento: forma === "particular" ? pagamento : undefined,
-        desconto: gestor ? descontoNum : 0,
-        acrescimo: gestor ? acrescimoNum : 0,
+        desconto: podeAjustar ? descontoNum : 0,
+        acrescimo: podeAjustar ? acrescimoNum : 0,
         itens,
         empresa:
           forma === "empresa"
@@ -349,7 +349,7 @@ export function ConferenciaModal({
                   <th className="px-3 py-2 text-left font-medium">Código</th>
                   <th className="px-3 py-2 text-left font-medium">Descrição</th>
                   <th className="px-3 py-2 text-right font-medium">Qtd</th>
-                  {gestor && (
+                  {podeAjustar && (
                     <th className="px-3 py-2 text-right font-medium">Valor</th>
                   )}
                 </tr>
@@ -374,7 +374,7 @@ export function ConferenciaModal({
                     </td>
                     <td className="px-3 py-2 text-ink">{i.descricao}</td>
                     <td className="px-3 py-2 text-right text-ink">{i.qtd}</td>
-                    {gestor && (
+                    {podeAjustar && (
                       <td className="px-3 py-2 text-right font-medium text-ink">
                         {formatBRL(i.valor)}
                       </td>
@@ -386,7 +386,7 @@ export function ConferenciaModal({
           )}
           
           {/* Adicionar Item Manual */}
-          {gestor && !carregando && (
+          {podeAjustar && !carregando && (
             <div className="mt-4 border-t border-line pt-4">
               <h4 className="text-xs font-semibold uppercase text-muted mb-2">
                 Adicionar Item Manual
@@ -431,7 +431,7 @@ export function ConferenciaModal({
       </div>
 
       {/* Ajustes (sem alterar o prontuário) */}
-      {gestor ? (
+      {podeAjustar ? (
         <div className="mt-5">
           <h3 className="text-sm font-semibold text-ink">
             Ajustes (desconto / acréscimo)
@@ -472,7 +472,8 @@ export function ConferenciaModal({
         </div>
       ) : (
         <div className="mt-5 flex items-center gap-2 rounded-xl bg-muted-surface px-4 py-3 text-sm text-muted">
-          <Lock className="h-4 w-4" /> Valores e ajustes restritos ao gestor.
+          <Lock className="h-4 w-4" /> Você não tem permissão para ajustar
+          valores.
         </div>
       )}
 
@@ -559,7 +560,7 @@ export function ConferenciaModal({
                     <div className="text-sm">
                       <div className="text-xs text-muted">Valor da cobrança</div>
                       <div className="text-lg font-semibold text-brand-600">
-                        {gestor ? formatBRL(totalFinal) : "—"}
+                        {podeAjustar ? formatBRL(totalFinal) : "—"}
                       </div>
                       <p className="mt-1 text-xs text-muted">
                         Escaneie para simular o pagamento. Este QR é apenas

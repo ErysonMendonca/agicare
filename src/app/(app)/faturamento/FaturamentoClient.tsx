@@ -54,6 +54,7 @@ export function FaturamentoClient({
   guias,
   lotes,
   gestor,
+  podeAjustar,
   procedimentos,
   kpis,
   valorTotalLabel,
@@ -62,6 +63,7 @@ export function FaturamentoClient({
   guias: GuiaTISS[];
   lotes: LoteTISS[];
   gestor: boolean;
+  podeAjustar: boolean;
   procedimentos: any[];
   kpis: { total: number; pendentes: number; faturados: number; glosados: number };
   valorTotalLabel: string;
@@ -382,7 +384,7 @@ export function FaturamentoClient({
       {selected && (
         <ConferenciaModal
           evento={selected}
-          gestor={gestor}
+          podeAjustar={podeAjustar}
           procedimentos={procedimentos}
           modo={modo}
           open={!!selected}
