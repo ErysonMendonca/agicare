@@ -152,6 +152,7 @@ export async function criarPrescricao(input: PrescricaoInput): Promise<ActionSta
       clinic_id: clinicId,
       patient_id: d.patientId,
       professional_id: professionalId,
+      created_by: current.userId,
       queue_entry_id: ativo?.queueEntryId ?? null,
       notes: d.observacoes || null,
     })

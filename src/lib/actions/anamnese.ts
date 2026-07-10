@@ -79,6 +79,7 @@ export async function gerarAnamnese(input: AnamneseInput): Promise<ActionState> 
     clinic_id: clinicId,
     patient_id: d.patientId,
     professional_id: professionalId,
+    created_by: current.userId,
     queue_entry_id: ativo?.queueEntryId ?? null,
     specialty: d.specialty,
     fields: d.fields,

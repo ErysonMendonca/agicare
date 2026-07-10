@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireClinico } from "@/lib/auth";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { getActiveClinicId, DEMO_CLINIC_ID } from "@/lib/tenant";
+import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -60,12 +61,16 @@ export async function criarPedidoProtetico(
   const supabase = await createClient();
   const professionalId = await getMyProfessionalId(guard.userId);
 
+  // Vincula o pedido ao atendimento corrente do paciente (histórico por atendimento).
+  const ativo = await getAtendimentoAtivo(d.patientId);
   const { data: order, error } = await supabase
     .from("prosthetic_orders")
     .insert({
       clinic_id: clinicId,
       patient_id: d.patientId,
       professional_id: professionalId,
+      created_by: guard.userId,
+      queue_entry_id: ativo?.queueEntryId ?? null,
       teeth: d.teeth,
       work_type: d.workType,
       urgent: d.urgent,

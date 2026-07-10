@@ -68,6 +68,7 @@ export async function emitirReceituario(
       clinic_id: clinicId,
       patient_id: d.patientId,
       professional_id: professionalId,
+      created_by: current.userId,
       queue_entry_id: ativo?.queueEntryId ?? null,
       kind: `receituario_${d.tipo}`,
       prescription_text: d.texto,

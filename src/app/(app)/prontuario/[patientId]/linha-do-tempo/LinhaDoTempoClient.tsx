@@ -145,8 +145,17 @@ function AtendimentoCard({
                             <p className="truncate text-sm font-medium text-ink">
                               {doc.titulo}
                             </p>
-                            <p className="text-xs text-muted">
-                              {doc.tipo} · {formatarData(doc.data)}
+                            <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted">
+                              <span>
+                                {doc.tipo} · {formatarData(doc.data)}
+                              </span>
+                              {doc.autor && doc.autor !== "—" && (
+                                <span className="inline-flex min-w-0 items-center gap-1">
+                                  <span aria-hidden>·</span>
+                                  <User className="h-3 w-3 flex-none" />
+                                  <span className="truncate">{doc.autor}</span>
+                                </span>
+                              )}
                             </p>
                           </div>
                         </Link>
