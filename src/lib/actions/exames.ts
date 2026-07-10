@@ -50,6 +50,7 @@ export async function criarPedidoExame(
     clinic_id: clinicId,
     patient_id: d.patientId,
     professional_id: professionalId,
+    created_by: guard.userId,
     queue_entry_id: ativo?.queueEntryId ?? null,
     tuss_code: d.tuss_code || null,
     exam_name: d.exam_name,

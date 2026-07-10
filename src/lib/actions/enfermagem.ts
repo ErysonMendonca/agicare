@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
+import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -18,6 +19,12 @@ function revalidate() {
 async function profissionalNome(): Promise<string> {
   const current = await getCurrentUser();
   return current?.profile?.full_name ?? "Equipe de Enfermagem";
+}
+
+/** id (profiles.id) do operador logado — autoria dos registros. null se sem sessão. */
+async function operadorId(): Promise<string | null> {
+  const current = await getCurrentUser();
+  return current?.userId ?? null;
 }
 
 // ── Aférição de Sinais Vitais ───────────────────────────────────────
@@ -96,12 +103,15 @@ export async function registrarAnotacao(
 
   const clinicId = await requireClinic();
   const supabase = await createClient();
+  const ativo = await getAtendimentoAtivo(parsed.data.patient_id);
   const { error } = await supabase.from("nursing_notes").insert({
     clinic_id: clinicId,
     patient_id: parsed.data.patient_id,
     code: parsed.data.code,
     content: parsed.data.content,
     professional_name: await profissionalNome(),
+    created_by: await operadorId(),
+    queue_entry_id: ativo?.queueEntryId ?? null,
   });
   if (error) return { error: error.message };
   revalidate();
@@ -227,6 +237,7 @@ export async function registrarEvolucao(
   const d = parsed.data;
   const clinicId = await requireClinic();
   const supabase = await createClient();
+  const ativo = await getAtendimentoAtivo(d.patient_id);
   const { error } = await supabase.from("nursing_evolutions").insert({
     clinic_id: clinicId,
     patient_id: d.patient_id,
@@ -235,6 +246,8 @@ export async function registrarEvolucao(
     reassessment: d.reassessment || null,
     conduct: d.conduct,
     professional_name: await profissionalNome(),
+    created_by: await operadorId(),
+    queue_entry_id: ativo?.queueEntryId ?? null,
   });
   if (error) return { error: error.message };
   revalidate();
@@ -290,6 +303,7 @@ export async function registrarProcedimento(
   const d = parsed.data;
   const clinicId = await requireClinic();
   const supabase = await createClient();
+  const ativo = await getAtendimentoAtivo(d.patient_id);
   const { error } = await supabase.from("nursing_procedures").insert({
     clinic_id: clinicId,
     patient_id: d.patient_id,
@@ -299,6 +313,8 @@ export async function registrarProcedimento(
     body_site: d.body_site || null,
     notes: d.notes || null,
     professional_name: await profissionalNome(),
+    created_by: await operadorId(),
+    queue_entry_id: ativo?.queueEntryId ?? null,
   });
   if (error) return { error: error.message };
   revalidate();
@@ -325,6 +341,10 @@ export async function registrarSae(
   const clinicId = await requireClinic();
   const supabase = await createClient();
 
+  const autorId = await operadorId();
+  const ativo = await getAtendimentoAtivo(d.patient_id);
+  const queueEntryId = ativo?.queueEntryId ?? null;
+
   const { data: sae, error } = await supabase
     .from("sae_records")
     .insert({
@@ -335,6 +355,8 @@ export async function registrarSae(
       related_factor: d.related_factor || null,
       prescription: d.prescription,
       frequency_hours: d.frequency_hours,
+      created_by: autorId,
+      queue_entry_id: queueEntryId,
     })
     .select("id")
     .single();
@@ -352,6 +374,8 @@ export async function registrarSae(
       description: d.prescription,
       scheduled_at: new Date(base + h * 3600 * 1000).toISOString(),
       status: "pendente" as const,
+      created_by: autorId,
+      queue_entry_id: queueEntryId,
     });
   }
   if (checks.length > 0) {

@@ -132,6 +132,7 @@ export async function registrarEvolucao(input: EvolucaoInput): Promise<ActionSta
     clinic_id: clinicId,
     patient_id: d.patientId,
     professional_id: professionalId,
+    created_by: current.userId,
     queue_entry_id: ativo?.queueEntryId ?? null,
     content: conteudo,
     created_at: recordedAt.toISOString(),

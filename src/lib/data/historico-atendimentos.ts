@@ -23,6 +23,7 @@ export type DocumentoHistorico = {
   titulo: string; // rótulo curto (ex.: nome do exame, "Atestado de N dias", 1ª linha do texto)
   data: string; // "dd/MM/yyyy HH:mm"
   aba: "anamnese" | "evolucao" | "prescricao" | "documentos" | "receituario" | "exames"; // segmento da rota p/ link
+  autor: string; // nome de quem salvou o documento ("—" quando desconhecido)
 };
 
 export type HistoricoAtendimento = {
@@ -58,6 +59,12 @@ function one<T>(v: unknown): T | null {
   return (v as T) ?? null;
 }
 
+/** Nome de quem salvou o documento, a partir do embed profiles!created_by. */
+function nomeAutor(v: unknown): string {
+  const p = one<{ full_name: string | null }>(v);
+  return p?.full_name ?? "—";
+}
+
 /** 1ª linha (curta) de um texto livre, para servir de título. */
 function primeiraLinha(texto: string | null | undefined, fallback: string): string {
   if (!texto) return fallback;
@@ -89,18 +96,21 @@ const DEMO_HISTORICO: HistoricoAtendimento[] = [
         titulo: "Paciente refere dor torácica ao esforço.",
         data: "12/06/2026 09:20",
         aba: "evolucao",
+        autor: "Dra. Ana Beatriz Costa",
       },
       {
         tipo: "Receituário",
         titulo: "Dipirona 500mg — 1 comp de 6/6h por 3 dias.",
         data: "12/06/2026 09:25",
         aba: "receituario",
+        autor: "Dra. Ana Beatriz Costa",
       },
       {
         tipo: "Exame",
         titulo: "Eletrocardiograma",
         data: "12/06/2026 09:30",
         aba: "exames",
+        autor: "Dra. Ana Beatriz Costa",
       },
     ],
   },
@@ -116,6 +126,7 @@ const DEMO_HISTORICO: HistoricoAtendimento[] = [
         titulo: "Anamnese",
         data: "10/06/2026 10:15",
         aba: "anamnese",
+        autor: "Dra. Ana Beatriz Costa",
       },
     ],
   },
@@ -144,23 +155,33 @@ export async function getHistoricoAtendimentos(
     await Promise.all([
       supabase
         .from("anamneses")
-        .select("id, queue_entry_id, specialty, created_at")
+        .select(
+          "id, queue_entry_id, specialty, created_at, created_by_profile:profiles!created_by(full_name)",
+        )
         .eq("patient_id", patientId),
       supabase
         .from("prescriptions")
-        .select("id, queue_entry_id, notes, created_at")
+        .select(
+          "id, queue_entry_id, notes, created_at, created_by_profile:profiles!created_by(full_name)",
+        )
         .eq("patient_id", patientId),
       supabase
         .from("certificates")
-        .select("id, queue_entry_id, kind, days, prescription_text, created_at")
+        .select(
+          "id, queue_entry_id, kind, days, prescription_text, created_at, created_by_profile:profiles!created_by(full_name)",
+        )
         .eq("patient_id", patientId),
       supabase
         .from("exam_orders")
-        .select("id, queue_entry_id, exam_name, created_at")
+        .select(
+          "id, queue_entry_id, exam_name, created_at, created_by_profile:profiles!created_by(full_name)",
+        )
         .eq("patient_id", patientId),
       supabase
         .from("medical_records")
-        .select("id, queue_entry_id, content, created_at")
+        .select(
+          "id, queue_entry_id, content, created_at, created_by_profile:profiles!created_by(full_name)",
+        )
         .eq("patient_id", patientId),
     ]);
 
@@ -175,6 +196,7 @@ export async function getHistoricoAtendimentos(
         : "Anamnese",
       data: fmtDataHora(a.created_at as string | null),
       aba: "anamnese",
+      autor: nomeAutor(a.created_by_profile),
       queueEntryId: (a.queue_entry_id as string | null) ?? null,
       ts: ts(a.created_at as string | null),
     });
@@ -187,6 +209,7 @@ export async function getHistoricoAtendimentos(
       titulo: primeiraLinha(p.notes as string | null, "Prescrição"),
       data: fmtDataHora(p.created_at as string | null),
       aba: "prescricao",
+      autor: nomeAutor(p.created_by_profile),
       queueEntryId: (p.queue_entry_id as string | null) ?? null,
       ts: ts(p.created_at as string | null),
     });
@@ -227,6 +250,7 @@ export async function getHistoricoAtendimentos(
       titulo,
       data: fmtDataHora(c.created_at as string | null),
       aba,
+      autor: nomeAutor(c.created_by_profile),
       queueEntryId: (c.queue_entry_id as string | null) ?? null,
       ts: ts(c.created_at as string | null),
     });
@@ -239,6 +263,7 @@ export async function getHistoricoAtendimentos(
       titulo: (e.exam_name as string | null) ?? "Exame",
       data: fmtDataHora(e.created_at as string | null),
       aba: "exames",
+      autor: nomeAutor(e.created_by_profile),
       queueEntryId: (e.queue_entry_id as string | null) ?? null,
       ts: ts(e.created_at as string | null),
     });
@@ -251,6 +276,7 @@ export async function getHistoricoAtendimentos(
       titulo: primeiraLinha(m.content as string | null, "Evolução"),
       data: fmtDataHora(m.created_at as string | null),
       aba: "evolucao",
+      autor: nomeAutor(m.created_by_profile),
       queueEntryId: (m.queue_entry_id as string | null) ?? null,
       ts: ts(m.created_at as string | null),
     });
@@ -274,6 +300,7 @@ export async function getHistoricoAtendimentos(
     titulo: d.titulo,
     data: d.data,
     aba: d.aba,
+    autor: d.autor,
   });
   const porDataDesc = (a: DocInterno, b: DocInterno) => b.ts - a.ts;
 

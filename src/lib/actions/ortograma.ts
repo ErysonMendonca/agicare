@@ -227,6 +227,7 @@ export async function salvarOrtograma(input: OrtogramaInput): Promise<ActionStat
         clinic_id: clinicId,
         patient_id: d.patientId,
         professional_id: professionalId,
+        created_by: clinico.userId,
         queue_entry_id: ativo?.queueEntryId ?? null,
         notes: notes || null,
       })
