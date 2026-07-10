@@ -185,6 +185,85 @@ function professionalPayload(d: z.infer<typeof baseSchema>) {
   };
 }
 
+// ── Unicidade do cadastro (CPF, conselho, e-mail) ────────────────
+/** Só os dígitos: '123.456.789-00' e '12345678900' são o mesmo CPF. */
+const soDigitos = (v?: string | null) => (v ?? "").replace(/\D/g, "");
+const normalizado = (v?: string | null) => (v ?? "").trim().toLowerCase();
+
+/**
+ * Recusa cadastro/edição que repita documento, registro de conselho ou e-mail
+ * de OUTRO profissional da mesma clínica (inclusive inativo: recadastrar quem
+ * foi desligado partiria o histórico dele em dois — o certo é reativar).
+ *
+ * Espelha os índices únicos parciais da migration 0104, que são a barreira
+ * final: duas requisições simultâneas passam por esta checagem e só o banco as
+ * separa. Aqui a mensagem é legível; lá, um erro 23505.
+ *
+ * `excluirId` é o próprio profissional, ao editar — senão ele colidiria consigo.
+ */
+async function checarDuplicidade(
+  svc: SupabaseClient,
+  clinicId: string,
+  d: { document?: string; council_name?: string; council_uf?: string; council_number?: string; email?: string },
+  excluirId?: string,
+): Promise<{ error: string; fieldErrors: Record<string, string[]> } | null> {
+  const doc = soDigitos(d.document);
+  const conselho = soDigitos(d.council_number);
+  const email = normalizado(d.email);
+  if (!doc && !conselho && !email) return null;
+
+  let query = svc
+    .from("professionals")
+    .select("id, document, council_name, council_uf, council_number, email")
+    .eq("clinic_id", clinicId);
+  if (excluirId) query = query.neq("id", excluirId);
+
+  const { data: existentes } = await query;
+  if (!existentes?.length) return null;
+
+  for (const p of existentes) {
+    if (doc && soDigitos(p.document as string) === doc) {
+      return {
+        error: "Já existe um profissional com este CPF/CNPJ nesta clínica.",
+        fieldErrors: { document: ["Documento já cadastrado."] },
+      };
+    }
+    if (
+      conselho &&
+      soDigitos(p.council_number as string) === conselho &&
+      normalizado(p.council_name as string) === normalizado(d.council_name) &&
+      normalizado(p.council_uf as string) === normalizado(d.council_uf)
+    ) {
+      return {
+        error: "Já existe um profissional com este registro de conselho nesta clínica.",
+        fieldErrors: { council_number: ["Registro de conselho já cadastrado."] },
+      };
+    }
+    if (email && normalizado(p.email as string) === email) {
+      return {
+        error: "Já existe um profissional com este e-mail nesta clínica.",
+        fieldErrors: { email: ["E-mail já cadastrado."] },
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Erro de índice único da 0104 → mensagem de campo. Rede de segurança para a
+ * corrida entre `checarDuplicidade` e o insert (dois cadastros simultâneos).
+ */
+function erroDeUnicidade(msg: string): { error: string; fieldErrors: Record<string, string[]> } | null {
+  if (!msg.includes("uq_professionals_clinic_")) return null;
+  if (msg.includes("_document"))
+    return { error: "Já existe um profissional com este CPF/CNPJ nesta clínica.", fieldErrors: { document: ["Documento já cadastrado."] } };
+  if (msg.includes("_conselho"))
+    return { error: "Já existe um profissional com este registro de conselho nesta clínica.", fieldErrors: { council_number: ["Registro de conselho já cadastrado."] } };
+  if (msg.includes("_email"))
+    return { error: "Já existe um profissional com este e-mail nesta clínica.", fieldErrors: { email: ["E-mail já cadastrado."] } };
+  return null;
+}
+
 /** Uma credencial tem conteúdo? (evita gravar linhas totalmente vazias.) */
 function credencialPreenchida(c: CredencialConvenio): boolean {
   return !!(
@@ -283,6 +362,11 @@ export async function createProfessional(
 
   try {
     return await withTenantService(async ({ svc, clinicId }) => {
+      // ANTES de criar a conta Auth: se o CPF/conselho/e-mail já existir, um
+      // erro só no insert do profissional deixaria um usuário Auth órfão.
+      const duplicado = await checarDuplicidade(svc, clinicId, d);
+      if (duplicado) return { ...duplicado, data: d as Record<string, unknown> };
+
       // Cria a conta Auth COM login e senha, agora integrados na criação do prof.
       // Usa um e-mail sintético baseado no username.
       const synthEmail = `${d.username}@agicare.local`;
@@ -345,6 +429,9 @@ export async function createProfessional(
       if (profError || !novoProf) {
         // Rollback: evita órfão em auth.users/profiles/clinic_members.
         await svc.auth.admin.deleteUser(userId);
+        // Corrida entre a checagem e o insert: o índice único da 0104 pegou.
+        const dup = profError ? erroDeUnicidade(profError.message) : null;
+        if (dup) return { ...dup, data: d as Record<string, unknown> };
         return { error: "Não foi possível concluir o cadastro do profissional." };
       }
 
@@ -407,6 +494,10 @@ export async function createAdminProfessional(
 
   try {
     return await withTenantService(async ({ svc, clinicId }) => {
+      // Mesma barreira do cadastro clínico: antes de mexer no Auth.
+      const duplicado = await checarDuplicidade(svc, clinicId, d);
+      if (duplicado) return { ...duplicado, data: d as Record<string, unknown> };
+
       // Parse custom role
       const [parsedBaseRole, parsedCargoId] = d.role.split(":");
       const finalRole = parsedBaseRole || "recepcao";
@@ -497,6 +588,9 @@ export async function createAdminProfessional(
 
       if (profError) {
         await svc.auth.admin.deleteUser(userId);
+        // Corrida entre a checagem e o insert: o índice único da 0104 pegou.
+        const dup = erroDeUnicidade(profError.message);
+        if (dup) return { ...dup, data: d as Record<string, unknown> };
         return { error: "Erro ao salvar os detalhes do profissional: " + profError.message };
       }
 
@@ -541,6 +635,11 @@ export async function updateProfessional(
 
   try {
     return await withTenantService(async ({ svc, clinicId }) => {
+      // Duplicidade contra os OUTROS profissionais da clínica (`id` excluído,
+      // senão o cadastro colidiria consigo mesmo ao ser reeditado).
+      const duplicado = await checarDuplicidade(svc, clinicId, d, id);
+      if (duplicado) return { ...duplicado, data: d as Record<string, unknown> };
+
       // Descobre o profile vinculado — SOMENTE dentro da clínica ativa (anti-IDOR).
       const { data: prof, error: fetchError } = await svc
         .from("professionals")
@@ -566,6 +665,9 @@ export async function updateProfessional(
         .eq("clinic_id", clinicId);
 
       if (profError) {
+        // Corrida entre a checagem e o update: o índice único da 0104 pegou.
+        const dup = erroDeUnicidade(profError.message);
+        if (dup) return { ...dup, data: d as Record<string, unknown> };
         return { error: "Não foi possível atualizar o profissional." };
       }
 
