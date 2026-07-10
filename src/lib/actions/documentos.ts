@@ -7,6 +7,7 @@ import { getCurrentUser, getRole } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
+import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 import { logAction } from "@/lib/system-log";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
@@ -68,10 +69,13 @@ export async function emitirAtestado(input: AtestadoInput): Promise<ActionState>
   const endDate = addDays(d.dataAtestado, d.dias);
   // Normaliza o CID (o autocomplete é livre): sem espaços e sempre maiúsculo.
   const cid10 = d.cid10 ? d.cid10.trim().toUpperCase() : null;
+  // Vincula o documento ao atendimento corrente do paciente (histórico por atendimento).
+  const ativo = await getAtendimentoAtivo(d.patientId);
   const { error } = await supabase.from("certificates").insert({
     clinic_id: clinicId,
     patient_id: d.patientId,
     professional_id: professionalId,
+    queue_entry_id: ativo?.queueEntryId ?? null,
     kind: "atestado",
     days: d.dias,
     issue_date: d.dataAtestado,
@@ -134,10 +138,13 @@ export async function darAlta(input: AltaInput): Promise<ActionState> {
   const d = parsed.data;
   // Normaliza o CID (autocomplete livre): sem espaços e sempre maiúsculo.
   const cid10 = d.cid10 ? d.cid10.trim().toUpperCase() : null;
+  // Vincula o documento ao atendimento corrente do paciente (histórico por atendimento).
+  const ativo = await getAtendimentoAtivo(d.patientId);
   const { error } = await supabase.from("certificates").insert({
     clinic_id: clinicId,
     patient_id: d.patientId,
     professional_id: professionalId,
+    queue_entry_id: ativo?.queueEntryId ?? null,
     kind: "alta",
     reason: d.motivo,
     discharge_detail: d.detalhe || null,

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireClinico } from "@/lib/auth";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
+import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 import { logAccess } from "@/lib/audit";
 import { enviarNotificacao } from "@/lib/integrations/notifications";
 
@@ -43,10 +44,13 @@ export async function criarPedidoExame(
   const professionalId = await getMyProfessionalId(guard.userId);
 
   const d = parsed.data;
+  // Vincula o pedido ao atendimento corrente do paciente (histórico por atendimento).
+  const ativo = await getAtendimentoAtivo(d.patientId);
   const { error } = await supabase.from("exam_orders").insert({
     clinic_id: clinicId,
     patient_id: d.patientId,
     professional_id: professionalId,
+    queue_entry_id: ativo?.queueEntryId ?? null,
     tuss_code: d.tuss_code || null,
     exam_name: d.exam_name,
     category: d.category,
