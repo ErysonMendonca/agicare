@@ -8,6 +8,7 @@ import { listCidCodes } from "@/lib/data/cid";
 import { listAltaCatalogosConfig } from "@/lib/data/alta";
 import { listProdutoCatalogos } from "@/lib/data/produto-catalogos";
 import { listProductCategories } from "@/lib/data/product-categories";
+import { listConsentTemplates } from "@/lib/data/consent-templates";
 import { requireView } from "@/lib/permissions";
 import { isGestor } from "@/lib/auth";
 import { ConfiguracoesClient } from "./ConfiguracoesClient";
@@ -25,6 +26,7 @@ export default async function ConfiguracoesPage() {
     altaCatalogos,
     produtoCatalogos,
     productCategories,
+    consentTemplates,
     gestor,
   ] = await Promise.all([
     getSettings(),
@@ -37,6 +39,7 @@ export default async function ConfiguracoesPage() {
     listAltaCatalogosConfig(),
     listProdutoCatalogos(),
     listProductCategories(),
+    listConsentTemplates(),
     isGestor(),
   ]);
   return (
@@ -52,6 +55,7 @@ export default async function ConfiguracoesPage() {
       detalhesAlta={altaCatalogos.detalhes}
       produtoCatalogos={produtoCatalogos}
       productCategories={productCategories}
+      consentTemplates={consentTemplates}
       isGestor={gestor}
     />
   );

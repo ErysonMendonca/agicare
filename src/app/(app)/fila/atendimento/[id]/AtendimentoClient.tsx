@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Save, Printer, AlertTriangle } from "lucide-react";
-import { FichaAtendimento, type DadosAtendimentoDoc } from "../../FichaAtendimento";
+import { type DadosAtendimentoDoc } from "../../FichaAtendimento";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -17,6 +16,9 @@ import type {
   AttendanceOption,
   AttendanceOptionsByCategory,
 } from "@/lib/data/attendance-options";
+import type { ConsentTemplate } from "@/lib/data/consent-templates";
+import type { ClinicaImpressao } from "@/app/(app)/prontuario/[patientId]/documentos/AtestadoImpressao";
+import { DocumentosAtendimentoModal } from "./DocumentosAtendimentoModal";
 
 const FALLBACK: Record<string, string[]> = {
   origem: ["1 - RECEPÇÃO", "2 - PRONTO ATENDIMENTO", "3 - INTERNAÇÃO"],
@@ -79,6 +81,8 @@ export function AtendimentoClient({
   item,
   attendanceOptions,
   profissionais = [],
+  termosAtivos = [],
+  clinica,
 }: {
   item: FilaItem;
   attendanceOptions?: AttendanceOptionsByCategory;
@@ -88,6 +92,10 @@ export function AtendimentoClient({
     especialidade: string;
     ativo: boolean;
   }[];
+  /** Termos de consentimento ATIVOS (impressos no modal ao salvar). */
+  termosAtivos?: ConsentTemplate[];
+  /** Dados da clínica p/ o cabeçalho dos documentos de impressão. */
+  clinica: ClinicaImpressao;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -291,13 +299,24 @@ export function AtendimentoClient({
     };
   }
 
-  const [docImpressao, setDocImpressao] = useState<DadosAtendimentoDoc | null>(
-    null,
-  );
-  function imprimirDocumento() {
-    flushSync(() => setDocImpressao(montarDoc()));
-    window.print();
-    setDocImpressao(null);
+  // Modal de documentos do atendimento (ficha + termos). Quando aberto pelo
+  // fluxo de "Salvar", navega para a fila ao fechar; quando aberto pela
+  // "Reimprimir Ficha", apenas fecha (não sai da tela).
+  const [docsModal, setDocsModal] = useState<DadosAtendimentoDoc | null>(null);
+  const [navegarAoFechar, setNavegarAoFechar] = useState(false);
+
+  function abrirDocs(dados: DadosAtendimentoDoc, navegar: boolean) {
+    setNavegarAoFechar(navegar);
+    setDocsModal(dados);
+  }
+
+  function fecharDocs() {
+    const navegar = navegarAoFechar;
+    setDocsModal(null);
+    if (navegar) {
+      router.push("/fila");
+      router.refresh();
+    }
   }
 
   const handleBack = async () => {
@@ -358,10 +377,14 @@ export function AtendimentoClient({
       clearDraft();
       setDirty(false);
       toast.success(
-        imprimir ? "Atendimento salvo. Gerando impressão…" : "Atendimento salvo.",
+        imprimir
+          ? "Atendimento salvo. Confira os documentos para impressão."
+          : "Atendimento salvo.",
       );
-      if (imprimir) imprimirDocumento();
-      router.push("/fila");
+      // Abre o modal de documentos (ficha + termos). Ao fechar/concluir,
+      // navega de volta para a fila. `imprimir` só muda o texto do toast —
+      // a impressão fica a cargo dos botões do modal.
+      abrirDocs(montarDoc(), true);
       router.refresh();
     });
   }
@@ -402,7 +425,11 @@ export function AtendimentoClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={imprimirDocumento} disabled={pending}>
+          <Button
+            variant="outline"
+            onClick={() => abrirDocs(montarDoc(), false)}
+            disabled={pending}
+          >
             <Printer className="mr-2 h-4 w-4" />
             Reimprimir Ficha
           </Button>
@@ -800,8 +827,18 @@ export function AtendimentoClient({
         </div>
       </div>
 
-      {/* Hidden print document */}
-      {docImpressao && <FichaAtendimento item={item} dados={docImpressao} />}
+      {/* Documentos do atendimento (ficha + termos de consentimento) */}
+      {docsModal && (
+        <DocumentosAtendimentoModal
+          aberto={docsModal !== null}
+          onClose={fecharDocs}
+          item={item}
+          dados={docsModal}
+          clinica={clinica}
+          termosAtivos={termosAtivos}
+          patientId={item.patientId}
+        />
+      )}
     </div>
   );
 }
