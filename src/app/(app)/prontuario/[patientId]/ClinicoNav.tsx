@@ -12,6 +12,7 @@ import {
   HeartPulse,
   ScrollText,
   History,
+  Smile,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,13 +27,21 @@ export function ClinicoNav({ patientId, userRole }: { patientId: string; userRol
     { href: `${base}/evolucao`, label: "Evolução", icon: Stethoscope },
     { href: `${base}/procedimento`, label: "Procedimento", icon: Syringe },
     { href: `${base}/protetico`, label: "Protético", icon: Bone },
+    { href: `${base}/ortograma`, label: "Ortograma", icon: Smile },
     { href: `${base}/receituario`, label: "Receituário", icon: ScrollText },
     { href: `${base}/documentos`, label: "Alta / Atestado", icon: FileText },
     { href: `${base}/historico`, label: "Histórico", icon: History },
   ];
 
   if (userRole === "enfermeiro" || userRole === "tecnico_enfermagem") {
-    tabs.splice(5, 0, { href: `${base}/enfermagem`, label: "Enfermagem", icon: HeartPulse });
+    // Logo após "Protético" — por âncora, não por índice fixo (a lista cresce).
+    const depoisDoProtetico =
+      tabs.findIndex((t) => t.href === `${base}/protetico`) + 1;
+    tabs.splice(depoisDoProtetico, 0, {
+      href: `${base}/enfermagem`,
+      label: "Enfermagem",
+      icon: HeartPulse,
+    });
   }
 
   return (
