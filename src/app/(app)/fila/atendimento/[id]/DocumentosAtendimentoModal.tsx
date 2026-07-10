@@ -1,0 +1,201 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { FileText, Printer, ScrollText, Check } from "lucide-react";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import type { FilaItem } from "@/lib/data/queue";
+import type { ConsentTemplate } from "@/lib/data/consent-templates";
+import type { ClinicaImpressao } from "@/app/(app)/prontuario/[patientId]/documentos/AtestadoImpressao";
+import type { DadosAtendimentoDoc } from "../../FichaAtendimento";
+import {
+  imprimirDocumentosAtendimento,
+  type TermoImpressao,
+} from "../../ImpressaoDocumentosAtendimento";
+import { registrarConsentimentosImpressos } from "@/lib/actions/consents";
+
+// ════════════════════════════════════════════════════════════════
+// Modal disparado ao salvar a Ficha de Atendimento (recepção): lista a
+// Ficha de Detalhe do Atendimento + cada termo ATIVO para IMPRESSÃO (o
+// paciente assina no papel). "Concluir" registra os termos impressos
+// (best-effort) e fecha. Também é a "nova visualização" da Reimpressão.
+// ════════════════════════════════════════════════════════════════
+
+/** Filtra ids reais (persistidos) dos ids de fallback demo (ex.: "demo-consent-0"). */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function DocumentosAtendimentoModal({
+  aberto,
+  onClose,
+  item,
+  dados,
+  clinica,
+  termosAtivos,
+  patientId,
+  professionalId,
+}: {
+  aberto: boolean;
+  onClose: () => void;
+  item: FilaItem;
+  dados: DadosAtendimentoDoc;
+  clinica: ClinicaImpressao;
+  termosAtivos: ConsentTemplate[];
+  patientId: string | null;
+  professionalId?: string | null;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [impresso, setImpresso] = useState(false);
+  // Garante um único registro em consents por abertura do modal (imprimir +
+  // concluir não devem duplicar as linhas de emissão).
+  const [registrado, setRegistrado] = useState(false);
+
+  // Paciente reduzido ao necessário para o cabeçalho do documento.
+  const paciente = {
+    nome: item.paciente,
+    registro: item.atendimentoCodigo ?? "",
+    idade: "",
+    convenio: dados.convenio,
+  };
+
+  const termosOrdenados = [...termosAtivos].sort((a, b) => a.sortOrder - b.sortOrder);
+
+  /** Registra os termos impressos no servidor (best-effort, não bloqueia). */
+  function registrar() {
+    if (registrado || !patientId || termosOrdenados.length === 0) return;
+    // Ignora ids de fallback demo (não-UUID): não há registro a persistir e o
+    // servidor rejeitaria por Zod, gerando um toast de erro desnecessário.
+    const templateIds = termosOrdenados
+      .map((t) => t.id)
+      .filter((id) => UUID_RE.test(id));
+    if (templateIds.length === 0) return;
+    setRegistrado(true);
+    startTransition(async () => {
+      const res = await registrarConsentimentosImpressos({
+        // FilaItem não expõe o id do profissional (só o nome) → null por ora;
+        // consents.professional_id é nullable, então não bloqueia o registro.
+        patientId,
+        professionalId: professionalId ?? null,
+        templateIds,
+      });
+      if (res?.error) toast.error(res.error);
+    });
+  }
+
+  function imprimirTudo() {
+    const termos: TermoImpressao[] = termosOrdenados.map((t) => ({
+      title: t.title,
+      body: t.body,
+    }));
+    imprimirDocumentosAtendimento(clinica, paciente, dados, termos);
+    setImpresso(true);
+    registrar();
+  }
+
+  function imprimirSomenteFicha() {
+    imprimirDocumentosAtendimento(clinica, paciente, dados, []);
+    setImpresso(true);
+  }
+
+  function concluir() {
+    registrar();
+    onClose();
+  }
+
+  const documentos = [
+    { id: "ficha", titulo: "Ficha de Detalhe do Atendimento", tipo: "ficha" as const },
+    ...termosOrdenados.map((t) => ({ id: t.id, titulo: t.title, tipo: "termo" as const })),
+  ];
+
+  return (
+    <Modal
+      open={aberto}
+      onClose={onClose}
+      title="Documentos do Atendimento"
+      subtitle="Imprima a ficha e os termos para o paciente assinar no papel."
+      className="max-w-xl"
+      footer={
+        <>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={pending}>
+            Fechar
+          </Button>
+          <Button type="button" variant="primary" onClick={concluir} disabled={pending}>
+            <Check className="h-4 w-4" />
+            Concluir
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <ul className="space-y-2">
+          {documentos.map((doc, i) => (
+            <motion.li
+              key={doc.id}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, delay: i * 0.04 }}
+              className="flex items-center gap-3 rounded-xl border border-line bg-white p-3"
+            >
+              <span
+                className={`flex h-9 w-9 flex-none items-center justify-center rounded-lg ${
+                  doc.tipo === "ficha"
+                    ? "bg-brand-50 text-brand-600"
+                    : "bg-purple-50 text-purple-600"
+                }`}
+              >
+                {doc.tipo === "ficha" ? (
+                  <FileText className="h-4 w-4" />
+                ) : (
+                  <ScrollText className="h-4 w-4" />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-ink">{doc.titulo}</p>
+                <p className="text-xs text-muted">
+                  {doc.tipo === "ficha"
+                    ? "Dados administrativos do atendimento"
+                    : "Termo de consentimento — assinatura no papel"}
+                </p>
+              </div>
+            </motion.li>
+          ))}
+        </ul>
+
+        {termosOrdenados.length === 0 && (
+          <p className="rounded-lg border border-line bg-muted-surface/60 px-3 py-2 text-xs text-muted">
+            Nenhum termo de consentimento ativo. Cadastre termos em
+            Configurações → Consentimentos.
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="primary"
+            onClick={imprimirTudo}
+            disabled={pending}
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir todos
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={imprimirSomenteFicha}
+            disabled={pending}
+          >
+            <FileText className="h-4 w-4" />
+            Só a ficha
+          </Button>
+          {impresso && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-status-ok">
+              <Check className="h-3.5 w-3.5" /> Enviado à impressão
+            </span>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}

@@ -53,7 +53,9 @@ import { EspecialidadesConfig } from "./EspecialidadesConfig";
 import { CidConfig } from "./CidConfig";
 import { AltaCatalogoConfig } from "./AltaCatalogoConfig";
 import { ProdutoCatalogosConfig } from "./ProdutoCatalogosConfig";
+import { ConsentTemplatesConfig } from "./ConsentTemplatesConfig";
 import type { ProductCategoryNode } from "@/lib/data/product-categories";
+import type { ConsentTemplate } from "@/lib/data/consent-templates";
 import type { CidCode } from "@/lib/data/cid";
 import type { MotivoAltaCfg, DetalheAltaCfg } from "@/lib/data/alta";
 import type { Especialidade } from "@/lib/data/especialidades";
@@ -77,6 +79,7 @@ const TIPO_PROFISSIONAL_TAB = "Tipos de Profissional";
 const CID_TAB = "Catálogo CID";
 const ALTA_CATALOGO_TAB = "Motivos e Detalhes de Alta";
 const PRODUTO_TAB = "Produto";
+const CONSENTIMENTOS_TAB = "Consentimentos";
 
 type Tab =
   | (typeof BASE_TABS)[number]
@@ -86,7 +89,8 @@ type Tab =
   | typeof TIPO_PROFISSIONAL_TAB
   | typeof CID_TAB
   | typeof ALTA_CATALOGO_TAB
-  | typeof PRODUTO_TAB;
+  | typeof PRODUTO_TAB
+  | typeof CONSENTIMENTOS_TAB;
 
 export function ConfiguracoesClient({
   settings,
@@ -100,6 +104,7 @@ export function ConfiguracoesClient({
   detalhesAlta,
   produtoCatalogos,
   productCategories,
+  consentTemplates,
   isGestor,
 }: {
   settings: ClinicSettings;
@@ -113,6 +118,7 @@ export function ConfiguracoesClient({
   detalhesAlta: DetalheAltaCfg[];
   produtoCatalogos: ProdutoCatalogos;
   productCategories: ProductCategoryNode[];
+  consentTemplates: ConsentTemplate[];
   isGestor: boolean;
 }) {
   // As abas de catálogo (Triagem, Dados de Atendimento, Especialidades,
@@ -127,6 +133,7 @@ export function ConfiguracoesClient({
         CID_TAB,
         ALTA_CATALOGO_TAB,
         PRODUTO_TAB,
+        CONSENTIMENTOS_TAB,
       ]
     : [...BASE_TABS];
   const [tabAtiva, setTabAtiva] = useState<Tab>("Geral");
@@ -641,6 +648,11 @@ export function ConfiguracoesClient({
           catalogos={produtoCatalogos}
           categorias={productCategories}
         />
+      )}
+
+      {/* Termos de consentimento (gestor-only), fora do form. */}
+      {isGestor && tabAtiva === CONSENTIMENTOS_TAB && (
+        <ConsentTemplatesConfig termos={consentTemplates} />
       )}
     </>
   );
