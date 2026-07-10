@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Plus,
   ClipboardList,
   AlertTriangle,
   TriangleAlert,
@@ -29,8 +28,6 @@ import {
 } from "@/lib/data/anamnese-templates.shared";
 import { type AnamneseRegistro } from "@/lib/data/anamnese";
 import { gerarAnamnese } from "@/lib/actions/anamnese";
-import { LousaRascunho } from "@/components/clinico/LousaRascunho";
-import { type AnamneseLousa } from "@/lib/data/anamnese-files";
 
 const textareaCls =
   "w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100";
@@ -40,13 +37,11 @@ export function AnamneseClient({
   anamneses,
   minhaEspecialidade,
   templates,
-  lousas = [],
 }: {
   patientId: string;
   anamneses: AnamneseRegistro[];
   minhaEspecialidade: string | null;
   templates: AnamneseTemplate[];
-  lousas?: AnamneseLousa[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -71,14 +66,6 @@ export function AnamneseClient({
   const fieldsBySpecialty = useMemo(() => {
     const m = new Map<string, AnamneseField[]>();
     for (const t of templates) m.set(t.specialty, t.fields);
-    return m;
-  }, [templates]);
-
-  // Imagem de fundo pré-fixada da lousa por especialidade (URL assinada).
-  const lousaBgBySpecialty = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const t of templates)
-      if (t.lousaImageUrl) m.set(t.specialty, t.lousaImageUrl);
     return m;
   }, [templates]);
 
@@ -212,19 +199,6 @@ export function AnamneseClient({
               </div>
             </fieldset>
           ))}
-        </div>
-
-        {/* Lousa / rascunho clínico (desenho sobre imagem) */}
-        <div className="mt-6">
-          <LousaRascunho
-            patientId={patientId}
-            lousas={lousas}
-            // Fundo pela especialidade da FICHA (estável) — não segue o Select do
-            // form nem a signed URL (que muda a cada refresh) → sem perda do desenho.
-            backgroundKey={especialidadeInicial}
-            backgroundUrl={lousaBgBySpecialty.get(especialidadeInicial)}
-            onSaved={() => router.refresh()}
-          />
         </div>
 
         {/* Consentimentos */}

@@ -3,8 +3,8 @@
  *
  * Tipos e o conversor do motor hardcoded (`@/lib/clinico/anamnese-config`) para
  * o formato achatado de `fields` (jsonb) usado pela tabela `anamnese_templates`.
- * Sem imports de servidor: pode ser importado por Client Components (lousa do
- * gestor) sem vazar `next/headers`. A camada server-only vive em
+ * Sem imports de servidor: pode ser importado por Client Components (o builder
+ * do gestor) sem vazar `next/headers`. A camada server-only vive em
  * `@/lib/data/anamnese-templates`.
  */
 
@@ -43,13 +43,6 @@ export type AnamneseField = {
 export type AnamneseTemplate = {
   specialty: string;
   fields: AnamneseField[];
-  /**
-   * Caminho (storage_path) da imagem de fundo pré-fixada da lousa no bucket
-   * privado `anamnese`. null/undefined = sem imagem. Escrito pelo gestor.
-   */
-  lousaImagePath?: string | null;
-  /** URL assinada (1h) da imagem de fundo, para exibição no client. */
-  lousaImageUrl?: string | null;
 };
 
 /** Converte um campo do motor hardcoded para o formato achatado. */

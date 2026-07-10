@@ -22,8 +22,6 @@ const fieldSchema = z.object({
 
 const upsertSchema = z.object({
   specialty: z.string().trim().min(1, "Informe a especialidade."),
-  // Caminho da imagem de fundo da lousa (bucket 'anamnese'); "" ou null = sem.
-  lousaImagePath: z.string().trim().max(500).nullish(),
   fields: z
     .array(fieldSchema)
     .min(1, "Inclua ao menos um campo.")
@@ -49,7 +47,6 @@ const upsertSchema = z.object({
 export async function upsertAnamneseTemplate(
   specialty: string,
   fields: AnamneseField[],
-  lousaImagePath?: string | null,
 ): Promise<ActionState> {
   if (!(await isGestor())) {
     return { error: "Sem permissão para editar templates de anamnese." };
@@ -57,16 +54,9 @@ export async function upsertAnamneseTemplate(
 
   const clinicId = await requireClinic();
 
-  const parsed = upsertSchema.safeParse({ specialty, fields, lousaImagePath });
+  const parsed = upsertSchema.safeParse({ specialty, fields });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
-  }
-
-  // Defesa em profundidade: a imagem de fundo só pode apontar para a pasta de
-  // templates DESTA clínica (impede referenciar objeto de outra clínica/paciente).
-  const imgPath = parsed.data.lousaImagePath || null;
-  if (imgPath && !imgPath.startsWith(`${clinicId}/templates/`)) {
-    return { error: "Caminho de imagem inválido." };
   }
 
   const supabase = await createClient();
@@ -75,7 +65,6 @@ export async function upsertAnamneseTemplate(
       clinic_id: clinicId,
       specialty: parsed.data.specialty,
       fields: parsed.data.fields,
-      lousa_image_path: imgPath,
       active: true,
       updated_at: new Date().toISOString(),
     },

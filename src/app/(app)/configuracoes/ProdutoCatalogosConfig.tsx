@@ -8,13 +8,26 @@ import {
   Tag,
   MapPin,
   Layers,
+  FolderTree,
   type LucideIcon,
 } from "lucide-react";
 import { CatalogoTabela } from "./CatalogoTabela";
+import { CategoriasProdutoConfig } from "./CategoriasProdutoConfig";
+import type { ProductCategoryNode } from "@/lib/data/product-categories";
 import type {
   ProdutoCatalogos,
   ProdutoCatalogoCategory,
 } from "@/lib/data/produto-catalogos";
+
+/**
+ * A árvore de categorias (0105) NÃO vive em attendance_options, então ela ganha
+ * uma aba própria identificada por este sentinela. O estado da sub-aba é a
+ * união dele com as categorias de attendance_options — assim o TS continua
+ * garantindo que `catalogos[ativo]` só é acessado quando `ativo` é uma delas.
+ */
+const ABA_CATEGORIAS = "categorias" as const;
+
+type AbaProduto = ProdutoCatalogoCategory | typeof ABA_CATEGORIAS;
 
 /** Metadados de exibição de cada catálogo do produto. */
 const CATALOGOS: {
@@ -75,21 +88,36 @@ const CATALOGOS: {
   },
 ];
 
+/** Pills renderizadas: Categorias (árvore) primeiro, depois os 6 catálogos. */
+const PILLS: { chave: AbaProduto; titulo: string; icon: LucideIcon }[] = [
+  { chave: ABA_CATEGORIAS, titulo: "Categorias", icon: FolderTree },
+  ...CATALOGOS.map((c) => ({
+    chave: c.categoria as AbaProduto,
+    titulo: c.titulo,
+    icon: c.icon,
+  })),
+];
+
 /**
- * Gestão dos catálogos do cadastro de produto (gestor-only). Cada catálogo é
- * uma tabela rica (CatalogoTabela); um seletor de sub-abas alterna entre os 6.
+ * Gestão dos catálogos do cadastro de produto (gestor-only). "Categorias" é a
+ * árvore de 3 níveis (CategoriasProdutoConfig); os demais são tabelas ricas
+ * (CatalogoTabela). Um seletor de sub-abas alterna entre eles.
  */
 export function ProdutoCatalogosConfig({
   catalogos,
+  categorias,
 }: {
   catalogos: ProdutoCatalogos;
+  categorias: ProductCategoryNode[];
 }) {
-  const [ativo, setAtivo] = useState<ProdutoCatalogoCategory>(
-    CATALOGOS[0].categoria,
-  );
+  const [ativo, setAtivo] = useState<AbaProduto>(ABA_CATEGORIAS);
 
-  const meta = CATALOGOS.find((c) => c.categoria === ativo) ?? CATALOGOS[0];
-  const Icon = meta.icon;
+  // Só resolvemos os metadados de CatalogoTabela quando a aba NÃO é a árvore.
+  const meta =
+    ativo === ABA_CATEGORIAS
+      ? null
+      : (CATALOGOS.find((c) => c.categoria === ativo) ?? CATALOGOS[0]);
+  const Icon = meta?.icon;
 
   return (
     <div className="space-y-5">
@@ -99,16 +127,16 @@ export function ProdutoCatalogosConfig({
         aria-label="Catálogos do produto"
         className="flex flex-wrap gap-2"
       >
-        {CATALOGOS.map((c) => {
+        {PILLS.map((c) => {
           const CIcon = c.icon;
-          const selecionado = c.categoria === ativo;
+          const selecionado = c.chave === ativo;
           return (
             <button
-              key={c.categoria}
+              key={c.chave}
               type="button"
               role="tab"
               aria-selected={selecionado}
-              onClick={() => setAtivo(c.categoria)}
+              onClick={() => setAtivo(c.chave)}
               className={
                 selecionado
                   ? "inline-flex items-center gap-2 rounded-full bg-brand-500 px-4 py-1.5 text-sm font-medium text-white shadow-sm"
@@ -122,16 +150,20 @@ export function ProdutoCatalogosConfig({
         })}
       </div>
 
-      <CatalogoTabela
-        key={meta.categoria}
-        categoria={meta.categoria}
-        titulo={meta.titulo}
-        descricao={meta.descricao}
-        substantivo={meta.substantivo}
-        placeholder={meta.placeholder}
-        icon={<Icon className="h-5 w-5" />}
-        itens={catalogos[meta.categoria] ?? []}
-      />
+      {meta === null || Icon === undefined ? (
+        <CategoriasProdutoConfig categorias={categorias} />
+      ) : (
+        <CatalogoTabela
+          key={meta.categoria}
+          categoria={meta.categoria}
+          titulo={meta.titulo}
+          descricao={meta.descricao}
+          substantivo={meta.substantivo}
+          placeholder={meta.placeholder}
+          icon={<Icon className="h-5 w-5" />}
+          itens={catalogos[meta.categoria] ?? []}
+        />
+      )}
     </div>
   );
 }

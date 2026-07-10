@@ -1,27 +1,70 @@
 "use client";
 
+import { useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Card } from "@/components/ui/Card";
 import { Checkbox, Toggle, SectionTitle } from "./ui";
 import type { ProdutoCompleto } from "../types";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
+import type { ProductCategoryNode } from "@/lib/data/product-categories";
+
+/**
+ * Rótulos ofertados num select de categoria: os nós ATIVOS do nível +, se o
+ * valor salvo no produto não estiver entre eles (categoria renomeada, inativada
+ * ou excluída), o próprio valor legado — para ele não sumir silenciosamente do
+ * formulário e ser reenviado como texto vazio no submit.
+ */
+function opcoesComLegado(nos: ProductCategoryNode[], valor: string): string[] {
+  const ativos = nos.filter((n) => n.active).map((n) => n.label);
+  return valor && !ativos.includes(valor) ? [valor, ...ativos] : ativos;
+}
 
 export function DadosGerais({
   produto,
   options,
+  categorias,
   novo,
   ativo,
   setAtivo,
 }: {
   produto: ProdutoCompleto;
   options: AttendanceOptionsByCategory;
+  /** Árvore Grupo → Classificação → Subclassificação (configurações). */
+  categorias: ProductCategoryNode[];
   novo: boolean;
   ativo: boolean;
   setAtivo: (v: boolean) => void;
 }) {
   const tipos = options.tipo_produto || [];
-  const grupos = options.grupo_produto || [];
+
+  // Os 3 selects de categoria são encadeados, logo controlados. O valor
+  // trafegado (e persistido em stock_products) continua sendo o LABEL em texto.
+  const [grupo, setGrupo] = useState(produto.productGroup ?? "");
+  const [classificacao, setClassificacao] = useState(produto.classification ?? "");
+  const [subclassificacao, setSubclassificacao] = useState(
+    produto.subclassification ?? "",
+  );
+
+  // Navegação da árvore por rótulo: buscamos entre TODOS os nós (inclusive
+  // inativos) para que um grupo legado ainda revele seus filhos.
+  const noGrupo = categorias.find((g) => g.label === grupo);
+  const noClassificacao = noGrupo?.children.find((c) => c.label === classificacao);
+
+  const opcoesGrupo = opcoesComLegado(categorias, grupo);
+  const opcoesClassificacao = opcoesComLegado(
+    noGrupo?.children ?? [],
+    classificacao,
+  );
+  const opcoesSubclassificacao = opcoesComLegado(
+    noClassificacao?.children ?? [],
+    subclassificacao,
+  );
+
+  // O filho só abre depois do pai escolhido — o que também cobre o caso legado,
+  // já que um valor legado preenchido conta como "pai escolhido".
+  const semGrupo = grupo === "";
+  const semClassificacao = classificacao === "";
 
   return (
     <div className="space-y-4">
@@ -79,25 +122,62 @@ export function DadosGerais({
             id="pr-grupo"
             name="product_group"
             label="Grupo"
-            defaultValue={produto.productGroup ?? ""}
+            value={grupo}
+            onChange={(e) => {
+              // Trocar o grupo invalida os níveis abaixo.
+              setGrupo(e.target.value);
+              setClassificacao("");
+              setSubclassificacao("");
+            }}
           >
             <option value="">Selecione</option>
-            {grupos.map((g) => (
-              <option key={g.id} value={g.label}>{g.label}</option>
+            {opcoesGrupo.map((label) => (
+              <option key={label} value={label}>{label}</option>
             ))}
           </Select>
-          <Input
+          <Select
             id="pr-classif"
             name="classification"
             label="Classificação"
-            defaultValue={produto.classification ?? ""}
-          />
-          <Input
+            value={classificacao}
+            disabled={semGrupo}
+            title={semGrupo ? "Selecione um grupo primeiro" : undefined}
+            onChange={(e) => {
+              setClassificacao(e.target.value);
+              setSubclassificacao("");
+            }}
+          >
+            <option value="">
+              {semGrupo ? "Selecione um grupo antes" : "Selecione"}
+            </option>
+            {opcoesClassificacao.map((label) => (
+              <option key={label} value={label}>{label}</option>
+            ))}
+          </Select>
+          {/* Select desabilitado não entra no FormData, e o update ignora campos
+              ausentes (mantendo o valor antigo). O hidden garante a limpeza. */}
+          {semGrupo && <input type="hidden" name="classification" value="" />}
+          {semClassificacao && (
+            <input type="hidden" name="subclassification" value="" />
+          )}
+          <Select
             id="pr-subclassif"
             name="subclassification"
             label="Subclassificação"
-            defaultValue={produto.subclassification ?? ""}
-          />
+            value={subclassificacao}
+            disabled={semClassificacao}
+            title={
+              semClassificacao ? "Selecione uma classificação primeiro" : undefined
+            }
+            onChange={(e) => setSubclassificacao(e.target.value)}
+          >
+            <option value="">
+              {semClassificacao ? "Selecione uma classificação antes" : "Selecione"}
+            </option>
+            {opcoesSubclassificacao.map((label) => (
+              <option key={label} value={label}>{label}</option>
+            ))}
+          </Select>
           <Input
             id="pr-ncm"
             name="ncm"
