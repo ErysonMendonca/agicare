@@ -8,6 +8,7 @@ import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
 import { getAtendimentoAtivo } from "@/lib/data/atendimento";
+import { resolveCidCode } from "@/lib/data/cid";
 import { logAction } from "@/lib/system-log";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
@@ -67,8 +68,19 @@ export async function emitirAtestado(input: AtestadoInput): Promise<ActionState>
   const clinicId = await requireClinic();
   const d = parsed.data;
   const endDate = addDays(d.dataAtestado, d.dias);
-  // Normaliza o CID (o autocomplete é livre): sem espaços e sempre maiúsculo.
-  const cid10 = d.cid10 ? d.cid10.trim().toUpperCase() : null;
+  // CID-10 opcional, mas se informado precisa existir (e estar ativo) no
+  // catálogo do admin (cid_codes). Fora do catálogo → não emite o documento.
+  let cid10: string | null = null;
+  if (d.cid10 && d.cid10.trim()) {
+    const cid = await resolveCidCode(d.cid10);
+    if (!cid) {
+      return {
+        error:
+          "CID-10 não encontrado no catálogo. Selecione um CID cadastrado em Configurações → Catálogo CID.",
+      };
+    }
+    cid10 = cid.code; // grava o código canônico do catálogo
+  }
   // Vincula o documento ao atendimento corrente do paciente (histórico por atendimento).
   const ativo = await getAtendimentoAtivo(d.patientId);
   const { error } = await supabase.from("certificates").insert({
@@ -137,8 +149,19 @@ export async function darAlta(input: AltaInput): Promise<ActionState> {
 
   const clinicId = await requireClinic();
   const d = parsed.data;
-  // Normaliza o CID (autocomplete livre): sem espaços e sempre maiúsculo.
-  const cid10 = d.cid10 ? d.cid10.trim().toUpperCase() : null;
+  // CID-10 opcional, mas se informado precisa existir (e estar ativo) no
+  // catálogo do admin (cid_codes). Fora do catálogo → não registra a alta.
+  let cid10: string | null = null;
+  if (d.cid10 && d.cid10.trim()) {
+    const cid = await resolveCidCode(d.cid10);
+    if (!cid) {
+      return {
+        error:
+          "CID-10 não encontrado no catálogo. Selecione um CID cadastrado em Configurações → Catálogo CID.",
+      };
+    }
+    cid10 = cid.code; // grava o código canônico do catálogo
+  }
   // Vincula o documento ao atendimento corrente do paciente (histórico por atendimento).
   const ativo = await getAtendimentoAtivo(d.patientId);
   const { error } = await supabase.from("certificates").insert({

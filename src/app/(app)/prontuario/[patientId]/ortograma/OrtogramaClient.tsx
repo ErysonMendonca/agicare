@@ -414,25 +414,30 @@ function Historico({
         }
         className="max-w-4xl"
         footer={
-          <Button
-            variant="outline"
-            onClick={() =>
-              versao &&
-              imprimirOrtograma(
-                {
-                  ...cabecalho,
-                  data: aberto?.dataLabel ?? cabecalho.data,
-                  profissional: versao.professionalName,
-                },
-                marcasVersao,
-                versao.notes,
-              )
-            }
-            disabled={!versao}
-          >
-            <Printer className="h-4 w-4" />
-            Imprimir
-          </Button>
+          <>
+            <Button variant="ghost" onClick={() => setAberto(null)}>
+              Fechar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                versao &&
+                imprimirOrtograma(
+                  {
+                    ...cabecalho,
+                    data: aberto?.dataLabel ?? cabecalho.data,
+                    profissional: versao.professionalName,
+                  },
+                  marcasVersao,
+                  versao.notes,
+                )
+              }
+              disabled={!versao}
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir
+            </Button>
+          </>
         }
       >
         {carregando || !versao ? (
