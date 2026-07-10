@@ -12,6 +12,7 @@ import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { cn } from "@/lib/utils";
 import { emitirReceituario, removerReceituario } from "@/lib/actions/receituario";
 import type { Receituario } from "@/lib/data/receituario";
+import type { CidCode } from "@/lib/data/cid";
 import {
   imprimirReceituarioSimples,
   type ClinicaImpressao,
@@ -45,18 +46,31 @@ export function ReceituarioClient({
   paciente,
   endereco,
   receituarios,
+  cidCodes,
 }: {
   patientId: string;
   clinica: ClinicaImpressao;
   paciente: PacienteImpressao;
   endereco: Endereco;
   receituarios: Receituario[];
+  cidCodes: CidCode[];
 }) {
   const router = useRouter();
   const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [tipo, setTipo] = useState<Tipo>("simples");
   const [texto, setTexto] = useState("");
+  const [cid10, setCid10] = useState("");
+  const [exibirCid, setExibirCid] = useState(true);
+
+  /** Normaliza um CID p/ comparação: maiúsculo, sem espaço e sem ponto. */
+  const normCid = (s: string) =>
+    s.trim().toUpperCase().replace(/\s+/g, "").replace(/\./g, "");
+  /** true se o CID digitado existe no catálogo do admin (cidCodes). */
+  function cidNoCatalogo(input: string): boolean {
+    const alvo = normCid(input);
+    return cidCodes.some((c) => normCid(c.code) === alvo);
+  }
 
   const pacienteEspecial: PacienteImpressaoEspecial = {
     nome: paciente.nome,
@@ -67,14 +81,17 @@ export function ReceituarioClient({
     cep: endereco.cep,
   };
 
-  /** Dispara a impressão do conteúdo conforme o tipo. */
-  function imprimir(t: Tipo, conteudo: string) {
+  /** Dispara a impressão do conteúdo conforme o tipo (CID opcional). */
+  function imprimir(t: Tipo, conteudo: string, cid = "") {
     if (t === "especial") {
-      imprimirReceituarioEspecial(clinica, pacienteEspecial, conteudo);
+      imprimirReceituarioEspecial(clinica, pacienteEspecial, conteudo, cid);
     } else {
-      imprimirReceituarioSimples(clinica, paciente, conteudo);
+      imprimirReceituarioSimples(clinica, paciente, conteudo, cid);
     }
   }
+
+  const MSG_CID_INVALIDO =
+    "CID-10 não encontrado no catálogo. Selecione um CID cadastrado em Configurações → Catálogo CID.";
 
   function salvar() {
     const conteudo = texto.trim();
@@ -82,11 +99,23 @@ export function ReceituarioClient({
       toast.error("Escreva a prescrição antes de salvar.");
       return;
     }
+    if (cid10.trim() && !cidNoCatalogo(cid10)) {
+      toast.error(MSG_CID_INVALIDO);
+      return;
+    }
     startTransition(async () => {
-      const res = await emitirReceituario({ patientId, tipo, texto: conteudo });
+      const res = await emitirReceituario({
+        patientId,
+        tipo,
+        texto: conteudo,
+        cid10: cid10.trim() || undefined,
+        exibirCid,
+      });
       if (res?.ok) {
         toast.success("Receituário emitido.");
         setTexto("");
+        setCid10("");
+        setExibirCid(true);
         router.refresh();
       } else {
         toast.error(res?.error ?? "Não foi possível emitir o receituário.");
@@ -101,7 +130,7 @@ export function ReceituarioClient({
       toast.error("Escreva a prescrição antes de imprimir.");
       return;
     }
-    imprimir(tipo, conteudo);
+    imprimir(tipo, conteudo, exibirCid ? cid10.trim() : "");
   }
 
   async function remover(id: string) {
@@ -162,6 +191,44 @@ export function ReceituarioClient({
             : "Receituário simples — prescrição de texto livre."}
         </p>
 
+        {/* Datalist compartilhado do catálogo de CID (sugestão; a validação é
+            no salvar e no servidor). */}
+        <datalist id="cid-codes-receituario">
+          {cidCodes.map((c) => (
+            <option key={c.id} value={c.code}>
+              {c.code} — {c.description}
+            </option>
+          ))}
+        </datalist>
+
+        <div className="mt-4 flex flex-wrap items-end gap-4">
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-ink">
+              CID-10 (opcional)
+            </span>
+            <input
+              id="receituario-cid"
+              list="cid-codes-receituario"
+              value={cid10}
+              onChange={(e) => setCid10(e.target.value)}
+              placeholder="Ex.: M54.5"
+              className="h-10 w-56 rounded-lg border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+          </label>
+          <label className="flex h-10 items-center gap-2">
+            <input
+              type="checkbox"
+              checked={exibirCid}
+              onChange={(e) => setExibirCid(e.target.checked)}
+              className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-100"
+            />
+            <span className="text-sm text-ink">Exibir CID na impressão</span>
+          </label>
+        </div>
+        <p className="mt-1 text-xs text-muted">
+          O CID-10 é opcional (LGPD) e deve pertencer ao catálogo do admin.
+        </p>
+
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={imprimirAtual}>
             <Printer className="h-4 w-4" /> Imprimir
@@ -198,13 +265,18 @@ export function ReceituarioClient({
                     <p className="whitespace-pre-line break-words text-sm text-ink">
                       {r.texto}
                     </p>
+                    {r.cid10 && (
+                      <p className="mt-1 text-xs text-muted">CID-10: {r.cid10}</p>
+                    )}
                     <p className="mt-1 text-xs text-muted">{r.profissional}</p>
                   </div>
                   <div className="flex shrink-0 gap-1">
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => imprimir(r.tipo, r.texto)}
+                      onClick={() =>
+                        imprimir(r.tipo, r.texto, r.exibirCid ? r.cid10 ?? "" : "")
+                      }
                     >
                       <Printer className="h-4 w-4" /> Imprimir
                     </Button>

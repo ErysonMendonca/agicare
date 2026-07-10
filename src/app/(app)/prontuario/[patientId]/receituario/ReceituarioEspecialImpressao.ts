@@ -45,6 +45,7 @@ function montarVia(
   paciente: PacienteImpressaoEspecial,
   texto: string,
   via: string,
+  cid: string,
 ): string {
   return `
   <div class="via">
@@ -85,6 +86,7 @@ function montarVia(
     <div class="presc-lbl">Prescrição:</div>
     <div class="presc">${corpoTexto(texto)}</div>
 
+    ${limpo(cid) ? `<div class="data">CID-10: ${esc(cid)}</div>` : ""}
     <div class="data">Data: ${esc(hojeBR())}</div>
 
     <div class="blocos">
@@ -114,6 +116,7 @@ function montarDocumento(
   clinica: ClinicaImpressao,
   paciente: PacienteImpressaoEspecial,
   texto: string,
+  cid: string,
 ): string {
   return `<!doctype html>
 <html lang="pt-BR">
@@ -149,9 +152,9 @@ function montarDocumento(
 </style>
 </head>
 <body>
-  ${montarVia(clinica, { ...paciente }, texto, "1ª VIA FARMÁCIA")
+  ${montarVia(clinica, { ...paciente }, texto, "1ª VIA FARMÁCIA", cid)
     .replace('class="via"', 'class="via primeira"')}
-  ${montarVia(clinica, { ...paciente }, texto, "2ª VIA PACIENTE")}
+  ${montarVia(clinica, { ...paciente }, texto, "2ª VIA PACIENTE", cid)}
 </body>
 </html>`;
 }
@@ -161,13 +164,14 @@ export function imprimirReceituarioEspecial(
   clinica: ClinicaImpressao,
   paciente: PacienteImpressaoEspecial,
   texto: string,
+  cid = "",
 ): void {
   const win = window.open("", "_blank", "width=820,height=1040");
   if (!win) {
     toast.error("Permita pop-ups para imprimir o receituário.");
     return;
   }
-  win.document.write(montarDocumento(clinica, paciente, texto));
+  win.document.write(montarDocumento(clinica, paciente, texto, cid));
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 150);

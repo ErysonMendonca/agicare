@@ -7,6 +7,10 @@ export type Receituario = {
   texto: string;
   dataHora: string;
   profissional: string;
+  /** CID-10 do catálogo (opcional por LGPD); null quando não informado. */
+  cid10: string | null;
+  /** Exibir o CID na impressão (LGPD — sigilo do diagnóstico). */
+  exibirCid: boolean;
 };
 
 function fmtDataHora(iso: string | null): string {
@@ -31,6 +35,8 @@ const DEMO_RECEITUARIOS: Receituario[] = [
     texto: "Dipirona 500mg — 1 comprimido de 6/6h por 3 dias.",
     dataHora: "12/06/2026 09:10",
     profissional: "Dra. Ana Beatriz Costa",
+    cid10: null,
+    exibirCid: true,
   },
 ];
 
@@ -43,7 +49,7 @@ export async function listReceituarios(
   const { data, error } = await supabase
     .from("certificates")
     .select(
-      "id, kind, prescription_text, created_at, professionals(profiles(full_name))",
+      "id, kind, prescription_text, cid10, show_cid, created_at, professionals(profiles(full_name))",
     )
     .eq("patient_id", patientId)
     .in("kind", ["receituario_simples", "receituario_especial"])
@@ -65,6 +71,8 @@ export async function listReceituarios(
       texto: (c.prescription_text as string | null) ?? "",
       dataHora: fmtDataHora((c.created_at as string | null) ?? null),
       profissional: profile?.full_name ?? "—",
+      cid10: (c.cid10 as string | null) ?? null,
+      exibirCid: (c.show_cid as boolean | null) ?? true,
     };
   });
 }
