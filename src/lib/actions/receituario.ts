@@ -9,6 +9,7 @@ import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
 import { getPatientEditavel } from "@/lib/data/patients";
 import { getAtendimentoAtivo } from "@/lib/data/atendimento";
+import { resolveCidCode } from "@/lib/data/cid";
 import { logAction } from "@/lib/system-log";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
@@ -26,6 +27,9 @@ const receituarioSchema = z.object({
   patientId: z.string().uuid("Paciente inválido."),
   tipo: z.enum(["simples", "especial"]),
   texto: z.string().trim().min(1, "Informe o conteúdo do receituário."),
+  // CID-10 OPCIONAL por LGPD; se informado, validado contra o catálogo.
+  cid10: z.string().trim().optional(),
+  exibirCid: z.boolean().optional(),
 });
 
 export type ReceituarioInput = z.infer<typeof receituarioSchema>;
@@ -60,6 +64,20 @@ export async function emitirReceituario(
   const paciente = await getPatientEditavel(d.patientId);
   if (!paciente) return { error: "Paciente não encontrado nesta clínica." };
 
+  // CID-10 opcional, mas se informado precisa existir (e estar ativo) no
+  // catálogo do admin (cid_codes). Fora do catálogo → não emite o receituário.
+  let cid10: string | null = null;
+  if (d.cid10 && d.cid10.trim()) {
+    const cid = await resolveCidCode(d.cid10);
+    if (!cid) {
+      return {
+        error:
+          "CID-10 não encontrado no catálogo. Selecione um CID cadastrado em Configurações → Catálogo CID.",
+      };
+    }
+    cid10 = cid.code; // grava o código canônico do catálogo
+  }
+
   // Vincula o receituário ao atendimento corrente do paciente (histórico por atendimento).
   const ativo = await getAtendimentoAtivo(d.patientId);
   const { data: inserted, error } = await supabase
@@ -72,6 +90,8 @@ export async function emitirReceituario(
       queue_entry_id: ativo?.queueEntryId ?? null,
       kind: `receituario_${d.tipo}`,
       prescription_text: d.texto,
+      cid10,
+      show_cid: d.exibirCid ?? true,
     })
     .select("id")
     .single();

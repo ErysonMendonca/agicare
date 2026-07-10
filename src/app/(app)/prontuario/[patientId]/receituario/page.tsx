@@ -1,6 +1,7 @@
 import { getResumo } from "@/lib/data/prontuario";
 import { getSettings } from "@/lib/data/settings";
 import { listReceituarios, getPacienteEndereco } from "@/lib/data/receituario";
+import { listCidCodes } from "@/lib/data/cid";
 import { SecaoClinica } from "../SecaoClinica";
 import { ReceituarioClient } from "./ReceituarioClient";
 
@@ -10,11 +11,12 @@ export default async function ReceituarioPage({
   params: Promise<{ patientId: string }>;
 }) {
   const { patientId } = await params;
-  const [resumo, settings, endereco, receituarios] = await Promise.all([
+  const [resumo, settings, endereco, receituarios, cidCodes] = await Promise.all([
     getResumo(patientId),
     getSettings(),
     getPacienteEndereco(patientId),
     listReceituarios(patientId),
+    listCidCodes(),
   ]);
 
   const identificacao = resumo?.identificacao ?? null;
@@ -48,6 +50,7 @@ export default async function ReceituarioPage({
           cep: endereco?.cep ?? "",
         }}
         receituarios={receituarios}
+        cidCodes={cidCodes}
       />
     </SecaoClinica>
   );

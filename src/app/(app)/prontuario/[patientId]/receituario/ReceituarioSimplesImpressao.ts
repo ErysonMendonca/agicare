@@ -42,6 +42,7 @@ function montarDocumento(
   clinica: ClinicaImpressao,
   paciente: PacienteImpressao,
   texto: string,
+  cid: string,
 ): string {
   return `<!doctype html>
 <html lang="pt-BR">
@@ -86,6 +87,7 @@ function montarDocumento(
 
   <div class="corpo">${corpoTexto(texto)}</div>
 
+  ${limpo(cid) ? `<p class="obs"><span class="label">CID-10:</span> ${esc(cid)}</p>` : ""}
   <p class="obs"><span class="label">Data:</span> ${esc(hojeBR())}</p>
 
   <div class="sign">
@@ -105,13 +107,14 @@ export function imprimirReceituarioSimples(
   clinica: ClinicaImpressao,
   paciente: PacienteImpressao,
   texto: string,
+  cid = "",
 ): void {
   const win = window.open("", "_blank", "width=820,height=1040");
   if (!win) {
     toast.error("Permita pop-ups para imprimir o receituário.");
     return;
   }
-  win.document.write(montarDocumento(clinica, paciente, texto));
+  win.document.write(montarDocumento(clinica, paciente, texto, cid));
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 150);
