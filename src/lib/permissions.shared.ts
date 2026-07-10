@@ -25,6 +25,7 @@ export type ModuleSlug =
   | "solicitacoes"
   | "profissionais"
   | "faturamento"
+  | "faturamento_ajustes"
   | "relatorios"
   | "configuracoes"
   | "usuarios"
@@ -88,6 +89,7 @@ export const MODULES: ModuleSlug[] = [
   "solicitacoes",
   "profissionais",
   "faturamento",
+  "faturamento_ajustes",
   "relatorios",
   "configuracoes",
   "usuarios",
@@ -108,6 +110,7 @@ export const MODULE_LABELS: Record<ModuleSlug, string> = {
   solicitacoes: "Solicitações",
   profissionais: "Profissionais",
   faturamento: "Faturamento",
+  faturamento_ajustes: "Desconto/Acréscimo no Check-out",
   relatorios: "Relatórios",
   configuracoes: "Configurações",
   usuarios: "Usuários",
@@ -151,6 +154,9 @@ export function temEnforcementDeAcoes(module: ModuleSlug): boolean {
 export function defaultCanView(role: Role, module: ModuleSlug): boolean {
   if (role === "admin") return true;
   if (role === "paciente") return false;
+  // Capacidade de desconto/acréscimo (e itens manuais) no check-out: toggle
+  // só para recepção (além do admin, já retornado acima). Médico não recebe.
+  if (module === "faturamento_ajustes") return role === "recepcao";
   // Usuários, Logs e Perfis de Acesso são liberáveis pelo admin, mas nunca
   // vêm ligados por default para papéis não-admin.
   if (RESTRITOS.includes(module)) return false;
@@ -175,6 +181,10 @@ export function defaultPermission(
   const canView = defaultCanView(role, module);
   const base = { canView, scope: "all" as Scope };
   if (!canView) {
+    return { ...base, canCreate: false, canEdit: false, canDelete: false };
+  }
+  // 'faturamento_ajustes' é um toggle de view: as ações não são usadas.
+  if (module === "faturamento_ajustes") {
     return { ...base, canCreate: false, canEdit: false, canDelete: false };
   }
   if (role === "recepcao" && module === "faturamento") {
