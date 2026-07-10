@@ -5,6 +5,7 @@ import { isGestor } from "@/lib/auth";
 import { getActiveClinicId, getMyClinics } from "@/lib/tenant";
 import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { listProdutoCatalogos } from "@/lib/data/produto-catalogos";
+import { listProductCategories } from "@/lib/data/product-categories";
 import { getProdutoCompleto, type ProdutoCompleto } from "@/lib/data/stock";
 import { getProdutoChildren } from "@/lib/data/stock-product-children";
 import { ProdutoEditor } from "./ProdutoEditor";
@@ -77,13 +78,15 @@ export default async function ProdutoEditorPage({
     const { id } = await params;
     const novo = id === "novo";
 
-    const [gestor, options, catalogos, clinicId, clinicas] = await Promise.all([
-      isGestor(),
-      listAttendanceOptions(),
-      listProdutoCatalogos(),
-      getActiveClinicId(),
-      getMyClinics(),
-    ]);
+    const [gestor, options, catalogos, categorias, clinicId, clinicas] =
+      await Promise.all([
+        isGestor(),
+        listAttendanceOptions(),
+        listProdutoCatalogos(),
+        listProductCategories(),
+        getActiveClinicId(),
+        getMyClinics(),
+      ]);
 
     const empresa =
       clinicas.find((c) => c.id === clinicId)?.name ?? clinicas[0]?.name ?? "—";
@@ -116,6 +119,7 @@ export default async function ProdutoEditorPage({
           childrenData={children}
           options={options}
           catalogos={catalogos}
+          categorias={categorias}
           gestor={gestor}
         />
       </>

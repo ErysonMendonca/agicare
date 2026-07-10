@@ -20,6 +20,7 @@ import {
 import type { ProdutoCompleto, ProdutoChildren, ProductXyzClass } from "./types";
 import type { AttendanceOptionsByCategory } from "@/lib/data/attendance-options.shared";
 import type { ProdutoCatalogos } from "@/lib/data/produto-catalogos";
+import type { ProductCategoryNode } from "@/lib/data/product-categories";
 
 // Novos Componentes
 import { DadosGerais } from "./components/DadosGerais";
@@ -63,6 +64,7 @@ export function ProdutoEditor({
   childrenData,
   options,
   catalogos,
+  categorias,
   gestor,
 }: {
   novo: boolean;
@@ -71,6 +73,8 @@ export function ProdutoEditor({
   childrenData: ProdutoChildren | null;
   options: AttendanceOptionsByCategory;
   catalogos: ProdutoCatalogos;
+  /** Árvore Grupo → Classificação → Subclassificação (configurações). */
+  categorias: ProductCategoryNode[];
   gestor: boolean;
 }) {
   const router = useRouter();
@@ -207,6 +211,7 @@ export function ProdutoEditor({
           <DadosGerais
             produto={produto}
             options={options}
+            categorias={categorias}
             novo={novo}
             ativo={ativo}
             setAtivo={setAtivo}

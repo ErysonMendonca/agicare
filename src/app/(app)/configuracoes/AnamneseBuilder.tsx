@@ -11,9 +11,6 @@ import {
   GripVertical,
   AlertTriangle,
   TriangleAlert,
-  ImageIcon,
-  Upload,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -21,7 +18,6 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { upsertAnamneseTemplate } from "@/lib/actions/anamnese-templates";
-import { salvarImagemLousaTemplate } from "@/lib/actions/anamnese-files";
 import {
   fallbackTemplate,
   type AnamneseField,
@@ -69,77 +65,16 @@ export function AnamneseBuilder({ templates }: { templates: AnamneseTemplate[] }
     for (const t of templates) m.set(t.specialty, t.fields);
     return m;
   }, [templates]);
-  // Imagem de fundo da lousa já configurada por especialidade (path + URL 1h).
-  const lousaMap = useMemo(() => {
-    const m = new Map<string, { path: string | null; url: string | null }>();
-    for (const t of templates)
-      m.set(t.specialty, {
-        path: t.lousaImagePath ?? null,
-        url: t.lousaImageUrl ?? null,
-      });
-    return m;
-  }, [templates]);
-
   const [specialty, setSpecialty] = useState<string>(
     especialidades[0] ?? "Geral",
   );
   const [fields, setFields] = useState<AnamneseField[]>(
     () => structuredClone(baseMap.get(specialty) ?? []),
   );
-  // Imagem de fundo da lousa em edição: `path` é o que persiste; `url` é só a
-  // prévia (signed URL do banco ou dataURL local recém-enviado).
-  const [lousaPath, setLousaPath] = useState<string | null>(
-    () => lousaMap.get(specialty)?.path ?? null,
-  );
-  const [lousaUrl, setLousaUrl] = useState<string | null>(
-    () => lousaMap.get(specialty)?.url ?? null,
-  );
-  const [enviandoImg, setEnviandoImg] = useState(false);
 
   function trocarEspecialidade(s: string) {
     setSpecialty(s);
     setFields(structuredClone(baseMap.get(s) ?? []));
-    setLousaPath(lousaMap.get(s)?.path ?? null);
-    setLousaUrl(lousaMap.get(s)?.url ?? null);
-  }
-
-  /** Lê o arquivo escolhido → dataURL → sobe via action → guarda o path/prévia. */
-  function enviarImagemLousa(file: File) {
-    if (!file.type.startsWith("image/")) {
-      toast.error("Selecione um arquivo de imagem.");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("A imagem excede o limite de 5MB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result ?? "");
-      setEnviandoImg(true);
-      startTransition(async () => {
-        const res = await salvarImagemLousaTemplate({
-          specialty,
-          dataUrl,
-          previousPath: lousaPath,
-        });
-        setEnviandoImg(false);
-        if (res.ok) {
-          setLousaPath(res.path);
-          setLousaUrl(dataUrl); // prévia imediata
-          toast.success("Imagem enviada — salve o template para confirmar.");
-        } else {
-          toast.error(res.error ?? "Falha ao enviar a imagem.");
-        }
-      });
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function removerImagemLousa() {
-    setLousaPath(null);
-    setLousaUrl(null);
-    toast.info("Imagem removida — salve o template para confirmar.");
   }
 
   function patch(i: number, p: Partial<AnamneseField>) {
@@ -211,7 +146,7 @@ export function AnamneseBuilder({ templates }: { templates: AnamneseTemplate[] }
     }
 
     startTransition(async () => {
-      const res = await upsertAnamneseTemplate(specialty, limpos, lousaPath);
+      const res = await upsertAnamneseTemplate(specialty, limpos);
       if (res?.ok) {
         toast.success("Template de anamnese salvo.");
         router.refresh();
@@ -249,69 +184,6 @@ export function AnamneseBuilder({ templates }: { templates: AnamneseTemplate[] }
               </option>
             ))}
           </Select>
-        </div>
-
-        {/* Imagem de fundo da lousa (pré-fixada por especialidade) */}
-        <div className="mb-6 rounded-xl border border-line bg-surface p-4">
-          <div className="flex items-center gap-2">
-            <ImageIcon className="h-4 w-4 text-brand-600" />
-            <h4 className="text-sm font-semibold text-ink">
-              Imagem de fundo da lousa
-            </h4>
-          </div>
-          <p className="mt-1 text-xs text-muted">
-            Opcional. Aparece como fundo da lousa no prontuário desta
-            especialidade — o médico anota por cima (desenho, formas, texto).
-          </p>
-
-          <div className="mt-3 flex items-start gap-4">
-            <div className="flex h-24 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-muted-surface">
-              {lousaUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={lousaUrl}
-                  alt="Prévia da imagem de fundo da lousa"
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <span className="text-xs text-muted">Sem imagem</span>
-              )}
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="inline-flex">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={enviandoImg || pending}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) enviarImagemLousa(f);
-                    e.target.value = "";
-                  }}
-                />
-                <span className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-muted-surface">
-                  <Upload className="h-4 w-4" />
-                  {enviandoImg
-                    ? "Enviando..."
-                    : lousaUrl
-                      ? "Trocar imagem"
-                      : "Enviar imagem"}
-                </span>
-              </label>
-              {lousaUrl && (
-                <button
-                  type="button"
-                  onClick={removerImagemLousa}
-                  disabled={enviandoImg || pending}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-40"
-                >
-                  <X className="h-4 w-4" />
-                  Remover
-                </button>
-              )}
-            </div>
-          </div>
         </div>
 
         <div className="space-y-3">

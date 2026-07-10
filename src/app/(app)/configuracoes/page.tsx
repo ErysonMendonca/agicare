@@ -7,6 +7,7 @@ import { listTriageTemplates } from "@/lib/data/triage-templates";
 import { listCidCodes } from "@/lib/data/cid";
 import { listAltaCatalogosConfig } from "@/lib/data/alta";
 import { listProdutoCatalogos } from "@/lib/data/produto-catalogos";
+import { listProductCategories } from "@/lib/data/product-categories";
 import { requireView } from "@/lib/permissions";
 import { isGestor } from "@/lib/auth";
 import { ConfiguracoesClient } from "./ConfiguracoesClient";
@@ -23,6 +24,7 @@ export default async function ConfiguracoesPage() {
     cidCodes,
     altaCatalogos,
     produtoCatalogos,
+    productCategories,
     gestor,
   ] = await Promise.all([
     getSettings(),
@@ -34,6 +36,7 @@ export default async function ConfiguracoesPage() {
     listCidCodes(),
     listAltaCatalogosConfig(),
     listProdutoCatalogos(),
+    listProductCategories(),
     isGestor(),
   ]);
   return (
@@ -48,6 +51,7 @@ export default async function ConfiguracoesPage() {
       motivosAlta={altaCatalogos.motivos}
       detalhesAlta={altaCatalogos.detalhes}
       produtoCatalogos={produtoCatalogos}
+      productCategories={productCategories}
       isGestor={gestor}
     />
   );

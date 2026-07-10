@@ -53,6 +53,7 @@ import { EspecialidadesConfig } from "./EspecialidadesConfig";
 import { CidConfig } from "./CidConfig";
 import { AltaCatalogoConfig } from "./AltaCatalogoConfig";
 import { ProdutoCatalogosConfig } from "./ProdutoCatalogosConfig";
+import type { ProductCategoryNode } from "@/lib/data/product-categories";
 import type { CidCode } from "@/lib/data/cid";
 import type { MotivoAltaCfg, DetalheAltaCfg } from "@/lib/data/alta";
 import type { Especialidade } from "@/lib/data/especialidades";
@@ -98,6 +99,7 @@ export function ConfiguracoesClient({
   motivosAlta,
   detalhesAlta,
   produtoCatalogos,
+  productCategories,
   isGestor,
 }: {
   settings: ClinicSettings;
@@ -110,6 +112,7 @@ export function ConfiguracoesClient({
   motivosAlta: MotivoAltaCfg[];
   detalhesAlta: DetalheAltaCfg[];
   produtoCatalogos: ProdutoCatalogos;
+  productCategories: ProductCategoryNode[];
   isGestor: boolean;
 }) {
   // As abas de catálogo (Triagem, Dados de Atendimento, Especialidades,
@@ -634,7 +637,10 @@ export function ConfiguracoesClient({
 
       {/* Catálogos do cadastro de produto (gestor-only), fora do form. */}
       {isGestor && tabAtiva === PRODUTO_TAB && (
-        <ProdutoCatalogosConfig catalogos={produtoCatalogos} />
+        <ProdutoCatalogosConfig
+          catalogos={produtoCatalogos}
+          categorias={productCategories}
+        />
       )}
     </>
   );
