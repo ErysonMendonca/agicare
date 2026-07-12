@@ -138,6 +138,7 @@ function montarDocumento(
   paciente: PacienteImpressao,
   dados: DadosAtendimentoDoc,
   termos: TermoImpressao[],
+  incluirFicha = true,
 ): string {
   const emitidoEm = new Date().toLocaleString("pt-BR", {
     day: "2-digit",
@@ -148,7 +149,7 @@ function montarDocumento(
   });
 
   const paginas = [
-    paginaFicha(clinica, paciente, dados, emitidoEm),
+    ...(incluirFicha ? [paginaFicha(clinica, paciente, dados, emitidoEm)] : []),
     ...termos.map((t) => paginaTermo(clinica, paciente, t)),
   ].join("\n");
 
@@ -191,20 +192,22 @@ ${paginas}
 
 /**
  * Abre o pacote de documentos numa janela nova e dispara a impressão.
- * `termos` vazio imprime só a ficha (página 1).
+ * `termos` vazio imprime só a ficha (página 1). Com `incluirFicha = false`
+ * imprime apenas os termos informados (impressão seletiva de um único termo).
  */
 export function imprimirDocumentosAtendimento(
   clinica: ClinicaImpressao,
   paciente: PacienteImpressao,
   dados: DadosAtendimentoDoc,
   termos: TermoImpressao[],
+  incluirFicha = true,
 ): void {
   const win = window.open("", "_blank", "width=820,height=1040");
   if (!win) {
     toast.error("Permita pop-ups para imprimir os documentos do atendimento.");
     return;
   }
-  win.document.write(montarDocumento(clinica, paciente, dados, termos));
+  win.document.write(montarDocumento(clinica, paciente, dados, termos, incluirFicha));
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 150);

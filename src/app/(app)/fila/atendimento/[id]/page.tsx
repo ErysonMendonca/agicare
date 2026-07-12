@@ -9,12 +9,16 @@ import { AtendimentoClient } from "./AtendimentoClient";
 
 export default async function AtendimentoDetalhePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ reimprimir?: string }>;
 }) {
   await requireView("fila");
 
   const { id } = await params;
+  const { reimprimir } = await searchParams;
+  const autoReimprimir = reimprimir === "1";
   const item = await getQueueItem(id);
 
   if (!item) {
@@ -43,6 +47,7 @@ export default async function AtendimentoDetalhePage({
       profissionais={profissionais}
       termosAtivos={termosAtivos}
       clinica={clinica}
+      autoReimprimir={autoReimprimir}
     />
   );
 }

@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Monitor, UserCheck, Eye, UserX, Stethoscope, Printer, Wallet } from "lucide-react";
+import { Monitor, UserCheck, Eye, UserX, Stethoscope, Printer, Wallet, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Modal } from "@/components/ui/Modal";
 import { type FilaItem } from "@/lib/data/queue";
@@ -70,10 +70,28 @@ export function AcoesPacienteModal({
   const mostrarAtender = podeAtender && (!atenderClinico || isMedico);
   // Recepção fecha o atendimento quando está aguardando pagamento.
   const podeFechar = item.statusRaw === "aguardando_pagamento";
+  // Status clínicos: paciente já passou do "Detalhe de Atendimento" e está com o
+  // profissional (aguardando/triagem/chamado/em atendimento).
+  const CLINICOS = [
+    "aguardando_atendimento",
+    "triagem",
+    "chamado",
+    "em_atendimento",
+  ];
   // Após o atendimento do médico (aguardando pagamento) não cabe desistência.
+  // Nos status clínicos também não faz sentido a recepção dar desistência.
   const podeDesistir =
     !TERMINAIS.includes(item.statusRaw) &&
-    item.statusRaw !== "aguardando_pagamento";
+    item.statusRaw !== "aguardando_pagamento" &&
+    !CLINICOS.includes(item.statusRaw);
+  // Reimprimir documentos do atendimento (ficha + termos) dos pacientes já
+  // com o profissional: recepção reabre o Detalhe em modo reimpressão.
+  const podeReimprimirDocs = CLINICOS.includes(item.statusRaw) && !!item.id;
+
+  function handleReimprimirDocs() {
+    onClose();
+    router.push(`/fila/atendimento/${item.id}?reimprimir=1`);
+  }
 
   function handleChamar() {
     // Toca o beep imediatamente (o clique conta como gesto do usuário).
@@ -205,6 +223,15 @@ export function AcoesPacienteModal({
             icon={<Wallet className="h-5 w-5" />}
             label="Faturamento"
             className="bg-brand-500 text-white hover:bg-brand-600 disabled:hover:bg-brand-500"
+          />
+        )}
+        {podeReimprimirDocs && (
+          <ActionButton
+            onClick={handleReimprimirDocs}
+            disabled={pending}
+            icon={<FileText className="h-5 w-5" />}
+            label="Reimprimir documentos"
+            className="border border-line bg-white text-ink hover:bg-muted-surface"
           />
         )}
         <ActionButton
