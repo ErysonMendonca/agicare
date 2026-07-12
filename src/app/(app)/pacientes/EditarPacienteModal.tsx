@@ -700,9 +700,13 @@ function EditarPacienteForm({
             <Input
               id="ep-end"
               name="address"
-              label="Logradouro"
+              label="Logradouro *"
               value={endereco}
-              onChange={(e) => setEndereco(e.target.value)}
+              onChange={(e) => {
+                setEndereco(e.target.value);
+                limparErro("address");
+              }}
+              error={erroCampo("address")}
               className="sm:col-span-2"
             />
           </div>

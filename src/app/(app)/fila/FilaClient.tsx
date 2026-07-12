@@ -46,7 +46,6 @@ import { CheckInModal } from "./CheckInModal";
 type ModalKind =
   | "acoes"
   | "triagem"
-  | "atendimento"
   | "desistencia"
   | "fechamento"
   | null;
@@ -705,12 +704,11 @@ export function FilaClient({
           totemEnabled={totemEnabled}
           onConfirmarPresenca={(item) => {
             // Modo sem totem: check-in confirmou a presença (paciente já em
-            // 'na_recepcao') → abre os Dados de Atendimento direto.
+            // 'na_recepcao') → abre os Dados de Atendimento direto. O detalhe é
+            // uma ROTA (/fila/atendimento/[id]), não um modal — navegar até ela.
             setCheckInOpen(false);
             setCheckInAlvo(null);
-            setSelected(item);
-            setModal("atendimento");
-            router.refresh();
+            router.push(`/fila/atendimento/${item.id}`);
           }}
         />
       )}
