@@ -83,6 +83,7 @@ export function AtendimentoClient({
   profissionais = [],
   termosAtivos = [],
   clinica,
+  autoReimprimir = false,
 }: {
   item: FilaItem;
   attendanceOptions?: AttendanceOptionsByCategory;
@@ -96,6 +97,8 @@ export function AtendimentoClient({
   termosAtivos?: ConsentTemplate[];
   /** Dados da clínica p/ o cabeçalho dos documentos de impressão. */
   clinica: ClinicaImpressao;
+  /** Abre automaticamente o modal de documentos ao montar (reimpressão pela fila). */
+  autoReimprimir?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
@@ -318,6 +321,20 @@ export function AtendimentoClient({
       router.refresh();
     }
   }
+
+  // Reimpressão vinda da fila (?reimprimir=1): abre o modal de documentos uma
+  // única vez ao montar, sem navegar ao fechar (permanece na tela). O rAF
+  // garante que o formRef já esteja montado para o montarDoc() ler os campos.
+  const reimpressaoAberta = useRef(false);
+  useEffect(() => {
+    if (!autoReimprimir || reimpressaoAberta.current) return;
+    reimpressaoAberta.current = true;
+    const raf = requestAnimationFrame(() => {
+      abrirDocs(montarDoc(), false);
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoReimprimir]);
 
   const handleBack = async () => {
     if (dirty) {

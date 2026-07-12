@@ -62,12 +62,17 @@ export function DocumentosAtendimentoModal({
 
   const termosOrdenados = [...termosAtivos].sort((a, b) => a.sortOrder - b.sortOrder);
 
+  const documentos = [
+    { id: "ficha", titulo: "Ficha de Detalhe do Atendimento", tipo: "ficha" as const },
+    ...termosOrdenados.map((t) => ({ id: t.id, titulo: t.title, tipo: "termo" as const })),
+  ];
+
   /** Registra os termos impressos no servidor (best-effort, não bloqueia). */
-  function registrar() {
-    if (registrado || !patientId || termosOrdenados.length === 0) return;
+  function registrar(templates: ConsentTemplate[] = termosOrdenados) {
+    if (registrado || !patientId || templates.length === 0) return;
     // Ignora ids de fallback demo (não-UUID): não há registro a persistir e o
     // servidor rejeitaria por Zod, gerando um toast de erro desnecessário.
-    const templateIds = termosOrdenados
+    const templateIds = templates
       .map((t) => t.id)
       .filter((id) => UUID_RE.test(id));
     if (templateIds.length === 0) return;
@@ -99,15 +104,29 @@ export function DocumentosAtendimentoModal({
     setImpresso(true);
   }
 
+  /** Impressão seletiva de uma única linha da lista (ficha OU um termo). */
+  function imprimirDocumento(doc: (typeof documentos)[number]) {
+    if (doc.tipo === "ficha") {
+      imprimirSomenteFicha();
+      return;
+    }
+    const termo = termosOrdenados.find((t) => t.id === doc.id);
+    if (!termo) return;
+    imprimirDocumentosAtendimento(
+      clinica,
+      paciente,
+      dados,
+      [{ title: termo.title, body: termo.body }],
+      false,
+    );
+    setImpresso(true);
+    registrar([termo]);
+  }
+
   function concluir() {
     registrar();
     onClose();
   }
-
-  const documentos = [
-    { id: "ficha", titulo: "Ficha de Detalhe do Atendimento", tipo: "ficha" as const },
-    ...termosOrdenados.map((t) => ({ id: t.id, titulo: t.title, tipo: "termo" as const })),
-  ];
 
   return (
     <Modal
@@ -159,6 +178,16 @@ export function DocumentosAtendimentoModal({
                     : "Termo de consentimento — assinatura no papel"}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => imprimirDocumento(doc)}
+                disabled={pending}
+                title={`Imprimir ${doc.titulo}`}
+                aria-label={`Imprimir ${doc.titulo}`}
+                className="flex-none rounded-lg border border-line p-2 text-muted transition-colors hover:bg-muted-surface hover:text-brand-600 disabled:opacity-50"
+              >
+                <Printer className="h-4 w-4" />
+              </button>
             </motion.li>
           ))}
         </ul>

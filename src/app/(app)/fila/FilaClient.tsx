@@ -109,6 +109,8 @@ const STATUS_OPCOES: StatusOpcao[] = [
   { value: "agendado", label: "Agendados" },
   { value: "aguardando", label: "Aguardando" },
   { value: "na_recepcao", label: "Na recepção" },
+  { value: "triagem", label: "Triagem" },
+  { value: "em_atendimento", label: "Em atendimento" },
   { value: "aguardando_pagamento", label: "Check-out (Pagamento)" },
 ];
 

@@ -60,12 +60,26 @@ export default async function FilaPage({
     listProfissionaisVinculo(),
   ]);
 
-  // 1. Filtrar a fila para exibir APENAS etapas do processo do recepcionista
+  // 1. Filtrar a fila para exibir as etapas visíveis à recepção. Além das etapas
+  // próprias da recepção (aguardando/na_recepcao/aguardando_pagamento), a recepção
+  // também ENXERGA os pacientes já encaminhados ao profissional ou em atendimento
+  // (triagem/aguardando_atendimento/chamado/em_atendimento) para poder reimprimir
+  // documentos depois. Fora da lista: 'finalizado' e 'desistencia'.
   const filaRecepcionista = fila.filter((i) =>
-    ["aguardando", "na_recepcao", "aguardando_pagamento"].includes(i.statusRaw)
+    [
+      "aguardando",
+      "na_recepcao",
+      "aguardando_atendimento",
+      "triagem",
+      "chamado",
+      "em_atendimento",
+      "aguardando_pagamento",
+    ].includes(i.statusRaw)
   );
 
-  // 2. Atualizar os KPIs para refletir a nova visão da recepção
+  // 2. KPIs: os novos status entram na LISTA e no `total`, mas NÃO devem inflar
+  // `emEspera` (só recepção) nem `checkout` (só pagamento) — a shape consumida
+  // pelo FilaClient permanece inalterada.
   const kpis = {
     checkin: agendados.length,
     emEspera: filaRecepcionista.filter((i) => ["aguardando", "na_recepcao"].includes(i.statusRaw)).length,
