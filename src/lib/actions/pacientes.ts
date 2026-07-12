@@ -68,7 +68,7 @@ const pacienteCampos = {
   cell: texto,
   email: z.string().trim().email("E-mail inválido.").optional().or(z.literal("")),
   cep: texto,
-  address: texto,
+  address: z.string().trim().min(1, "Informe o endereço."),
   district: texto,
   city: texto,
   uf: texto,

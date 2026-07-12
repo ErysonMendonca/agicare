@@ -37,6 +37,7 @@ export const CAMPOS_OBRIGATORIOS: {
     minDigits: 8,
     altName: "cell",
   },
+  { name: "address", label: "Endereço", aba: "contato" },
 ];
 
 /** Um campo obrigatório está faltando neste FormData? */
