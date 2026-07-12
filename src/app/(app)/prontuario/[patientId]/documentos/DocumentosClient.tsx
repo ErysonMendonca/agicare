@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, FilePlus2, LogOut, Printer, ShieldCheck } from "lucide-react";
+import { FileText, FilePlus2, LogOut, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -83,7 +83,6 @@ const ALTA_INICIAL = {
 export function DocumentosClient({
   patientId,
   documentos,
-  temReceita,
   cidCodes,
   motivosAlta,
   detalhesAlta,
@@ -92,7 +91,6 @@ export function DocumentosClient({
 }: {
   patientId: string;
   documentos: Documento[];
-  temReceita: boolean;
   cidCodes: CidCode[];
   motivosAlta: MotivoAlta[];
   detalhesAlta: DetalheAlta[];
@@ -316,14 +314,6 @@ export function DocumentosClient({
       </datalist>
 
       <div className="mb-4 flex flex-wrap justify-end gap-2">
-        <Button
-          variant="outline"
-          disabled={!temReceita}
-          onClick={() => window.print()}
-          title={temReceita ? undefined : "Emita uma prescrição para imprimir a receita"}
-        >
-          <Printer className="h-4 w-4" /> Imprimir Receita
-        </Button>
         <Button variant="outline" onClick={abrirAlta}>
           <LogOut className="h-4 w-4" /> Registrar Alta
         </Button>

@@ -26,10 +26,7 @@ import {
   type AnamneseTemplate,
 } from "@/lib/data/anamnese-templates.shared";
 import { type AnamneseRegistro } from "@/lib/data/anamnese";
-import {
-  gerarAnamnese,
-  editarAnamnese,
-} from "@/lib/actions/anamnese";
+import { gerarAnamnese } from "@/lib/actions/anamnese";
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
 
 type BlocoCampos = { titulo: string; campos: AnamneseField[] };
@@ -93,41 +90,7 @@ export function AnamneseClient({
     [fieldsBySpecialty, specialty],
   );
 
-  // Edição de uma anamnese existente.
-  const [editar, setEditar] = useState<AnamneseRegistro | null>(null);
-  const [editValues, setEditValues] = useState<Record<string, unknown>>({});
   const [cancelar, setCancelar] = useState<AnamneseRegistro | null>(null);
-
-  const editBlocos = useMemo(
-    () =>
-      editar ? agruparCampos(fieldsBySpecialty.get(editar.specialty) ?? []) : [],
-    [editar, fieldsBySpecialty],
-  );
-
-  function abrirEdicao(a: AnamneseRegistro) {
-    setEditar(a);
-    setEditValues({ ...a.campos });
-  }
-
-  function salvarEdicao() {
-    if (!editar) return;
-    const alvo = editar;
-    startTransition(async () => {
-      const res = await editarAnamnese({
-        id: alvo.id,
-        patientId,
-        specialty: alvo.specialty,
-        fields: editValues,
-      });
-      if (res?.ok) {
-        toast.success("Anamnese atualizada.");
-        setEditar(null);
-        router.refresh();
-      } else {
-        toast.error(res?.error ?? "Não foi possível atualizar a anamnese.");
-      }
-    });
-  }
 
   function confirmarCancelamento(motivo: string) {
     if (!cancelar) return;
@@ -330,7 +293,6 @@ export function AnamneseClient({
                   cancelReason={a.cancelReason}
                   pending={pending}
                   onView={() => setVer(a)}
-                  onEdit={() => abrirEdicao(a)}
                   onPrint={() => imprimirAnamnese(a)}
                   onCancel={() => setCancelar(a)}
                 />
@@ -382,78 +344,6 @@ export function AnamneseClient({
                 />
               </div>
             )}
-          </div>
-        )}
-      </Modal>
-
-      {/* Modal Editar */}
-      <Modal
-        open={editar !== null}
-        onClose={() => setEditar(null)}
-        title={editar ? `Editar Anamnese — ${editar.specialty}` : "Editar Anamnese"}
-        subtitle={editar ? `${editar.profissional} · ${editar.dataHora}` : undefined}
-        className="max-w-2xl"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setEditar(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={salvarEdicao} disabled={pending}>
-              {pending ? "Salvando…" : "Salvar Alterações"}
-            </Button>
-          </>
-        }
-      >
-        {editar && (
-          <div className="space-y-6">
-            {editBlocos.length === 0 && (
-              <p className="rounded-lg border border-dashed border-line p-4 text-center text-sm text-muted">
-                Modelo desta especialidade indisponível para edição estruturada.
-              </p>
-            )}
-            {editBlocos.map((bloco) => (
-              <fieldset
-                key={bloco.titulo}
-                className="rounded-xl border border-line bg-white p-4"
-              >
-                <legend className="px-1 text-sm font-semibold text-ink">
-                  {bloco.titulo}
-                </legend>
-                <div className="space-y-4">
-                  {bloco.campos.map((campo) => {
-                    const val = editValues[campo.id];
-                    return (
-                      <CampoView
-                        key={campo.id}
-                        campo={campo}
-                        valorTexto={typeof val === "string" ? val : ""}
-                        valorArray={Array.isArray(val) ? (val as string[]) : []}
-                        valorBool={val === true}
-                        onTexto={(v) =>
-                          setEditValues((s) => ({ ...s, [campo.id]: v }))
-                        }
-                        onToggle={(opt) =>
-                          setEditValues((s) => {
-                            const atual = Array.isArray(s[campo.id])
-                              ? (s[campo.id] as string[])
-                              : [];
-                            return {
-                              ...s,
-                              [campo.id]: atual.includes(opt)
-                                ? atual.filter((o) => o !== opt)
-                                : [...atual, opt],
-                            };
-                          })
-                        }
-                        onBool={(v) =>
-                          setEditValues((s) => ({ ...s, [campo.id]: v }))
-                        }
-                      />
-                    );
-                  })}
-                </div>
-              </fieldset>
-            ))}
           </div>
         )}
       </Modal>
