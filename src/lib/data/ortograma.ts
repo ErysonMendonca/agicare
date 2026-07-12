@@ -33,6 +33,8 @@ export type OrtogramaResumo = {
   professionalName: string;
   /** Total de marcações (não de dentes marcados). */
   totalMarcas: number;
+  /** Nº do atendimento (queue_entries.attendance_code) em que foi gerado; null = avulso/legado. */
+  atendimentoCodigo: string | null;
   /** Cancelamento (não destrutivo): null = ortograma ativo. */
   cancelledAt: string | null;
   cancelReason: string | null;
@@ -189,7 +191,7 @@ export async function listOrtogramas(patientId: string): Promise<OrtogramaResumo
   const { data: charts, error } = await supabase
     .from("dental_charts")
     .select(
-      "id, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name))",
+      "id, created_at, cancelled_at, cancel_reason, queue_entries(attendance_code), professionals(profiles(full_name))",
     )
     .eq("clinic_id", clinicId)
     .eq("patient_id", patientId)
@@ -209,12 +211,19 @@ export async function listOrtogramas(patientId: string): Promise<OrtogramaResumo
     totais.set(id, (totais.get(id) ?? 0) + 1);
   }
 
-  return charts.map((c) => ({
-    id: c.id as string,
-    createdAt: (c.created_at as string | null) ?? "",
-    professionalName: nomeProfissional(c.professionals),
-    totalMarcas: totais.get(c.id as string) ?? 0,
-    cancelledAt: (c.cancelled_at as string | null) ?? null,
-    cancelReason: (c.cancel_reason as string | null) ?? null,
-  }));
+  return charts.map((c) => {
+    // Relacionamento único (FK queue_entry_id) — Supabase devolve objeto ou array.
+    const qe = Array.isArray(c.queue_entries) ? c.queue_entries[0] : c.queue_entries;
+    return {
+      id: c.id as string,
+      createdAt: (c.created_at as string | null) ?? "",
+      professionalName: nomeProfissional(c.professionals),
+      totalMarcas: totais.get(c.id as string) ?? 0,
+      atendimentoCodigo:
+        ((qe as { attendance_code?: string | null } | null | undefined)
+          ?.attendance_code as string | null) ?? null,
+      cancelledAt: (c.cancelled_at as string | null) ?? null,
+      cancelReason: (c.cancel_reason as string | null) ?? null,
+    };
+  });
 }
