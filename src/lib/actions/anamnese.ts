@@ -17,17 +17,21 @@ const anamneseSchema = z.object({
   patientId: z.string().min(1, "Paciente inválido."),
   specialty: z.string().trim().min(1, "Especialidade obrigatória."),
   fields: z.record(z.string(), z.unknown()).default({}),
-  consent: z.boolean(), // Consentimento LGPD (obrigatório)
-  consentAtendimento: z.boolean(), // Consentimento para Atendimento (obrigatório)
-  consentImagem: z.boolean().default(false), // Registro de Imagens (opcional)
+  // Consentimento/assinatura deixaram de ser coletados na tela de anamnese
+  // (o consentimento é tratado no fluxo da recepção — Documentos do Atendimento,
+  // assinado no papel). Mantidos opcionais para compatibilidade do payload.
+  consent: z.boolean().default(false),
+  consentAtendimento: z.boolean().default(false),
+  consentImagem: z.boolean().default(false),
   signature: z
     .string()
     .trim()
-    .min(1, "Assinatura digital obrigatória.")
-    .max(500_000, "Assinatura digital inválida (tamanho excedido)."),
+    .max(500_000, "Assinatura digital inválida (tamanho excedido).")
+    .default(""),
 });
 
-export type AnamneseInput = z.infer<typeof anamneseSchema>;
+// z.input: campos com .default() (consent/assinatura) são OPCIONAIS na entrada.
+export type AnamneseInput = z.input<typeof anamneseSchema>;
 
 /** Mesma especialidade = mesmo módulo de anamnese (ex.: "Podologia" ≈ "Podológico"). */
 function mesmaEspecialidade(a: string, b: string): boolean {
@@ -44,11 +48,6 @@ export async function gerarAnamnese(input: AnamneseInput): Promise<ActionState> 
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
   const d = parsed.data;
-  if (!d.consent)
-    return { error: "É necessário registrar o consentimento LGPD." };
-  if (!d.consentAtendimento)
-    return { error: "É necessário registrar o consentimento para atendimento." };
-
 
   const current = await getCurrentUser();
   if (!current) return { error: "Sessão expirada." };
@@ -92,18 +91,24 @@ export async function gerarAnamnese(input: AnamneseInput): Promise<ActionState> 
   //    Best-effort: falha aqui (tabela/coluna ausente, RLS) NÃO derruba a
   //    geração da anamnese, que já foi persistida acima.
   try {
-    const contexts: string[] = ["lgpd", "atendimento"];
-    if (d.consentImagem) contexts.push("imagem"); // opcional: só se marcado
-    const rows = contexts.map((context) => ({
-      clinic_id: clinicId,
-      patient_id: d.patientId,
-      professional_id: professionalId,
-      context,
-      accepted: true,
-      signature: d.signature,
-      created_by: current.userId, // profiles.id (1:1 com auth.users)
-    }));
-    await supabase.from("consents").insert(rows);
+    // Só registra consentimentos efetivamente aceitos (hoje a tela de anamnese
+    // não os coleta — fica vazio e nada é inserido).
+    const contexts: string[] = [];
+    if (d.consent) contexts.push("lgpd");
+    if (d.consentAtendimento) contexts.push("atendimento");
+    if (d.consentImagem) contexts.push("imagem");
+    if (contexts.length > 0) {
+      const rows = contexts.map((context) => ({
+        clinic_id: clinicId,
+        patient_id: d.patientId,
+        professional_id: professionalId,
+        context,
+        accepted: true,
+        signature: d.signature,
+        created_by: current.userId, // profiles.id (1:1 com auth.users)
+      }));
+      await supabase.from("consents").insert(rows);
+    }
   } catch {
     // Auditoria de consentimento é best-effort; não interrompe o fluxo principal.
   }

@@ -6,7 +6,6 @@ import {
   ClipboardList,
   AlertTriangle,
   TriangleAlert,
-  ShieldCheck,
   Eye,
   Lock,
 } from "lucide-react";
@@ -14,7 +13,6 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
-import { SignaturePad } from "@/components/ui/SignaturePad";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
@@ -57,10 +55,6 @@ export function AnamneseClient({
 
   const [specialty, setSpecialty] = useState<string>(especialidadeInicial);
   const [values, setValues] = useState<Record<string, unknown>>({});
-  const [consent, setConsent] = useState(false); // LGPD (obrigatório)
-  const [consentAtendimento, setConsentAtendimento] = useState(false); // obrigatório
-  const [consentImagem, setConsentImagem] = useState(false); // opcional
-  const [signature, setSignature] = useState("");
 
   // Mapa especialidade → campos (vem do template salvo no banco ou do fallback).
   const fieldsBySpecialty = useMemo(() => {
@@ -104,15 +98,8 @@ export function AnamneseClient({
     setValue(key, atual.includes(opt) ? atual.filter((o) => o !== opt) : [...atual, opt]);
   };
 
-  // Pode gerar: LGPD + Atendimento marcados e assinatura preenchida.
-  const consentimentosOk = consent && consentAtendimento && signature.trim() !== "";
-
   function reset() {
     setValues({});
-    setConsent(false);
-    setConsentAtendimento(false);
-    setConsentImagem(false);
-    setSignature("");
     setSpecialty(especialidadeInicial);
   }
 
@@ -122,10 +109,6 @@ export function AnamneseClient({
         patientId,
         specialty,
         fields: values,
-        consent,
-        consentAtendimento,
-        consentImagem,
-        signature,
       });
       if (res?.ok) {
         toast.success("Anamnese gerada.");
@@ -201,77 +184,8 @@ export function AnamneseClient({
           ))}
         </div>
 
-        {/* Consentimentos */}
-        <div className="mt-6 rounded-xl border border-line bg-white p-4">
-          <h3 className="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-ink">
-            <ShieldCheck className="h-4 w-4 text-green-600" /> Consentimentos
-          </h3>
-
-          <div className="space-y-3">
-            <label className="flex items-start gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-brand-500"
-              />
-              <span>
-                <span className="font-medium">Consentimento LGPD</span>
-                <span className="text-red-500"> *</span> — Declaro que o paciente foi
-                informado e consente com o tratamento dos dados de saúde conforme a LGPD.
-              </span>
-            </label>
-
-            <label className="flex items-start gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={consentAtendimento}
-                onChange={(e) => setConsentAtendimento(e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-brand-500"
-              />
-              <span>
-                <span className="font-medium">Consentimento para Atendimento</span>
-                <span className="text-red-500"> *</span> — O paciente está ciente e
-                concorda com a realização do atendimento e dos procedimentos propostos.
-              </span>
-            </label>
-
-            <label className="flex items-start gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={consentImagem}
-                onChange={(e) => setConsentImagem(e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-brand-500"
-              />
-              <span>
-                <span className="font-medium">Registro de Imagens</span>
-                <span className="text-muted"> (opcional)</span> — O paciente autoriza o
-                registro de fotos para acompanhamento clínico da evolução.
-              </span>
-            </label>
-          </div>
-
-          <div className="mt-4 rounded-lg border border-line bg-muted-surface p-3 text-xs leading-relaxed text-muted">
-            <span className="font-semibold text-ink">Aviso Legal:</span> os dados de saúde
-            são considerados dados pessoais sensíveis (Lei nº 13.709/2018 — LGPD) e o seu
-            tratamento ocorre exclusivamente para fins de assistência à saúde, sob sigilo
-            profissional. O acesso é restrito à equipe clínica autorizada, e o registro de
-            imagens depende de autorização específica do paciente, que pode ser revogada a
-            qualquer momento.
-          </div>
-
-          <div className="mt-3">
-            <SignaturePad
-              label="Assinatura digital do profissional"
-              value={signature}
-              onChange={setSignature}
-              required
-            />
-          </div>
-        </div>
-
         <div className="mt-6 flex justify-end">
-          <Button onClick={gerar} disabled={pending || !podeGerar || !consentimentosOk}>
+          <Button onClick={gerar} disabled={pending || !podeGerar}>
             {pending ? "Salvando…" : "Salvar Anamnese"}
           </Button>
         </div>
