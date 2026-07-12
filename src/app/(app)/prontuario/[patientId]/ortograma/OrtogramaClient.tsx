@@ -53,6 +53,8 @@ export interface OrtogramaHistoricoItem {
   dataLabel: string;
   professionalName: string;
   totalMarcas: number;
+  /** Nº do atendimento (queue_entries.attendance_code); null = avulso/legado. */
+  atendimentoCodigo: string | null;
   /** Cancelamento (não destrutivo): null = ortograma ativo. */
   cancelledAt: string | null;
   cancelReason: string | null;
@@ -109,6 +111,8 @@ export function OrtogramaClient({
   // salvamento seguido bateria na trava otimista com o carimbo velho.
   const [carimbo, setCarimbo] = useState(updatedAt);
   const [ferramenta, setFerramenta] = useState<Ferramenta>(null);
+  // Data da versão anterior reaberta para edição (null = editando o corrente).
+  const [editandoDe, setEditandoDe] = useState<string | null>(null);
   // Última ação, lida por leitores de tela (região aria-live).
   const [anuncio, setAnuncio] = useState("");
 
@@ -190,13 +194,30 @@ export function OrtogramaClient({
       }
       if (res.chartId) setChartAtual(res.chartId);
       setCarimbo(res.updatedAt);
+      setEditandoDe(null);
       toast.success("Ortograma salvo.");
       router.refresh();
     });
   }
 
-  function imprimir() {
-    imprimirOrtograma(cabecalho, marcas, notes);
+  // Reabre uma versão anterior no editor para EDIÇÃO (sobrescreve aquele chart,
+  // com trava otimista pelo carimbo). Diferente de "Visualizar" (só leitura).
+  function editarVersao(item: OrtogramaHistoricoItem) {
+    startTransition(async () => {
+      const res = await carregarOrtograma(patientId, item.id);
+      if (res.error || !res.versao) {
+        toast.error(res.error ?? "Não foi possível abrir o ortograma para edição.");
+        return;
+      }
+      setMarcas(res.versao.marcas);
+      setNotes(res.versao.notes);
+      setChartAtual(item.id);
+      setCarimbo(res.versao.updatedAt);
+      setEditandoDe(item.dataLabel);
+      setFerramenta(null);
+      toast.info(`Editando o ortograma de ${item.dataLabel}. Salvar sobrescreve essa versão.`);
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    });
   }
 
   return (
@@ -204,45 +225,25 @@ export function OrtogramaClient({
       <div className="flex flex-col gap-4">
         {/* Herança entre atendimentos: o dentista parte do estado dentário
             conhecido, mas precisa saber que ainda não há registro desta consulta. */}
-        {herdadoNaoSalvo && (
-          <p className="flex items-start gap-2 rounded-lg border border-dashed border-brand-200 bg-brand-50/50 px-3 py-2 text-sm text-muted">
-            <FileClock className="mt-0.5 h-4 w-4 flex-none text-brand-600" aria-hidden />
+        {editandoDe ? (
+          <p className="flex items-start gap-2 rounded-lg border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <FileClock className="mt-0.5 h-4 w-4 flex-none text-amber-600" aria-hidden />
             <span>
-              Partindo do ortograma de <strong className="font-medium text-ink">{herdadoDeData}</strong> —
-              salvar criará um novo registro para este atendimento.
+              Editando o ortograma de <strong className="font-medium">{editandoDe}</strong> —
+              salvar sobrescreve essa versão.
             </span>
           </p>
+        ) : (
+          herdadoNaoSalvo && (
+            <p className="flex items-start gap-2 rounded-lg border border-dashed border-brand-200 bg-brand-50/50 px-3 py-2 text-sm text-muted">
+              <FileClock className="mt-0.5 h-4 w-4 flex-none text-brand-600" aria-hidden />
+              <span>
+                Partindo do ortograma de <strong className="font-medium text-ink">{herdadoDeData}</strong> —
+                salvar criará um novo registro para este atendimento.
+              </span>
+            </p>
+          )
         )}
-
-        {/* Cabeçalho do exame (dados do servidor, somente leitura) */}
-        <Card className="p-4">
-          <div className="flex items-start justify-between gap-4">
-            <dl className="grid flex-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-              {[
-                ["Paciente", cabecalho.paciente],
-                ["Data de nascimento", cabecalho.nascimento],
-                ["Prontuário", cabecalho.prontuario],
-                ["Data", cabecalho.data],
-                ["Profissional", cabecalho.profissional],
-                ["CRO", cabecalho.cro],
-              ].map(([rotulo, valor]) => (
-                <div key={rotulo}>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-muted">
-                    {rotulo}
-                  </dt>
-                  <dd className="mt-0.5 truncate text-sm font-medium text-ink">
-                    {valor}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-
-            <Button variant="outline" size="sm" onClick={imprimir} className="flex-none">
-              <Printer className="h-4 w-4" />
-              Imprimir
-            </Button>
-          </div>
-        </Card>
 
         {/* Arcos */}
         <Card className="p-4 sm:p-6">
@@ -332,6 +333,7 @@ export function OrtogramaClient({
           itens={historico}
           chartAtual={chartAtual}
           cabecalho={cabecalho}
+          onEditar={editarVersao}
         />
       </div>
     </div>
@@ -351,11 +353,13 @@ function Historico({
   itens,
   chartAtual,
   cabecalho,
+  onEditar,
 }: {
   patientId: string;
   itens: OrtogramaHistoricoItem[];
   chartAtual: string | null;
   cabecalho: OrtogramaClientProps["cabecalho"];
+  onEditar: (item: OrtogramaHistoricoItem) => void;
 }) {
   const router = useRouter();
   const [aberto, setAberto] = useState<OrtogramaHistoricoItem | null>(null);
@@ -394,6 +398,7 @@ function Historico({
           ...cabecalho,
           data: item.dataLabel,
           profissional: res.versao.professionalName,
+          atendimento: item.atendimentoCodigo ?? "—",
         },
         res.versao.marcas,
         res.versao.notes,
@@ -451,6 +456,9 @@ function Historico({
                     <span className="text-sm font-medium text-ink">
                       {item.dataLabel}
                     </span>
+                    <span className="text-xs font-medium text-brand-600">
+                      Atendimento nº {item.atendimentoCodigo ?? "—"}
+                    </span>
                     <span className="text-xs text-muted">
                       {item.professionalName} · {item.totalMarcas}{" "}
                       {item.totalMarcas === 1 ? "marcação" : "marcações"}
@@ -461,6 +469,7 @@ function Historico({
                     cancelReason={item.cancelReason}
                     pending={carregando || cancelando}
                     onView={() => abrir(item)}
+                    onEdit={() => onEditar(item)}
                     onPrint={() => imprimirItem(item)}
                     onCancel={() => setCancelar(item)}
                   />
@@ -484,7 +493,9 @@ function Historico({
         onClose={() => setAberto(null)}
         title={`Ortograma de ${aberto?.dataLabel ?? ""}`}
         subtitle={
-          aberto ? `${aberto.professionalName} · somente leitura` : undefined
+          aberto
+            ? `${aberto.professionalName} · Atendimento nº ${aberto.atendimentoCodigo ?? "—"} · somente leitura`
+            : undefined
         }
         className="max-w-4xl"
         footer={
@@ -501,6 +512,7 @@ function Historico({
                     ...cabecalho,
                     data: aberto?.dataLabel ?? cabecalho.data,
                     profissional: versao.professionalName,
+                    atendimento: aberto?.atendimentoCodigo ?? "—",
                   },
                   marcasVersao,
                   versao.notes,

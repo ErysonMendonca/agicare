@@ -54,6 +54,8 @@ export type CabecalhoOrtograma = {
   data: string;
   profissional: string;
   cro: string;
+  /** Nº do atendimento (queue_entries.attendance_code) em que foi gerado. */
+  atendimento?: string;
 };
 
 /** "—" (placeholder do data layer) → vazio, para não poluir o documento. */
@@ -289,6 +291,7 @@ function montarDocumento(
     ${campo("Paciente", cab.paciente)}
     ${campo("Data de nascimento", cab.nascimento)}
     ${campo("Prontuário", cab.prontuario)}
+    ${campo("Atendimento nº", cab.atendimento ?? "—")}
     ${campo("Data", cab.data)}
     ${campo("Profissional", cab.profissional)}
     ${campo("CRO", cab.cro)}

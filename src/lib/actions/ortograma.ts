@@ -15,7 +15,6 @@ import {
   denteValido,
   normalizarMarcas,
   type Marca,
-  type Marcacao,
 } from "@/lib/clinico/ortograma.shared";
 
 export type ActionState =
@@ -32,12 +31,14 @@ export type ActionState =
     }
   | undefined;
 
-/** Versão antiga aberta pelo histórico — só leitura, nunca volta para edição. */
+/** Versão do histórico — usada tanto no modal (leitura) quanto ao reabrir para edição. */
 export type OrtogramaVersao = {
   notes: string;
-  marcas: Array<{ tooth: number; marking: Marcacao }>;
+  marcas: Marca[];
   professionalName: string;
   createdAt: string;
+  /** Carimbo do registro — trava otimista ao reabrir a versão para edição. */
+  updatedAt: string;
 };
 
 /**
@@ -70,9 +71,10 @@ export async function carregarOrtograma(
   return {
     versao: {
       notes: chart.notes,
-      marcas: chart.marcas.map(({ tooth, marking }) => ({ tooth, marking })),
+      marcas: chart.marcas,
       professionalName: chart.professionalName,
       createdAt: chart.createdAt,
+      updatedAt: chart.updatedAt,
     },
   };
 }
