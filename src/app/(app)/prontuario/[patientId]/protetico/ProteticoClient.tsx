@@ -16,6 +16,7 @@ import {
   Radiation,
   Smile,
   File as FileIcon,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
@@ -36,9 +37,13 @@ import {
 } from "@/lib/clinico/protetico-shared";
 import {
   criarPedidoProtetico,
+  editarPedidoProtetico,
   registrarArquivoProtetico,
 } from "@/lib/actions/protetico";
 import { Odontograma } from "@/components/clinico/Odontograma";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
+import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
 
 type Anexo = { file: File; kind: KindArquivo };
 
@@ -87,6 +92,33 @@ export function ProteticoClient({
   const [clinicalNotes, setClinicalNotes] = useState("");
   // Etapa 3
   const [anexos, setAnexos] = useState<Anexo[]>([]);
+
+  // Ações por pedido: visualizar (read-only), editar e cancelar.
+  const [verPedido, setVerPedido] = useState<PedidoProtetico | null>(null);
+  const [editar, setEditar] = useState<PedidoProtetico | null>(null);
+  const [cancelar, setCancelar] = useState<PedidoProtetico | null>(null);
+
+  function imprimirPedido(p: PedidoProtetico) {
+    imprimirPedidoProtetico(p);
+  }
+
+  function confirmarCancelamento(motivo: string) {
+    if (!cancelar) return;
+    startTransition(async () => {
+      const res = await cancelarDocumento({
+        tabela: "prosthetic_orders",
+        id: cancelar.id,
+        motivo,
+      });
+      if (res?.error) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Pedido protético cancelado.");
+      setCancelar(null);
+      router.refresh();
+    });
+  }
 
   // O Scan/STL é obrigatório para concluir o pedido (5.5): o laboratório
   // trabalha sobre o modelo digital. Demais anexos seguem opcionais.
@@ -306,9 +338,22 @@ export function ProteticoClient({
                       </div>
                     </div>
                   </div>
-                  <Badge status={p.status === "aberto" ? "wait" : "ok"}>
-                    {p.status}
-                  </Badge>
+                  <div className="flex flex-col items-end gap-2">
+                    {!p.cancelledAt && (
+                      <Badge status={p.status === "aberto" ? "wait" : "ok"}>
+                        {p.status}
+                      </Badge>
+                    )}
+                    <DocumentActions
+                      cancelled={p.cancelledAt !== null}
+                      cancelReason={p.cancelReason}
+                      pending={pending}
+                      onView={() => setVerPedido(p)}
+                      onEdit={() => setEditar(p)}
+                      onPrint={() => imprimirPedido(p)}
+                      onCancel={() => setCancelar(p)}
+                    />
+                  </div>
                 </div>
 
                 {p.clinicalNotes && (
@@ -679,6 +724,323 @@ export function ProteticoClient({
           </div>
         )}
       </Modal>
+
+      {/* Visualizar (somente leitura) */}
+      <VerPedidoModal
+        pedido={verPedido}
+        onClose={() => setVerPedido(null)}
+        onPrint={imprimirPedido}
+      />
+
+      {/* Editar */}
+      <EditarPedidoModal
+        pedido={editar}
+        patientId={patientId}
+        pending={pending}
+        onClose={() => setEditar(null)}
+        onSaved={() => {
+          setEditar(null);
+          router.refresh();
+        }}
+        startTransition={startTransition}
+      />
+
+      {/* Cancelar (não destrutivo) */}
+      <CancelarDocumentoModal
+        open={cancelar !== null}
+        onClose={() => setCancelar(null)}
+        onConfirm={confirmarCancelamento}
+        pending={pending}
+        titulo="Cancelar pedido protético"
+      />
     </>
   );
+}
+
+// ── Modal: visualizar pedido (read-only) ─────────────────────────
+function VerPedidoModal({
+  pedido,
+  onClose,
+  onPrint,
+}: {
+  pedido: PedidoProtetico | null;
+  onClose: () => void;
+  onPrint: (p: PedidoProtetico) => void;
+}) {
+  return (
+    <Modal
+      open={pedido !== null}
+      onClose={onClose}
+      title="Pedido protético"
+      subtitle={pedido ? `${pedido.workType} · Dentes ${pedido.teeth}` : undefined}
+      className="max-w-2xl"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Fechar
+          </Button>
+          {pedido && (
+            <Button variant="outline" onClick={() => onPrint(pedido)}>
+              <Printer className="h-4 w-4" />
+              Imprimir
+            </Button>
+          )}
+        </>
+      }
+    >
+      {pedido && (
+        <div className="space-y-4 text-sm">
+          <dl className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+            {[
+              ["Tipo de trabalho", pedido.workType],
+              ["Dentes", pedido.teeth],
+              ["Material", pedido.material],
+              ["Cor / Escala", pedido.color],
+              ["Linha de término", pedido.finishLine || "—"],
+              ["Oclusão", pedido.occlusion || "—"],
+              ["Prazo", pedido.dueDate ?? "—"],
+              ["Urgente", pedido.urgent ? "Sim" : "Não"],
+              ["Profissional", pedido.profissional],
+              ["Criado em", pedido.criadoEm],
+            ].map(([rotulo, valor]) => (
+              <div key={rotulo} className="flex flex-col">
+                <dt className="text-xs font-medium uppercase tracking-wide text-muted">
+                  {rotulo}
+                </dt>
+                <dd className="mt-0.5 text-ink">{valor}</dd>
+              </div>
+            ))}
+          </dl>
+
+          {pedido.clinicalNotes && (
+            <div className="border-t border-line pt-3">
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+                Observações clínicas
+              </p>
+              <p className="whitespace-pre-wrap text-ink">{pedido.clinicalNotes}</p>
+            </div>
+          )}
+
+          {pedido.arquivos.length > 0 && (
+            <div className="border-t border-line pt-3">
+              <p className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
+                <Paperclip className="h-3.5 w-3.5" />
+                {pedido.arquivos.length} anexo(s)
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {pedido.arquivos.map((a) => {
+                  const Icon = iconeKind(a.kind);
+                  return (
+                    <span
+                      key={a.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-xs text-ink"
+                    >
+                      <Icon className="h-3.5 w-3.5 text-brand-600" />
+                      <span className="max-w-[180px] truncate">{a.fileName}</span>
+                      <span className="text-muted">· {rotuloKind(a.kind)}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ── Modal: editar pedido ─────────────────────────────────────────
+function EditarPedidoModal({
+  pedido,
+  patientId,
+  pending,
+  onClose,
+  onSaved,
+  startTransition,
+}: {
+  pedido: PedidoProtetico | null;
+  patientId: string;
+  pending: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+  startTransition: React.TransitionStartFunction;
+}) {
+  const [teeth, setTeeth] = useState("");
+  const [workType, setWorkType] = useState("");
+  const [urgent, setUrgent] = useState(false);
+  const [material, setMaterial] = useState("");
+  const [color, setColor] = useState("");
+  const [finishLine, setFinishLine] = useState("");
+  const [occlusion, setOcclusion] = useState("");
+  const [clinicalNotes, setClinicalNotes] = useState("");
+
+  // Preenche os campos quando um pedido é aberto para edição.
+  const pedidoId = pedido?.id ?? null;
+  const carregadoRef = useRef<string | null>(null);
+  if (pedido && carregadoRef.current !== pedidoId) {
+    carregadoRef.current = pedidoId;
+    setTeeth(pedido.teeth === "—" ? "" : pedido.teeth);
+    setWorkType(pedido.workType === "—" ? "" : pedido.workType);
+    setUrgent(pedido.urgent);
+    setMaterial(pedido.material === "—" ? "" : pedido.material);
+    setColor(pedido.color === "—" ? "" : pedido.color);
+    setFinishLine(pedido.finishLine);
+    setOcclusion(pedido.occlusion);
+    setClinicalNotes(pedido.clinicalNotes);
+  }
+  if (!pedido) carregadoRef.current = null;
+
+  function salvar() {
+    if (!pedido) return;
+    if (!teeth.trim() || !workType.trim()) {
+      toast.error("Informe os dentes e o tipo de trabalho.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await editarPedidoProtetico({
+        orderId: pedido.id,
+        patientId,
+        teeth,
+        workType,
+        urgent,
+        material,
+        color,
+        finishLine,
+        occlusion,
+        clinicalNotes,
+      });
+      if (res?.error) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Pedido protético atualizado.");
+      onSaved();
+    });
+  }
+
+  return (
+    <Modal
+      open={pedido !== null}
+      onClose={onClose}
+      title="Editar pedido protético"
+      className="max-w-2xl"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose} disabled={pending}>
+            Cancelar
+          </Button>
+          <Button onClick={salvar} disabled={pending}>
+            {pending ? "Salvando…" : "Salvar alterações"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input
+            label="Dentes do trabalho"
+            value={teeth}
+            onChange={(e) => setTeeth(e.target.value)}
+            placeholder="Ex.: 11, 21"
+          />
+          <div>
+            <span className="mb-1.5 block text-sm font-medium text-ink">
+              Tipo de trabalho
+            </span>
+            <select
+              value={workType}
+              onChange={(e) => setWorkType(e.target.value)}
+              className="h-11 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            >
+              <option value="">Selecione…</option>
+              {TIPOS_TRABALHO.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Input
+            label="Material"
+            value={material}
+            onChange={(e) => setMaterial(e.target.value)}
+          />
+          <Input
+            label="Cor / Escala"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+          />
+          <Input
+            label="Linha de término"
+            value={finishLine}
+            onChange={(e) => setFinishLine(e.target.value)}
+          />
+          <Input
+            label="Oclusão"
+            value={occlusion}
+            onChange={(e) => setOcclusion(e.target.value)}
+          />
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            checked={urgent}
+            onChange={(e) => setUrgent(e.target.checked)}
+            className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-400"
+          />
+          Trabalho urgente
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-ink">
+            Observações clínicas
+          </span>
+          <textarea
+            rows={4}
+            value={clinicalNotes}
+            onChange={(e) => setClinicalNotes(e.target.value)}
+            className="w-full resize-y rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Impressão simples do pedido ──────────────────────────────────
+function imprimirPedidoProtetico(p: PedidoProtetico) {
+  const win = window.open("", "_blank", "width=800,height=600");
+  if (!win) return;
+  const linha = (rotulo: string, valor: string) =>
+    `<tr><th style="text-align:left;padding:4px 12px 4px 0;color:#555;font-weight:600;white-space:nowrap;vertical-align:top">${rotulo}</th><td style="padding:4px 0">${valor || "—"}</td></tr>`;
+  const anexos =
+    p.arquivos.length > 0
+      ? `<p style="margin-top:16px"><strong>Anexos:</strong></p><ul>${p.arquivos
+          .map((a) => `<li>${a.fileName} — ${rotuloKind(a.kind)}</li>`)
+          .join("")}</ul>`
+      : "";
+  win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Pedido Protético</title>
+    <style>body{font-family:system-ui,Arial,sans-serif;color:#111;padding:32px;max-width:640px;margin:0 auto}
+    h1{font-size:20px;margin:0 0 4px}table{border-collapse:collapse;font-size:14px;width:100%}
+    .sub{color:#666;font-size:13px;margin-bottom:16px}</style></head>
+    <body>
+      <h1>Pedido de Trabalho Protético</h1>
+      <p class="sub">${p.profissional} · ${p.criadoEm}</p>
+      <table>
+        ${linha("Tipo de trabalho", p.workType)}
+        ${linha("Dentes", p.teeth)}
+        ${linha("Material", p.material)}
+        ${linha("Cor / Escala", p.color)}
+        ${linha("Linha de término", p.finishLine)}
+        ${linha("Oclusão", p.occlusion)}
+        ${linha("Prazo", p.dueDate ?? "—")}
+        ${linha("Urgente", p.urgent ? "Sim" : "Não")}
+        ${linha("Observações", p.clinicalNotes)}
+      </table>
+      ${anexos}
+      <script>window.onload=function(){window.print()}</script>
+    </body></html>`);
+  win.document.close();
 }

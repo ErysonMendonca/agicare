@@ -50,4 +50,7 @@ export type PedidoProtetico = {
   profissional: string;
   criadoEm: string;
   arquivos: ArquivoProtetico[];
+  /** Cancelamento (não destrutivo): null = pedido ativo. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };

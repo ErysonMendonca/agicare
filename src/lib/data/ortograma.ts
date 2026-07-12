@@ -22,6 +22,9 @@ export type OrtogramaAtual = {
   updatedAt: string;
   /** Atendimento a que este ortograma pertence (null = registro avulso). */
   queueEntryId: string | null;
+  /** Cancelamento (não destrutivo): null = ortograma ativo. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 export type OrtogramaResumo = {
@@ -30,6 +33,9 @@ export type OrtogramaResumo = {
   professionalName: string;
   /** Total de marcações (não de dentes marcados). */
   totalMarcas: number;
+  /** Cancelamento (não destrutivo): null = ortograma ativo. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 /** Nome do profissional vindo do join aninhado (Supabase devolve objeto ou array). */
@@ -63,7 +69,7 @@ export async function getOrtogramaAtual(patientId: string): Promise<OrtogramaAtu
   const { data: chart, error } = await supabase
     .from("dental_charts")
     .select(
-      "id, notes, created_at, updated_at, queue_entry_id, professionals(profiles(full_name))",
+      "id, notes, created_at, updated_at, queue_entry_id, cancelled_at, cancel_reason, professionals(profiles(full_name))",
     )
     .eq("clinic_id", clinicId)
     .eq("patient_id", patientId)
@@ -91,6 +97,8 @@ export async function getOrtogramaAtual(patientId: string): Promise<OrtogramaAtu
     createdAt: (chart.created_at as string | null) ?? "",
     updatedAt: (chart.updated_at as string | null) ?? "",
     queueEntryId: (chart.queue_entry_id as string | null) ?? null,
+    cancelledAt: (chart.cancelled_at as string | null) ?? null,
+    cancelReason: (chart.cancel_reason as string | null) ?? null,
   };
 }
 
@@ -110,7 +118,7 @@ export async function getOrtogramaPorId(
   const { data: chart, error } = await supabase
     .from("dental_charts")
     .select(
-      "id, notes, created_at, updated_at, queue_entry_id, professionals(profiles(full_name))",
+      "id, notes, created_at, updated_at, queue_entry_id, cancelled_at, cancel_reason, professionals(profiles(full_name))",
     )
     .eq("id", chartId)
     .eq("clinic_id", clinicId)
@@ -137,6 +145,8 @@ export async function getOrtogramaPorId(
     createdAt: (chart.created_at as string | null) ?? "",
     updatedAt: (chart.updated_at as string | null) ?? "",
     queueEntryId: (chart.queue_entry_id as string | null) ?? null,
+    cancelledAt: (chart.cancelled_at as string | null) ?? null,
+    cancelReason: (chart.cancel_reason as string | null) ?? null,
   };
 }
 
@@ -178,7 +188,9 @@ export async function listOrtogramas(patientId: string): Promise<OrtogramaResumo
   const supabase = await createClient();
   const { data: charts, error } = await supabase
     .from("dental_charts")
-    .select("id, created_at, professionals(profiles(full_name))")
+    .select(
+      "id, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name))",
+    )
     .eq("clinic_id", clinicId)
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
@@ -202,5 +214,7 @@ export async function listOrtogramas(patientId: string): Promise<OrtogramaResumo
     createdAt: (c.created_at as string | null) ?? "",
     professionalName: nomeProfissional(c.professionals),
     totalMarcas: totais.get(c.id as string) ?? 0,
+    cancelledAt: (c.cancelled_at as string | null) ?? null,
+    cancelReason: (c.cancel_reason as string | null) ?? null,
   }));
 }

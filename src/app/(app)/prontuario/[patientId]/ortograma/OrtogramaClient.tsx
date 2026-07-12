@@ -34,6 +34,9 @@ import {
   type OrtogramaVersao,
 } from "@/lib/actions/ortograma";
 import { imprimirOrtograma } from "./OrtogramaImpressao";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
+import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
 
 /** Ferramenta ativa: uma marcação, a borracha, ou nenhuma. */
 type Ferramenta = Marcacao | "borracha" | null;
@@ -50,6 +53,9 @@ export interface OrtogramaHistoricoItem {
   dataLabel: string;
   professionalName: string;
   totalMarcas: number;
+  /** Cancelamento (não destrutivo): null = ortograma ativo. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 }
 
 export interface OrtogramaClientProps {
@@ -351,9 +357,12 @@ function Historico({
   chartAtual: string | null;
   cabecalho: OrtogramaClientProps["cabecalho"];
 }) {
+  const router = useRouter();
   const [aberto, setAberto] = useState<OrtogramaHistoricoItem | null>(null);
   const [versao, setVersao] = useState<OrtogramaVersao | null>(null);
   const [carregando, startCarregar] = useTransition();
+  const [cancelar, setCancelar] = useState<OrtogramaHistoricoItem | null>(null);
+  const [cancelando, startCancelar] = useTransition();
 
   // O ortograma em edição não é "anterior": ele já está na tela.
   const anteriores = itens.filter((i) => i.id !== chartAtual);
@@ -372,6 +381,44 @@ function Historico({
     });
   }
 
+  // Impressão direta a partir da lista: carrega a versão e imprime.
+  function imprimirItem(item: OrtogramaHistoricoItem) {
+    startCarregar(async () => {
+      const res = await carregarOrtograma(patientId, item.id);
+      if (res.error || !res.versao) {
+        toast.error(res.error ?? "Não foi possível abrir o ortograma.");
+        return;
+      }
+      imprimirOrtograma(
+        {
+          ...cabecalho,
+          data: item.dataLabel,
+          profissional: res.versao.professionalName,
+        },
+        res.versao.marcas,
+        res.versao.notes,
+      );
+    });
+  }
+
+  function confirmarCancelamento(motivo: string) {
+    if (!cancelar) return;
+    startCancelar(async () => {
+      const res = await cancelarDocumento({
+        tabela: "dental_charts",
+        id: cancelar.id,
+        motivo,
+      });
+      if (res?.error) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Ortograma cancelado.");
+      setCancelar(null);
+      router.refresh();
+    });
+  }
+
   const marcasVersao: Marca[] = versao?.marcas ?? [];
 
   return (
@@ -387,23 +434,50 @@ function Historico({
         </p>
       ) : (
         <ul className="flex flex-col gap-1">
-          {anteriores.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => abrir(item)}
-                className="flex w-full flex-col items-start gap-0.5 rounded-lg border border-line px-2.5 py-2 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          {anteriores.map((item) => {
+            const cancelado = item.cancelledAt !== null;
+            return (
+              <li
+                key={item.id}
+                className="rounded-lg border border-line px-2.5 py-2"
               >
-                <span className="text-sm font-medium text-ink">{item.dataLabel}</span>
-                <span className="text-xs text-muted">
-                  {item.professionalName} · {item.totalMarcas}{" "}
-                  {item.totalMarcas === 1 ? "marcação" : "marcações"}
-                </span>
-              </button>
-            </li>
-          ))}
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => !cancelado && abrir(item)}
+                    disabled={cancelado}
+                    className="flex flex-1 flex-col items-start gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-default"
+                  >
+                    <span className="text-sm font-medium text-ink">
+                      {item.dataLabel}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {item.professionalName} · {item.totalMarcas}{" "}
+                      {item.totalMarcas === 1 ? "marcação" : "marcações"}
+                    </span>
+                  </button>
+                  <DocumentActions
+                    cancelled={cancelado}
+                    cancelReason={item.cancelReason}
+                    pending={carregando || cancelando}
+                    onView={() => abrir(item)}
+                    onPrint={() => imprimirItem(item)}
+                    onCancel={() => setCancelar(item)}
+                  />
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
+
+      <CancelarDocumentoModal
+        open={cancelar !== null}
+        onClose={() => setCancelar(null)}
+        onConfirm={confirmarCancelamento}
+        pending={cancelando}
+        titulo="Cancelar ortograma"
+      />
 
       <Modal
         open={aberto !== null}

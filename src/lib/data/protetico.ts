@@ -65,6 +65,8 @@ const DEMO_PEDIDOS: PedidoProtetico[] = [
         sizeBytes: 1_204_553,
       },
     ],
+    cancelledAt: null,
+    cancelReason: null,
   },
   {
     id: "demo-prot-2",
@@ -89,6 +91,8 @@ const DEMO_PEDIDOS: PedidoProtetico[] = [
         sizeBytes: 856_201,
       },
     ],
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -104,7 +108,7 @@ export async function listPedidosProteticos(
   const { data, error } = await supabase
     .from("prosthetic_orders")
     .select(
-      "id, teeth, work_type, urgent, due_date, material, color, finish_line, occlusion, clinical_notes, status, created_at, " +
+      "id, teeth, work_type, urgent, due_date, material, color, finish_line, occlusion, clinical_notes, status, created_at, cancelled_at, cancel_reason, " +
         "professionals(profiles(full_name)), " +
         "prosthetic_files(id, file_name, storage_path, kind, size_bytes, created_at)",
     )
@@ -135,6 +139,8 @@ export async function listPedidosProteticos(
     clinical_notes: string | null;
     status: string | null;
     created_at: string | null;
+    cancelled_at: string | null;
+    cancel_reason: string | null;
     professionals: ProfJoin | ProfJoin[] | null;
     prosthetic_files: FileRow[] | null;
   };
@@ -170,6 +176,8 @@ export async function listPedidosProteticos(
         kind: (f.kind as string | null) ?? "scan",
         sizeBytes: (f.size_bytes as number | null) ?? null,
       })),
+      cancelledAt: (r.cancelled_at as string | null) ?? null,
+      cancelReason: (r.cancel_reason as string | null) ?? null,
     };
   });
 }

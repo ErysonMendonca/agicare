@@ -6,7 +6,6 @@ import {
   ClipboardList,
   AlertTriangle,
   TriangleAlert,
-  Eye,
   Lock,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +15,8 @@ import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
   chaveEspecialidade,
   ESPECIALIDADES_ANAMNESE,
@@ -25,7 +26,30 @@ import {
   type AnamneseTemplate,
 } from "@/lib/data/anamnese-templates.shared";
 import { type AnamneseRegistro } from "@/lib/data/anamnese";
-import { gerarAnamnese } from "@/lib/actions/anamnese";
+import {
+  gerarAnamnese,
+  editarAnamnese,
+} from "@/lib/actions/anamnese";
+import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
+
+type BlocoCampos = { titulo: string; campos: AnamneseField[] };
+
+/** Agrupa campos por seção preservando a ordem (usado no form e na edição). */
+function agruparCampos(campos: AnamneseField[]): BlocoCampos[] {
+  const grupos: BlocoCampos[] = [];
+  const indice = new Map<string, number>();
+  for (const campo of campos) {
+    const titulo = campo.section?.trim() || "Anamnese";
+    let i = indice.get(titulo);
+    if (i === undefined) {
+      i = grupos.length;
+      indice.set(titulo, i);
+      grupos.push({ titulo, campos: [] });
+    }
+    grupos[i].campos.push(campo);
+  }
+  return grupos;
+}
 
 const textareaCls =
   "w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100";
@@ -64,22 +88,98 @@ export function AnamneseClient({
   }, [templates]);
 
   // Agrupa os campos da especialidade selecionada por seção (preserva a ordem).
-  const blocos = useMemo(() => {
-    const campos = fieldsBySpecialty.get(specialty) ?? [];
-    const grupos: { titulo: string; campos: AnamneseField[] }[] = [];
-    const indice = new Map<string, number>();
-    for (const campo of campos) {
-      const titulo = campo.section?.trim() || "Anamnese";
-      let i = indice.get(titulo);
-      if (i === undefined) {
-        i = grupos.length;
-        indice.set(titulo, i);
-        grupos.push({ titulo, campos: [] });
+  const blocos = useMemo(
+    () => agruparCampos(fieldsBySpecialty.get(specialty) ?? []),
+    [fieldsBySpecialty, specialty],
+  );
+
+  // Edição de uma anamnese existente.
+  const [editar, setEditar] = useState<AnamneseRegistro | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, unknown>>({});
+  const [cancelar, setCancelar] = useState<AnamneseRegistro | null>(null);
+
+  const editBlocos = useMemo(
+    () =>
+      editar ? agruparCampos(fieldsBySpecialty.get(editar.specialty) ?? []) : [],
+    [editar, fieldsBySpecialty],
+  );
+
+  function abrirEdicao(a: AnamneseRegistro) {
+    setEditar(a);
+    setEditValues({ ...a.campos });
+  }
+
+  function salvarEdicao() {
+    if (!editar) return;
+    const alvo = editar;
+    startTransition(async () => {
+      const res = await editarAnamnese({
+        id: alvo.id,
+        patientId,
+        specialty: alvo.specialty,
+        fields: editValues,
+      });
+      if (res?.ok) {
+        toast.success("Anamnese atualizada.");
+        setEditar(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível atualizar a anamnese.");
       }
-      grupos[i].campos.push(campo);
-    }
-    return grupos;
-  }, [fieldsBySpecialty, specialty]);
+    });
+  }
+
+  function confirmarCancelamento(motivo: string) {
+    if (!cancelar) return;
+    const alvo = cancelar;
+    startTransition(async () => {
+      const res = await cancelarDocumento({
+        tabela: "anamneses",
+        id: alvo.id,
+        motivo,
+      });
+      if (res?.ok) {
+        toast.success("Anamnese cancelada.");
+        setCancelar(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível cancelar a anamnese.");
+      }
+    });
+  }
+
+  function imprimirAnamnese(a: AnamneseRegistro) {
+    const linhas = Object.entries(a.campos)
+      .map(
+        ([key, val]) =>
+          `<div class="campo"><span class="k">${escapeHtml(key)}</span><span class="v">${escapeHtml(
+            formatarValor(val),
+          )}</span></div>`,
+      )
+      .join("");
+    const win = window.open("", "_blank", "width=800,height=900");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Anamnese — ${escapeHtml(
+      a.specialty,
+    )}</title><style>
+      body{font-family:system-ui,Arial,sans-serif;color:#1a1a1a;padding:32px;max-width:720px;margin:0 auto}
+      h1{font-size:18px;margin:0 0 4px}
+      .meta{color:#666;font-size:13px;margin-bottom:20px}
+      .campo{border-bottom:1px solid #e5e5e5;padding:8px 0}
+      .k{display:block;text-transform:uppercase;font-size:11px;color:#888}
+      .v{display:block;font-size:14px}
+      @media print{body{padding:0}}
+    </style></head><body>
+      <h1>Anamnese — ${escapeHtml(a.specialty)}</h1>
+      <div class="meta">${escapeHtml(a.profissional)} · ${escapeHtml(a.dataHora)} · Atendimento nº ${escapeHtml(
+        a.atendimentoCodigo ?? "—",
+      )}</div>
+      ${linhas}
+    </body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  }
 
   // Regra: só gera quem é da especialidade da ficha (em demo, minha = null → liberado).
   const podeGerar =
@@ -220,11 +320,20 @@ export function AnamneseClient({
                     <p className="text-xs text-muted">
                       {a.profissional} · {a.dataHora}
                     </p>
+                    <p className="mt-0.5 text-xs font-medium text-brand-600">
+                      Atendimento nº {a.atendimentoCodigo ?? "—"}
+                    </p>
                   </div>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => setVer(a)}>
-                  <Eye className="h-4 w-4" /> Ver
-                </Button>
+                <DocumentActions
+                  cancelled={a.cancelledAt !== null}
+                  cancelReason={a.cancelReason}
+                  pending={pending}
+                  onView={() => setVer(a)}
+                  onEdit={() => abrirEdicao(a)}
+                  onPrint={() => imprimirAnamnese(a)}
+                  onCancel={() => setCancelar(a)}
+                />
               </Card>
             </FadeInUp>
           ))}
@@ -236,7 +345,11 @@ export function AnamneseClient({
         open={ver !== null}
         onClose={() => setVer(null)}
         title={ver ? `Anamnese — ${ver.specialty}` : "Anamnese"}
-        subtitle={ver ? `${ver.profissional} · ${ver.dataHora}` : undefined}
+        subtitle={
+          ver
+            ? `${ver.profissional} · ${ver.dataHora} · Atendimento nº ${ver.atendimentoCodigo ?? "—"}`
+            : undefined
+        }
         className="max-w-2xl"
       >
         {ver && (
@@ -272,8 +385,98 @@ export function AnamneseClient({
           </div>
         )}
       </Modal>
+
+      {/* Modal Editar */}
+      <Modal
+        open={editar !== null}
+        onClose={() => setEditar(null)}
+        title={editar ? `Editar Anamnese — ${editar.specialty}` : "Editar Anamnese"}
+        subtitle={editar ? `${editar.profissional} · ${editar.dataHora}` : undefined}
+        className="max-w-2xl"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEditar(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={salvarEdicao} disabled={pending}>
+              {pending ? "Salvando…" : "Salvar Alterações"}
+            </Button>
+          </>
+        }
+      >
+        {editar && (
+          <div className="space-y-6">
+            {editBlocos.length === 0 && (
+              <p className="rounded-lg border border-dashed border-line p-4 text-center text-sm text-muted">
+                Modelo desta especialidade indisponível para edição estruturada.
+              </p>
+            )}
+            {editBlocos.map((bloco) => (
+              <fieldset
+                key={bloco.titulo}
+                className="rounded-xl border border-line bg-white p-4"
+              >
+                <legend className="px-1 text-sm font-semibold text-ink">
+                  {bloco.titulo}
+                </legend>
+                <div className="space-y-4">
+                  {bloco.campos.map((campo) => {
+                    const val = editValues[campo.id];
+                    return (
+                      <CampoView
+                        key={campo.id}
+                        campo={campo}
+                        valorTexto={typeof val === "string" ? val : ""}
+                        valorArray={Array.isArray(val) ? (val as string[]) : []}
+                        valorBool={val === true}
+                        onTexto={(v) =>
+                          setEditValues((s) => ({ ...s, [campo.id]: v }))
+                        }
+                        onToggle={(opt) =>
+                          setEditValues((s) => {
+                            const atual = Array.isArray(s[campo.id])
+                              ? (s[campo.id] as string[])
+                              : [];
+                            return {
+                              ...s,
+                              [campo.id]: atual.includes(opt)
+                                ? atual.filter((o) => o !== opt)
+                                : [...atual, opt],
+                            };
+                          })
+                        }
+                        onBool={(v) =>
+                          setEditValues((s) => ({ ...s, [campo.id]: v }))
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              </fieldset>
+            ))}
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Cancelar (não destrutivo) */}
+      <CancelarDocumentoModal
+        open={cancelar !== null}
+        onClose={() => setCancelar(null)}
+        onConfirm={confirmarCancelamento}
+        pending={pending}
+        titulo="Cancelar anamnese"
+      />
     </>
   );
+}
+
+/** Escapa texto para injeção segura na janela de impressão. */
+function escapeHtml(valor: string): string {
+  return valor
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 /** Distingue assinaturas novas (imagem base64) de registros legados (texto). */

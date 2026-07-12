@@ -7,10 +7,7 @@ import {
   Pill,
   HeartHandshake,
   Trash2,
-  Printer,
   CheckSquare,
-  Pencil,
-  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
@@ -19,6 +16,8 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
   type Prescricao,
   type Medicamento,
@@ -100,7 +99,8 @@ export function PrescricaoClient({
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [excluir, setExcluir] = useState<Prescricao | null>(null);
+  const [cancelar, setCancelar] = useState<Prescricao | null>(null);
+  const [ver, setVer] = useState<Prescricao | null>(null);
 
   const [meds, setMeds] = useState<MedRow[]>([]);
   const [cuidados, setCuidados] = useState<CuidadoRow[]>([]);
@@ -193,17 +193,17 @@ export function PrescricaoClient({
     });
   }
 
-  function confirmarExclusao() {
-    if (!excluir) return;
-    const alvo = excluir;
+  function confirmarCancelamento(motivo: string) {
+    if (!cancelar) return;
+    const alvo = cancelar;
     startTransition(async () => {
-      const res = await deletePrescricao(alvo.id, patientId);
+      const res = await deletePrescricao(alvo.id, patientId, motivo);
       if (res?.ok) {
-        toast.success("Prescrição excluída.");
-        setExcluir(null);
+        toast.success("Prescrição cancelada.");
+        setCancelar(null);
         router.refresh();
       } else {
-        toast.error(res?.error ?? "Não foi possível excluir a prescrição.");
+        toast.error(res?.error ?? "Não foi possível cancelar a prescrição.");
       }
     });
   }
@@ -242,30 +242,17 @@ export function PrescricaoClient({
                     <p className="font-medium text-ink">{p.profissional}</p>
                     <p className="text-xs text-muted">{p.dataHora}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        router.push(
-                          `/prontuario/${patientId}/receita?p=${p.id}`,
-                        )
-                      }
-                    >
-                      <Printer className="h-4 w-4" /> Receita
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => abrirEdicao(p)}>
-                      <Pencil className="h-4 w-4" /> Editar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setExcluir(p)}
-                      className="text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" /> Excluir
-                    </Button>
-                  </div>
+                  <DocumentActions
+                    cancelled={p.cancelledAt !== null}
+                    cancelReason={p.cancelReason}
+                    pending={pending}
+                    onView={() => setVer(p)}
+                    onEdit={() => abrirEdicao(p)}
+                    onPrint={() =>
+                      router.push(`/prontuario/${patientId}/receita?p=${p.id}`)
+                    }
+                    onCancel={() => setCancelar(p)}
+                  />
                 </div>
 
                 {p.medicamentos.length > 0 && (
@@ -557,48 +544,80 @@ export function PrescricaoClient({
         </label>
       </Modal>
 
-      {/* Modal de confirmação de exclusão */}
+      {/* Modal de visualização (read-only) */}
       <Modal
-        open={excluir !== null}
-        onClose={() => setExcluir(null)}
-        title="Excluir prescrição"
-        subtitle="Esta ação não pode ser desfeita."
-        className="max-w-md"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setExcluir(null)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={confirmarExclusao}
-              disabled={pending}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {pending ? "Excluindo…" : "Excluir"}
-            </Button>
-          </>
-        }
+        open={ver !== null}
+        onClose={() => setVer(null)}
+        title="Prescrição"
+        subtitle={ver ? `${ver.profissional} · ${ver.dataHora}` : undefined}
+        className="max-w-2xl"
       >
-        <div className="flex gap-3">
-          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
-            <AlertTriangle className="h-5 w-5" />
-          </span>
-          <div className="text-sm text-muted">
-            <p>
-              Excluir a prescrição de{" "}
-              <span className="font-medium text-ink">
-                {excluir?.dataHora}
-              </span>
-              ? Os medicamentos, cuidados e aprazamentos pendentes serão
-              removidos.
-            </p>
-            <p className="mt-2">
-              Se houver itens já administrados (checados), a exclusão será
-              bloqueada para preservar o registro clínico.
-            </p>
+        {ver && (
+          <div className="space-y-4 text-sm">
+            {ver.medicamentos.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase text-muted">
+                  Medicamentos
+                </p>
+                <ul className="space-y-2">
+                  {ver.medicamentos.map((m) => (
+                    <li
+                      key={m.id}
+                      className="rounded-lg border border-line bg-muted-surface p-3"
+                    >
+                      <span className="font-medium text-ink">
+                        {m.nome} {m.concentracao !== "—" ? m.concentracao : ""}
+                      </span>
+                      <span className="text-muted">
+                        {" "}
+                        — {m.posologia}
+                        {m.via && m.via !== "—" ? ` · ${m.via}` : ""} ·{" "}
+                        {m.frequencia} · {m.duracao}
+                      </span>
+                      {m.observacoes && (
+                        <p className="mt-1 text-xs text-muted">{m.observacoes}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {ver.cuidados.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase text-muted">
+                  Cuidados
+                </p>
+                <ul className="space-y-2">
+                  {ver.cuidados.map((c) => (
+                    <li
+                      key={c.id}
+                      className="rounded-lg border border-line bg-muted-surface p-3"
+                    >
+                      <span className="font-medium text-ink">{c.nome}</span>
+                      <span className="text-muted">
+                        {" "}
+                        — {c.frequencia} · {c.duracao}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {ver.observacoes && (
+              <p className="text-muted">Obs.: {ver.observacoes}</p>
+            )}
           </div>
-        </div>
+        )}
       </Modal>
+
+      {/* Modal de cancelamento (não destrutivo) */}
+      <CancelarDocumentoModal
+        open={cancelar !== null}
+        onClose={() => setCancelar(null)}
+        onConfirm={confirmarCancelamento}
+        pending={pending}
+        titulo="Cancelar prescrição"
+      />
     </>
   );
 }

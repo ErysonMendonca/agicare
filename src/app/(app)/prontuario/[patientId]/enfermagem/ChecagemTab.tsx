@@ -1,21 +1,57 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { ClipboardCheck, Clock, User, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import { type Cuidado } from "@/lib/data/enfermagem";
 import { checarCuidado, reaprazarCuidado } from "@/lib/actions/enfermagem";
-import { EmptyState } from "./Shared";
+import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
+import { EmptyState, DetalheModal, imprimirDocumento } from "./Shared";
+
+function camposCuidado(c: Cuidado) {
+  return [
+    { label: "Cuidado", value: c.descricao },
+    { label: "Paciente", value: c.paciente },
+    { label: "Horário", value: c.horario },
+    { label: "Status", value: c.status.label },
+    { label: "Justificativa", value: c.justificativa },
+    { label: "Profissional", value: c.profissional },
+  ];
+}
 
 export function ChecagemTab({ cuidados }: { cuidados: Cuidado[] }) {
   const [selecionado, setSelecionado] = useState<Cuidado | null>(null);
+  const [viewing, setViewing] = useState<Cuidado | null>(null);
+  const [cancelando, setCancelando] = useState<Cuidado | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function confirmarCancelamento(motivo: string) {
+    if (!cancelando) return;
+    startTransition(async () => {
+      const res = await cancelarDocumento({
+        tabela: "care_checks",
+        id: cancelando.id,
+        motivo,
+      });
+      if (res?.ok) {
+        toast.success("Cuidado cancelado.");
+        setCancelando(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível cancelar.");
+      }
+    });
+  }
 
   return (
     <div className="mt-6 flex flex-col gap-4">
@@ -29,49 +65,73 @@ export function ChecagemTab({ cuidados }: { cuidados: Cuidado[] }) {
         />
       ) : (
         <Stagger className="flex flex-col gap-3">
-          {cuidados.map((c) => (
-            <FadeInUp key={c.id}>
-              <Card
-                interactive
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelecionado(c)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setSelecionado(c);
+          {cuidados.map((c) => {
+            const cancelado = c.cancelledAt != null;
+            return (
+              <FadeInUp key={c.id}>
+                <Card
+                  interactive={!cancelado}
+                  role={cancelado ? undefined : "button"}
+                  tabIndex={cancelado ? undefined : 0}
+                  onClick={cancelado ? undefined : () => setSelecionado(c)}
+                  onKeyDown={
+                    cancelado
+                      ? undefined
+                      : (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelecionado(c);
+                          }
+                        }
                   }
-                }}
-                className="cursor-pointer p-4"
-              >
-                <div className="flex items-center gap-4">
-                  <span className="flex h-12 w-16 flex-none flex-col items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                    <Clock className="h-4 w-4" />
-                    <span className="text-xs font-bold">{c.horario}</span>
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-ink">{c.descricao}</h3>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-                      <span className="flex items-center gap-1.5">
-                        <User className="h-4 w-4" /> {c.paciente}
-                      </span>
-                      {c.profissional !== "—" && (
-                        <span>Checado por {c.profissional}</span>
+                  className={cancelado ? "p-4" : "cursor-pointer p-4"}
+                >
+                  <div className="flex items-center gap-4">
+                    <span className="flex h-12 w-16 flex-none flex-col items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                      <Clock className="h-4 w-4" />
+                      <span className="text-xs font-bold">{c.horario}</span>
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-ink">{c.descricao}</h3>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+                        <span className="flex items-center gap-1.5">
+                          <User className="h-4 w-4" /> {c.paciente}
+                        </span>
+                        {c.profissional !== "—" && (
+                          <span>Checado por {c.profissional}</span>
+                        )}
+                      </div>
+                      {c.justificativa !== "—" && (
+                        <p className="mt-1 text-sm text-orange-600">
+                          Justificativa: {c.justificativa}
+                        </p>
                       )}
                     </div>
-                    {c.justificativa !== "—" && (
-                      <p className="mt-1 text-sm text-orange-600">
-                        Justificativa: {c.justificativa}
-                      </p>
+                    {!cancelado && (
+                      <Badge status={c.status.tone} className="flex-none">
+                        {c.status.label}
+                      </Badge>
                     )}
+                    <div
+                      className="flex-none"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <DocumentActions
+                        cancelled={cancelado}
+                        cancelReason={c.cancelReason}
+                        pending={pending}
+                        onView={() => setViewing(c)}
+                        onPrint={() =>
+                          imprimirDocumento("Checagem de cuidado", camposCuidado(c))
+                        }
+                        onCancel={() => setCancelando(c)}
+                      />
+                    </div>
                   </div>
-                  <Badge status={c.status.tone} className="flex-none">
-                    {c.status.label}
-                  </Badge>
-                </div>
-              </Card>
-            </FadeInUp>
-          ))}
+                </Card>
+              </FadeInUp>
+            );
+          })}
         </Stagger>
       )}
 
@@ -82,6 +142,21 @@ export function ChecagemTab({ cuidados }: { cuidados: Cuidado[] }) {
           onClose={() => setSelecionado(null)}
         />
       )}
+
+      <DetalheModal
+        open={viewing != null}
+        onClose={() => setViewing(null)}
+        titulo="Checagem de cuidado"
+        campos={viewing ? camposCuidado(viewing) : []}
+      />
+
+      <CancelarDocumentoModal
+        open={cancelando != null}
+        onClose={() => setCancelando(null)}
+        onConfirm={confirmarCancelamento}
+        pending={pending}
+        titulo="Cancelar cuidado"
+      />
     </div>
   );
 }

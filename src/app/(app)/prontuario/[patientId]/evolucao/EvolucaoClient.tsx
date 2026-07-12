@@ -2,15 +2,40 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Eye, Printer, Stethoscope, HeartPulse, X } from "lucide-react";
+import { Plus, Printer, Stethoscope, HeartPulse, X } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import { type EvolucaoCard } from "@/lib/data/evolucao";
-import { registrarEvolucao } from "@/lib/actions/evolucao";
+import { registrarEvolucao, editarEvolucao } from "@/lib/actions/evolucao";
+import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
+
+/** Extrai o valor de um campo rotulado do conteúdo formatado da evolução. */
+function extrairCampo(conteudo: string, label: string): string {
+  const bloco = conteudo
+    .split("\n\n")
+    .find((b) => b.trimStart().startsWith(`${label}:`));
+  if (!bloco) return "";
+  return bloco.slice(bloco.indexOf(":") + 1).trim();
+}
+
+type TextosEvolucao = Record<TextoKey, string>;
+
+/** Reconstrói os 5 campos a partir do conteúdo salvo (para editar). */
+function parseConteudo(conteudo: string): TextosEvolucao {
+  return {
+    queixa: extrairCampo(conteudo, "Queixa Principal"),
+    hda: extrairCampo(conteudo, "História da Doença Atual (HDA)"),
+    exame: extrairCampo(conteudo, "Exame Físico"),
+    hipotese: extrairCampo(conteudo, "Hipótese Diagnóstica"),
+    conduta: extrairCampo(conteudo, "Conduta / Plano"),
+  };
+}
 
 /** Data/hora local no formato aceito por <input type="datetime-local">. */
 function agoraLocal(): string {
@@ -40,6 +65,58 @@ export function EvolucaoClient({
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState(false);
   const [ver, setVer] = useState<EvolucaoCard | null>(null);
+  const [cancelar, setCancelar] = useState<EvolucaoCard | null>(null);
+  const [editar, setEditar] = useState<EvolucaoCard | null>(null);
+  const [editTextos, setEditTextos] = useState<TextosEvolucao>({
+    queixa: "",
+    hda: "",
+    exame: "",
+    hipotese: "",
+    conduta: "",
+  });
+
+  function abrirEdicao(e: EvolucaoCard) {
+    setEditar(e);
+    setEditTextos(parseConteudo(e.conteudo));
+  }
+
+  function salvarEdicao() {
+    if (!editar) return;
+    const alvo = editar;
+    startTransition(async () => {
+      const res = await editarEvolucao({
+        id: alvo.id,
+        patientId,
+        ...editTextos,
+      });
+      if (res?.ok) {
+        toast.success("Evolução atualizada.");
+        setEditar(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível atualizar a evolução.");
+      }
+    });
+  }
+
+  function confirmarCancelamento(motivo: string) {
+    if (!cancelar) return;
+    const alvo = cancelar;
+    startTransition(async () => {
+      const res = await cancelarDocumento({
+        tabela: "medical_records",
+        id: alvo.id,
+        motivo,
+      });
+      if (res?.ok) {
+        toast.success("Evolução cancelada.");
+        setCancelar(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível cancelar a evolução.");
+      }
+    });
+  }
 
   const [dataHora, setDataHora] = useState(agoraLocal());
   const [vitais, setVitais] = useState({
@@ -121,21 +198,18 @@ export function EvolucaoClient({
                       <p className="mt-1 line-clamp-2 text-sm text-muted">{e.resumo}</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setVer(e)}>
-                      <Eye className="h-4 w-4" /> Ver
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setVer(e);
-                        setTimeout(() => window.print(), 50);
-                      }}
-                    >
-                      <Printer className="h-4 w-4" /> Imprimir
-                    </Button>
-                  </div>
+                  <DocumentActions
+                    cancelled={e.cancelledAt !== null}
+                    cancelReason={e.cancelReason}
+                    pending={pending}
+                    onView={() => setVer(e)}
+                    onEdit={() => abrirEdicao(e)}
+                    onPrint={() => {
+                      setVer(e);
+                      setTimeout(() => window.print(), 50);
+                    }}
+                    onCancel={() => setCancelar(e)}
+                  />
                 </div>
               </Card>
             </FadeInUp>
@@ -327,6 +401,55 @@ export function EvolucaoClient({
           </div>
         )}
       </Modal>
+
+      {/* Modal de edição do texto */}
+      <Modal
+        open={editar !== null}
+        onClose={() => setEditar(null)}
+        title="Editar Evolução Clínica"
+        subtitle={
+          editar ? `${editar.profissional} · ${editar.dataHora}` : undefined
+        }
+        className="max-w-2xl"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEditar(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={salvarEdicao} disabled={pending}>
+              {pending ? "Salvando…" : "Salvar Alterações"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {TEXTOS.map(([key, label, placeholder]) => (
+            <label key={key} className="block">
+              <span className="mb-1.5 block text-sm font-medium text-ink">
+                {label} <span className="text-red-500">*</span>
+              </span>
+              <textarea
+                rows={3}
+                placeholder={placeholder}
+                value={editTextos[key]}
+                onChange={(ev) =>
+                  setEditTextos((t) => ({ ...t, [key]: ev.target.value }))
+                }
+                className="w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+          ))}
+        </div>
+      </Modal>
+
+      {/* Modal de cancelamento (não destrutivo) */}
+      <CancelarDocumentoModal
+        open={cancelar !== null}
+        onClose={() => setCancelar(null)}
+        onConfirm={confirmarCancelamento}
+        pending={pending}
+        titulo="Cancelar evolução"
+      />
     </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Syringe, Search, Plus, User, Clock, MapPin } from "lucide-react";
 import { toast } from "sonner";
@@ -10,12 +10,23 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
   type ProcedimentoEnfermagem,
   type OpcaoPaciente,
 } from "@/lib/data/enfermagem";
-import { registrarProcedimento } from "@/lib/actions/enfermagem";
-import { EmptyState, PacienteSelect } from "./Shared";
+import {
+  registrarProcedimento,
+  editarProcedimento,
+} from "@/lib/actions/enfermagem";
+import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
+import {
+  EmptyState,
+  PacienteSelect,
+  DetalheModal,
+  imprimirDocumento,
+} from "./Shared";
 
 export function ProcedimentosTab({
   procedimentos,
@@ -26,6 +37,43 @@ export function ProcedimentosTab({
 }) {
   const [busca, setBusca] = useState("");
   const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  const [viewing, setViewing] = useState<ProcedimentoEnfermagem | null>(null);
+  const [editing, setEditing] = useState<ProcedimentoEnfermagem | null>(null);
+  const [cancelando, setCancelando] =
+    useState<ProcedimentoEnfermagem | null>(null);
+
+  function confirmarCancelamento(motivo: string) {
+    if (!cancelando) return;
+    startTransition(async () => {
+      const res = await cancelarDocumento({
+        tabela: "nursing_procedures",
+        id: cancelando.id,
+        motivo,
+      });
+      if (res?.ok) {
+        toast.success("Procedimento cancelado.");
+        setCancelando(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível cancelar.");
+      }
+    });
+  }
+
+  function camposProc(p: ProcedimentoEnfermagem) {
+    return [
+      { label: "Procedimento", value: p.nome },
+      { label: "Código TUSS", value: p.tuss },
+      { label: "Paciente", value: p.paciente },
+      { label: "Materiais", value: p.materiais },
+      { label: "Local", value: p.local },
+      { label: "Profissional", value: p.profissional },
+      { label: "Data", value: p.data },
+    ];
+  }
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -73,9 +121,25 @@ export function ProcedimentosTab({
                     <Badge status="active">TUSS {p.tuss}</Badge>
                     <h3 className="font-semibold text-ink">{p.nome}</h3>
                   </div>
-                  <span className="flex items-center gap-1.5 text-sm text-muted">
-                    <Clock className="h-4 w-4" /> {p.data}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1.5 text-sm text-muted">
+                      <Clock className="h-4 w-4" /> {p.data}
+                    </span>
+                    <DocumentActions
+                      cancelled={p.cancelledAt != null}
+                      cancelReason={p.cancelReason}
+                      pending={pending}
+                      onView={() => setViewing(p)}
+                      onEdit={() => setEditing(p)}
+                      onPrint={() =>
+                        imprimirDocumento(
+                          "Procedimento de enfermagem",
+                          camposProc(p),
+                        )
+                      }
+                      onCancel={() => setCancelando(p)}
+                    />
+                  </div>
                 </div>
                 <p className="mt-2 text-sm text-muted">
                   <span className="font-medium text-ink">Materiais: </span>
@@ -103,6 +167,28 @@ export function ProcedimentosTab({
         onClose={() => setOpen(false)}
         pacientes={pacientes}
       />
+
+      <ProcedimentoModal
+        open={editing != null}
+        onClose={() => setEditing(null)}
+        pacientes={pacientes}
+        procedimento={editing}
+      />
+
+      <DetalheModal
+        open={viewing != null}
+        onClose={() => setViewing(null)}
+        titulo="Procedimento de enfermagem"
+        campos={viewing ? camposProc(viewing) : []}
+      />
+
+      <CancelarDocumentoModal
+        open={cancelando != null}
+        onClose={() => setCancelando(null)}
+        onConfirm={confirmarCancelamento}
+        pending={pending}
+        titulo="Cancelar procedimento"
+      />
     </div>
   );
 }
@@ -111,11 +197,15 @@ function ProcedimentoModal({
   open,
   onClose,
   pacientes,
+  procedimento = null,
 }: {
   open: boolean;
   onClose: () => void;
   pacientes: OpcaoPaciente[];
+  /** Quando presente, o modal edita este registro em vez de criar um novo. */
+  procedimento?: ProcedimentoEnfermagem | null;
 }) {
+  const modoEdicao = procedimento != null;
   const [pacienteId, setPacienteId] = useState("");
   const [form, setForm] = useState({
     tuss_code: "",
@@ -127,12 +217,26 @@ function ProcedimentoModal({
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
+  // Pré-carrega os campos ao abrir em modo edição.
+  useEffect(() => {
+    if (open && procedimento) {
+      const limpa = (v: string) => (v === "—" ? "" : v);
+      setForm({
+        tuss_code: limpa(procedimento.tuss),
+        name: limpa(procedimento.nome),
+        materials: limpa(procedimento.materiais),
+        body_site: limpa(procedimento.local),
+        notes: "",
+      });
+    }
+  }, [open, procedimento]);
+
   function set(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
   function handleSalvar() {
-    if (!pacienteId) {
+    if (!modoEdicao && !pacienteId) {
       toast.error("Selecione o paciente.");
       return;
     }
@@ -141,18 +245,19 @@ function ProcedimentoModal({
       return;
     }
     startTransition(async () => {
-      const res = await registrarProcedimento({
-        patient_id: pacienteId,
-        ...form,
-      });
+      const res = modoEdicao
+        ? await editarProcedimento({ id: procedimento.id, ...form })
+        : await registrarProcedimento({ patient_id: pacienteId, ...form });
       if (res?.ok) {
-        toast.success("Procedimento registrado.");
+        toast.success(
+          modoEdicao ? "Procedimento atualizado." : "Procedimento registrado.",
+        );
         setPacienteId("");
         setForm({ tuss_code: "", name: "", materials: "", body_site: "", notes: "" });
         router.refresh();
         onClose();
       } else {
-        toast.error(res?.error ?? "Não foi possível registrar.");
+        toast.error(res?.error ?? "Não foi possível salvar.");
       }
     });
   }
@@ -161,24 +266,30 @@ function ProcedimentoModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Registrar procedimento de enfermagem"
+      title={
+        modoEdicao
+          ? "Editar procedimento de enfermagem"
+          : "Registrar procedimento de enfermagem"
+      }
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             Cancelar
           </Button>
           <Button onClick={handleSalvar} disabled={pending}>
-            Registrar
+            {modoEdicao ? "Salvar alterações" : "Registrar"}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        <PacienteSelect
-          pacientes={pacientes}
-          value={pacienteId}
-          onChange={setPacienteId}
-        />
+        {!modoEdicao && (
+          <PacienteSelect
+            pacientes={pacientes}
+            value={pacienteId}
+            onChange={setPacienteId}
+          />
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Input
             label="Código TUSS"

@@ -14,6 +14,9 @@ export type ExamOrder = {
   observacoes: string | null;
   /** Data/hora da solicitação já formatada (pt-BR). */
   quando: string;
+  /** Cancelamento (não destrutivo): null = pedido ativo. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 /** Item do catálogo TUSS (código oficial p/ faturamento). */

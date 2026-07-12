@@ -116,3 +116,50 @@ export async function gerarAnamnese(input: AnamneseInput): Promise<ActionState> 
   revalidatePath(`/prontuario/${d.patientId}/anamnese`);
   return { ok: true };
 }
+
+const editarAnamneseSchema = z.object({
+  id: z.string().uuid("Anamnese inválida."),
+  patientId: z.string().min(1, "Paciente inválido."),
+  specialty: z.string().trim().min(1, "Especialidade obrigatória."),
+  fields: z.record(z.string(), z.unknown()).default({}),
+});
+
+export type EditarAnamneseInput = z.infer<typeof editarAnamneseSchema>;
+
+/**
+ * Edita uma anamnese existente (campos/especialidade). Não altera consentimentos
+ * nem assinatura. Bloqueia documentos cancelados (padrão 0111) e filtra por
+ * clínica (multitenant). Gate: permissão de edição no módulo Prontuário.
+ */
+export async function editarAnamnese(
+  input: EditarAnamneseInput,
+): Promise<ActionState> {
+  const parsed = editarAnamneseSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada." };
+
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+  const d = parsed.data;
+
+  const { data: updated, error } = await supabase
+    .from("anamneses")
+    .update({ specialty: d.specialty, fields: d.fields })
+    .eq("id", d.id)
+    .eq("patient_id", d.patientId)
+    .eq("clinic_id", clinicId)
+    .is("cancelled_at", null)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!updated || updated.length === 0) {
+    return { error: "Anamnese não encontrada ou cancelada." };
+  }
+
+  revalidatePath(`/prontuario/${d.patientId}/anamnese`);
+  return { ok: true };
+}

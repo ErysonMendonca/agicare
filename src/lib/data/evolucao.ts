@@ -22,6 +22,9 @@ export type EvolucaoCard = {
   conteudo: string;
   /** Sinais vitais extras aferidos junto da evolução (opcional). */
   extras: SinalExtra[];
+  /** Cancelamento (não destrutivo): null = evolução ativa. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 /** Converte o jsonb `extra` (objeto chave→valor) em lista de pares. */
@@ -55,6 +58,8 @@ const DEMO_EVOLUCOES: EvolucaoCard[] = [
       "Hipótese Diagnóstica: Dor torácica atípica a esclarecer.\n\n" +
       "Conduta / Plano: Solicitar ECG e enzimas. Reavaliar em 48h.",
     extras: [{ label: "Perímetro cefálico", value: "34 cm" }],
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -67,7 +72,7 @@ export async function listEvolucoes(patientId: string): Promise<EvolucaoCard[]> 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("medical_records")
-    .select("id, content, created_at, professionals(profiles(full_name))")
+    .select("id, content, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name))")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
 
@@ -112,6 +117,8 @@ export async function listEvolucoes(patientId: string): Promise<EvolucaoCard[]> 
       resumo: primeira || "Evolução clínica registrada.",
       conteudo,
       extras,
+      cancelledAt: (r.cancelled_at as string | null) ?? null,
+      cancelReason: (r.cancel_reason as string | null) ?? null,
     };
   });
 }
