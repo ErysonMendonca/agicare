@@ -137,6 +137,8 @@ export type AnotacaoEnfermagem = {
   profissional: string;
   data: string;
   conteudo: string;
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 const MOCK_ANOTACOES: AnotacaoEnfermagem[] = [
@@ -148,6 +150,8 @@ const MOCK_ANOTACOES: AnotacaoEnfermagem[] = [
     data: "12/06/2026 09:15",
     conteudo:
       "Paciente deambulando sem auxílio, aceitou dieta via oral integralmente. Acesso venoso periférico em MSE pérvio, sem sinais flogísticos.",
+    cancelledAt: null,
+    cancelReason: null,
   },
   {
     id: "a2",
@@ -157,6 +161,8 @@ const MOCK_ANOTACOES: AnotacaoEnfermagem[] = [
     data: "12/06/2026 07:50",
     conteudo:
       "Paciente febril (38,2°C), administrado antitérmico conforme prescrição. Mantida hidratação venosa. Reavaliar em 1h.",
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -183,6 +189,8 @@ export async function listAnotacoes(
       profissional: (n.professional_name as string | null) ?? "—",
       data: fmtDataHora(n.created_at as string | null),
       conteudo: (n.content as string | null) ?? "",
+      cancelledAt: (n.cancelled_at as string | null) ?? null,
+      cancelReason: (n.cancel_reason as string | null) ?? null,
     };
   });
 }
@@ -212,6 +220,8 @@ export type Cuidado = {
   statusRaw: CuidadoStatus;
   justificativa: string;
   profissional: string;
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 const CUIDADO_STATUS: Record<CuidadoStatus, { label: string; tone: Status }> = {
@@ -231,6 +241,8 @@ const MOCK_CUIDADOS: Cuidado[] = [
     statusRaw: "administrado",
     justificativa: "—",
     profissional: "Enf. Mariana Souza Lima",
+    cancelledAt: null,
+    cancelReason: null,
   },
   {
     id: "c2",
@@ -242,6 +254,8 @@ const MOCK_CUIDADOS: Cuidado[] = [
     statusRaw: "pendente",
     justificativa: "—",
     profissional: "—",
+    cancelledAt: null,
+    cancelReason: null,
   },
   {
     id: "c3",
@@ -253,6 +267,8 @@ const MOCK_CUIDADOS: Cuidado[] = [
     statusRaw: "aprazado",
     justificativa: "Paciente em exame de imagem no horário.",
     profissional: "Enf. Mariana Souza Lima",
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -281,6 +297,8 @@ export async function listCuidados(patientId: string): Promise<Cuidado[]> {
       statusRaw,
       justificativa: (c.justification as string | null) ?? "—",
       profissional: (c.professional_name as string | null) ?? "—",
+      cancelledAt: (c.cancelled_at as string | null) ?? null,
+      cancelReason: (c.cancel_reason as string | null) ?? null,
     };
   });
 }
@@ -388,6 +406,8 @@ export type EvolucaoEnfermagem = {
   avaliacao: string;
   reavaliacao: string;
   conduta: string;
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 const MOCK_EVOLUCOES: EvolucaoEnfermagem[] = [
@@ -403,6 +423,8 @@ const MOCK_EVOLUCOES: EvolucaoEnfermagem[] = [
       "Mantém-se estável após período de observação. Sinais vitais dentro da normalidade.",
     conduta:
       "Mantidos cuidados de enfermagem. Estimulada deambulação precoce e hidratação oral.",
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -431,6 +453,8 @@ export async function listEvolucoes(
       avaliacao: (e.assessment as string | null) ?? "—",
       reavaliacao: (e.reassessment as string | null) ?? "—",
       conduta: (e.conduct as string | null) ?? "—",
+      cancelledAt: (e.cancelled_at as string | null) ?? null,
+      cancelReason: (e.cancel_reason as string | null) ?? null,
     };
   });
 }
@@ -516,6 +540,8 @@ export type ProcedimentoEnfermagem = {
   local: string;
   profissional: string;
   data: string;
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 const MOCK_PROCEDIMENTOS: ProcedimentoEnfermagem[] = [
@@ -528,6 +554,8 @@ const MOCK_PROCEDIMENTOS: ProcedimentoEnfermagem[] = [
     local: "Membro inferior direito",
     profissional: "Enf. Mariana Souza Lima",
     data: "12/06/2026 08:45",
+    cancelledAt: null,
+    cancelReason: null,
   },
   {
     id: "p2",
@@ -538,6 +566,8 @@ const MOCK_PROCEDIMENTOS: ProcedimentoEnfermagem[] = [
     local: "Membro superior esquerdo",
     profissional: "Enf. Mariana Souza Lima",
     data: "12/06/2026 07:20",
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -566,6 +596,8 @@ export async function listProcedimentosEnfermagem(
       local: (p.body_site as string | null) ?? "—",
       profissional: (p.professional_name as string | null) ?? "—",
       data: fmtDataHora(p.performed_at as string | null),
+      cancelledAt: (p.cancelled_at as string | null) ?? null,
+      cancelReason: (p.cancel_reason as string | null) ?? null,
     };
   });
 }
@@ -583,6 +615,8 @@ export type RegistroSae = {
   prescricao: string;
   frequencia: number;
   data: string;
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 const MOCK_SAE: RegistroSae[] = [
@@ -596,6 +630,8 @@ const MOCK_SAE: RegistroSae[] = [
     prescricao: "Realizar mudança de decúbito a cada 2 horas e hidratar a pele.",
     frequencia: 2,
     data: "12/06/2026 07:10",
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -623,6 +659,8 @@ export async function listSae(patientId: string): Promise<RegistroSae[]> {
       prescricao: (s.prescription as string | null) ?? "—",
       frequencia: Number(s.frequency_hours ?? 6),
       data: fmtDataHora(s.created_at as string | null),
+      cancelledAt: (s.cancelled_at as string | null) ?? null,
+      cancelReason: (s.cancel_reason as string | null) ?? null,
     };
   });
 }

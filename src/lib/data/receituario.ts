@@ -11,6 +11,9 @@ export type Receituario = {
   cid10: string | null;
   /** Exibir o CID na impressão (LGPD — sigilo do diagnóstico). */
   exibirCid: boolean;
+  /** Cancelamento (não destrutivo): null = documento ativo. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 function fmtDataHora(iso: string | null): string {
@@ -37,6 +40,8 @@ const DEMO_RECEITUARIOS: Receituario[] = [
     profissional: "Dra. Ana Beatriz Costa",
     cid10: null,
     exibirCid: true,
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -49,7 +54,7 @@ export async function listReceituarios(
   const { data, error } = await supabase
     .from("certificates")
     .select(
-      "id, kind, prescription_text, cid10, show_cid, created_at, professionals(profiles(full_name))",
+      "id, kind, prescription_text, cid10, show_cid, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name))",
     )
     .eq("patient_id", patientId)
     .in("kind", ["receituario_simples", "receituario_especial"])
@@ -73,6 +78,8 @@ export async function listReceituarios(
       profissional: profile?.full_name ?? "—",
       cid10: (c.cid10 as string | null) ?? null,
       exibirCid: (c.show_cid as boolean | null) ?? true,
+      cancelledAt: (c.cancelled_at as string | null) ?? null,
+      cancelReason: (c.cancel_reason as string | null) ?? null,
     };
   });
 }

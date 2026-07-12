@@ -111,13 +111,111 @@ export async function emitirReceituario(
   return { ok: true };
 }
 
-const removerSchema = z.object({
+const editarReceituarioSchema = z.object({
   id: z.string().uuid("Receituário inválido."),
+  patientId: z.string().uuid("Paciente inválido."),
+  tipo: z.enum(["simples", "especial"]),
+  texto: z.string().trim().min(1, "Informe o conteúdo do receituário."),
+  cid10: z.string().trim().optional(),
+  exibirCid: z.boolean().optional(),
 });
 
-/** Remove um receituário (escopo da clínica, apenas kind receituario_*). */
-export async function removerReceituario(id: string): Promise<ActionState> {
-  const parsed = removerSchema.safeParse({ id });
+export type EditarReceituarioInput = z.infer<typeof editarReceituarioSchema>;
+
+/** Edita um receituário já emitido (bloqueado se cancelado). */
+export async function editarReceituario(
+  input: EditarReceituarioInput,
+): Promise<ActionState> {
+  const parsed = editarReceituarioSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const negado = await guardMedico();
+  if (negado) return { error: negado };
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
+
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada." };
+
+  const supabase = await createClient();
+  const clinicId = await requireClinic();
+  const d = parsed.data;
+
+  // Bloqueia edição de documento cancelado (read-only).
+  const { data: atual, error: erroBusca } = await supabase
+    .from("certificates")
+    .select("cancelled_at")
+    .eq("id", d.id)
+    .eq("clinic_id", clinicId)
+    .like("kind", "receituario_%")
+    .maybeSingle();
+  if (erroBusca) return { error: "Não foi possível carregar o receituário." };
+  if (!atual) return { error: "Receituário não encontrado nesta clínica." };
+  if (atual.cancelled_at)
+    return { error: "Documento cancelado não pode ser editado." };
+
+  let cid10: string | null = null;
+  if (d.cid10 && d.cid10.trim()) {
+    const cid = await resolveCidCode(d.cid10);
+    if (!cid) {
+      return {
+        error:
+          "CID-10 não encontrado no catálogo. Selecione um CID cadastrado em Configurações → Catálogo CID.",
+      };
+    }
+    cid10 = cid.code;
+  }
+
+  const { error } = await supabase
+    .from("certificates")
+    .update({
+      kind: `receituario_${d.tipo}`,
+      prescription_text: d.texto,
+      cid10,
+      show_cid: d.exibirCid ?? true,
+    })
+    .eq("id", d.id)
+    .eq("clinic_id", clinicId)
+    .like("kind", "receituario_%")
+    .is("cancelled_at", null);
+  if (error) {
+    console.error("editarReceituario update falhou:", error);
+    return { error: "Não foi possível editar o receituário." };
+  }
+
+  await logAction({
+    action: "update",
+    module: "documentos",
+    summary: "Editou um receituário",
+    entity: "certificate",
+    entityId: d.id,
+  });
+  revalidatePath(`/prontuario/${d.patientId}/receituario`);
+  return { ok: true };
+}
+
+const removerSchema = z.object({
+  id: z.string().uuid("Receituário inválido."),
+  motivo: z
+    .string()
+    .trim()
+    .min(3, "Informe o motivo do cancelamento.")
+    .max(500, "Motivo muito longo (máx. 500 caracteres)."),
+});
+
+/**
+ * Cancela um receituário (escopo da clínica, apenas kind receituario_*).
+ *
+ * NÃO apaga fisicamente (LGPD/rastreabilidade): grava o carimbo de
+ * cancelamento (0111) e o documento continua visível, marcado e read-only.
+ * O nome é mantido por compatibilidade com os chamadores existentes, mas o
+ * comportamento agora é CANCELAR — passou a exigir `motivo`.
+ */
+export async function removerReceituario(
+  id: string,
+  motivo: string,
+): Promise<ActionState> {
+  const parsed = removerSchema.safeParse({ id, motivo });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
 
@@ -126,24 +224,40 @@ export async function removerReceituario(id: string): Promise<ActionState> {
   const denied = await requireAction("prontuario", "delete");
   if (denied) return { error: denied };
 
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada." };
+
   const supabase = await createClient();
   const clinicId = await requireClinic();
-  const { data: removed, error } = await supabase
+  const { data: cancelled, error } = await supabase
     .from("certificates")
-    .delete()
+    .update({
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: current.userId,
+      cancel_reason: parsed.data.motivo,
+    })
     .eq("id", parsed.data.id)
     .eq("clinic_id", clinicId)
     .like("kind", "receituario_%")
+    .is("cancelled_at", null)
     .select("patient_id");
   if (error) {
-    console.error("removerReceituario delete falhou:", error);
-    return { error: "Não foi possível remover o receituário." };
+    console.error("removerReceituario cancelamento falhou:", error.message);
+    return { error: "Não foi possível cancelar o receituário." };
   }
-  if (!removed || removed.length === 0) {
-    return { error: "Receituário não encontrado." };
+  if (!cancelled || cancelled.length === 0) {
+    return { error: "Receituário não encontrado ou já cancelado." };
   }
 
-  const patientId = removed[0]?.patient_id as string | undefined;
+  await logAction({
+    action: "delete",
+    module: "prontuario",
+    summary: "Cancelou um receituário",
+    entity: "certificates",
+    entityId: parsed.data.id,
+  });
+
+  const patientId = cancelled[0]?.patient_id as string | undefined;
   revalidatePath(
     patientId ? `/prontuario/${patientId}/receituario` : "/prontuario",
   );

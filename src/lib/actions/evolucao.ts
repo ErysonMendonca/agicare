@@ -143,3 +143,62 @@ export async function registrarEvolucao(input: EvolucaoInput): Promise<ActionSta
   revalidatePath(`/prontuario/${d.patientId}`);
   return { ok: true };
 }
+
+const editarEvolucaoSchema = z.object({
+  id: z.string().uuid("Evolução inválida."),
+  patientId: z.string().min(1, "Paciente inválido."),
+  queixa: z.string().trim().min(1, "Queixa Principal é obrigatória."),
+  hda: z.string().trim().min(1, "HDA é obrigatória."),
+  exame: z.string().trim().min(1, "Exame Físico é obrigatório."),
+  hipotese: z.string().trim().min(1, "Hipótese Diagnóstica é obrigatória."),
+  conduta: z.string().trim().min(1, "Conduta / Plano é obrigatória."),
+});
+
+export type EditarEvolucaoInput = z.infer<typeof editarEvolucaoSchema>;
+
+/**
+ * Edita o texto de uma evolução (medical_records.content). Não mexe em sinais
+ * vitais. Bloqueia documentos cancelados (padrão 0111), filtra por clínica.
+ * Gate: permissão de edição no módulo Prontuário.
+ */
+export async function editarEvolucao(
+  input: EditarEvolucaoInput,
+): Promise<ActionState> {
+  const parsed = editarEvolucaoSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada." };
+
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+  const d = parsed.data;
+
+  const conteudo = [
+    `Queixa Principal: ${d.queixa}`,
+    `História da Doença Atual (HDA): ${d.hda}`,
+    `Exame Físico: ${d.exame}`,
+    `Hipótese Diagnóstica: ${d.hipotese}`,
+    `Conduta / Plano: ${d.conduta}`,
+  ].join("\n\n");
+
+  const { data: updated, error } = await supabase
+    .from("medical_records")
+    .update({ content: conteudo })
+    .eq("id", d.id)
+    .eq("patient_id", d.patientId)
+    .eq("clinic_id", clinicId)
+    .is("cancelled_at", null)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!updated || updated.length === 0) {
+    return { error: "Evolução não encontrada ou cancelada." };
+  }
+
+  revalidatePath(`/prontuario/${d.patientId}/evolucao`);
+  revalidatePath(`/prontuario/${d.patientId}`);
+  return { ok: true };
+}

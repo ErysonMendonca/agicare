@@ -14,7 +14,15 @@ import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { type Documento } from "@/lib/data/documentos";
 import { type CidCode } from "@/lib/data/cid";
 import { type MotivoAlta, type DetalheAlta } from "@/lib/data/alta";
-import { emitirAtestado, darAlta } from "@/lib/actions/documentos";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
+import {
+  emitirAtestado,
+  darAlta,
+  editarAtestado,
+  editarAlta,
+} from "@/lib/actions/documentos";
+import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
 import {
   imprimirAtestado,
   type ClinicaImpressao,
@@ -44,6 +52,22 @@ function fmtDataHoraLocal(v: string | null): string | null {
     hour: "2-digit",
     minute: "2-digit",
   })}`;
+}
+
+/** "dd/mm/aaaa" → "aaaa-mm-dd" (input date). Vazio se inválido. */
+function brDateToISO(v: string | null): string {
+  if (!v) return "";
+  const [d, m, y] = v.split("/");
+  if (!d || !m || !y) return "";
+  return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+
+/** "dd/mm/aaaa hh:mm" → "aaaa-mm-ddThh:mm" (datetime-local). Vazio se inválido. */
+function brDateTimeToLocal(v: string | null): string {
+  if (!v) return "";
+  const [datePart, timePart] = v.split(" ");
+  const iso = brDateToISO(datePart);
+  return iso ? `${iso}T${timePart ?? "00:00"}` : "";
 }
 
 const ALTA_INICIAL = {
@@ -78,6 +102,11 @@ export function DocumentosClient({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [modal, setModal] = useState<ModalKind>(null);
+  // Edição: id do documento em edição (null = criação).
+  const [editId, setEditId] = useState<string | null>(null);
+  // Visualização read-only e cancelamento.
+  const [viewDoc, setViewDoc] = useState<Documento | null>(null);
+  const [cancelDoc, setCancelDoc] = useState<Documento | null>(null);
 
   // Atestado
   const [atestado, setAtestado] = useState({
@@ -111,7 +140,22 @@ export function DocumentosClient({
   /** Fecha o modal do atestado zerando o formulário (evita reter dados). */
   function fecharAtestado() {
     resetAtestado();
+    setEditId(null);
     setModal(null);
+  }
+
+  /** Abre o modal de atestado pré-preenchido para edição. */
+  function abrirEditarAtestado(d: Documento) {
+    setEditId(d.id);
+    setAtestado({
+      dias: String(d.dias ?? 1),
+      dataAtestado: brDateToISO(d.dataAtestado) || hoje(),
+      diagnostico: d.diagnostico ?? "",
+      cid10: d.cid10 ?? "",
+      observacao: d.observacao ?? "",
+      exibirCid: d.exibirCid,
+    });
+    setModal("atestado");
   }
 
   /** Normaliza um CID p/ comparação: maiúsculo, sem espaço e sem ponto. */
@@ -130,23 +174,27 @@ export function DocumentosClient({
       toast.error(MSG_CID_INVALIDO);
       return;
     }
+    const payload = {
+      patientId,
+      dias: Number(atestado.dias),
+      dataAtestado: atestado.dataAtestado,
+      diagnostico: atestado.diagnostico,
+      cid10: atestado.cid10 || undefined,
+      observacao: atestado.observacao || undefined,
+      exibirCid: atestado.exibirCid,
+    };
     startTransition(async () => {
-      const res = await emitirAtestado({
-        patientId,
-        dias: Number(atestado.dias),
-        dataAtestado: atestado.dataAtestado,
-        diagnostico: atestado.diagnostico,
-        cid10: atestado.cid10 || undefined,
-        observacao: atestado.observacao || undefined,
-        exibirCid: atestado.exibirCid,
-      });
+      const res = editId
+        ? await editarAtestado({ ...payload, id: editId })
+        : await emitirAtestado(payload);
       if (res?.ok) {
-        toast.success("Atestado emitido.");
+        toast.success(editId ? "Atestado atualizado." : "Atestado emitido.");
         resetAtestado();
+        setEditId(null);
         setModal(null);
         router.refresh();
       } else {
-        toast.error(res?.error ?? "Não foi possível emitir o atestado.");
+        toast.error(res?.error ?? "Não foi possível salvar o atestado.");
       }
     });
   }
@@ -158,12 +206,30 @@ export function DocumentosClient({
   /** Fecha o modal de alta zerando o formulário. */
   function fecharAlta() {
     resetAlta();
+    setEditId(null);
     setModal(null);
   }
 
   /** Abre a alta já com a data/hora padrão = agora. */
   function abrirAlta() {
+    setEditId(null);
     setAlta({ ...ALTA_INICIAL, dataAlta: agoraLocal() });
+    setModal("alta");
+  }
+
+  /** Abre o modal de alta pré-preenchido para edição. */
+  function abrirEditarAlta(d: Documento) {
+    const m = motivosAlta.find((x) => x.label === d.motivo);
+    setEditId(d.id);
+    setAlta({
+      dataAlta: brDateTimeToLocal(d.dataAlta) || agoraLocal(),
+      cid10: d.cid10 ?? "",
+      motivo: d.motivo ?? "",
+      motivoId: m?.id ?? "",
+      detalhe: d.detalhe ?? "",
+      observacao: d.observacao ?? "",
+      exibirCid: d.exibirCid,
+    });
     setModal("alta");
   }
 
@@ -193,7 +259,7 @@ export function DocumentosClient({
       const dataAltaISO = alta.dataAlta
         ? new Date(alta.dataAlta).toISOString()
         : "";
-      const res = await darAlta({
+      const payload = {
         patientId,
         dataAlta: dataAltaISO,
         cid10: alta.cid10 || undefined,
@@ -201,14 +267,38 @@ export function DocumentosClient({
         detalhe: alta.detalhe || undefined,
         observacao: alta.observacao || undefined,
         exibirCid: alta.exibirCid,
-      });
+      };
+      const res = editId
+        ? await editarAlta({ ...payload, id: editId })
+        : await darAlta(payload);
       if (res?.ok) {
-        toast.success("Alta registrada.");
+        toast.success(editId ? "Alta atualizada." : "Alta registrada.");
         resetAlta();
+        setEditId(null);
         setModal(null);
         router.refresh();
       } else {
-        toast.error(res?.error ?? "Não foi possível registrar a alta.");
+        toast.error(res?.error ?? "Não foi possível salvar a alta.");
+      }
+    });
+  }
+
+  /** Confirma o cancelamento (não destrutivo) do documento selecionado. */
+  function confirmarCancelamento(motivo: string) {
+    const alvo = cancelDoc;
+    if (!alvo) return;
+    startTransition(async () => {
+      const res = await cancelarDocumento({
+        tabela: "certificates",
+        id: alvo.id,
+        motivo,
+      });
+      if (res?.ok) {
+        toast.success("Documento cancelado.");
+        setCancelDoc(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível cancelar o documento.");
       }
     });
   }
@@ -308,17 +398,21 @@ export function DocumentosClient({
                       )}
                       <p className="mt-1 text-xs text-muted">{d.profissional}</p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
+                    <DocumentActions
+                      cancelled={!!d.cancelledAt}
+                      cancelReason={d.cancelReason}
+                      pending={pending}
+                      onView={() => setViewDoc(d)}
+                      onEdit={() =>
+                        isAtestado ? abrirEditarAtestado(d) : abrirEditarAlta(d)
+                      }
+                      onPrint={() =>
                         isAtestado
                           ? imprimirAtestado(clinica, paciente, d)
                           : imprimirAlta(clinica, paciente, d)
                       }
-                    >
-                      <Printer className="h-4 w-4" /> Imprimir
-                    </Button>
+                      onCancel={() => setCancelDoc(d)}
+                    />
                   </div>
                 </Card>
               </FadeInUp>
@@ -331,7 +425,7 @@ export function DocumentosClient({
       <Modal
         open={modal === "atestado"}
         onClose={fecharAtestado}
-        title="Novo Atestado"
+        title={editId ? "Editar Atestado" : "Novo Atestado"}
         subtitle="O CID-10 é opcional por LGPD (sigilo do diagnóstico)."
         footer={
           <>
@@ -339,7 +433,11 @@ export function DocumentosClient({
               Cancelar
             </Button>
             <Button onClick={salvarAtestado} disabled={pending}>
-              {pending ? "Emitindo…" : "Emitir Atestado"}
+              {pending
+                ? "Salvando…"
+                : editId
+                  ? "Salvar alterações"
+                  : "Emitir Atestado"}
             </Button>
           </>
         }
@@ -414,7 +512,7 @@ export function DocumentosClient({
       <Modal
         open={modal === "alta"}
         onClose={fecharAlta}
-        title="Registrar Alta"
+        title={editId ? "Editar Alta" : "Registrar Alta"}
         subtitle="Data/hora, motivo, detalhe, CID (opcional) e observação."
         footer={
           <>
@@ -422,7 +520,11 @@ export function DocumentosClient({
               Cancelar
             </Button>
             <Button onClick={salvarAlta} disabled={pending}>
-              {pending ? "Salvando…" : "Registrar Alta"}
+              {pending
+                ? "Salvando…"
+                : editId
+                  ? "Salvar alterações"
+                  : "Registrar Alta"}
             </Button>
           </>
         }
@@ -522,6 +624,103 @@ export function DocumentosClient({
           </div>
         )}
       </Modal>
+
+      {/* Modal Visualizar (read-only) */}
+      <Modal
+        open={!!viewDoc}
+        onClose={() => setViewDoc(null)}
+        title={viewDoc?.tipo === "alta" ? "Alta" : "Atestado"}
+        subtitle="Visualização do documento (somente leitura)."
+        footer={
+          <Button variant="outline" onClick={() => setViewDoc(null)}>
+            Fechar
+          </Button>
+        }
+      >
+        {viewDoc && (
+          <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-medium text-muted">Emitido em</dt>
+              <dd className="text-ink">{viewDoc.dataHora}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted">Profissional</dt>
+              <dd className="text-ink">{viewDoc.profissional}</dd>
+            </div>
+            {viewDoc.tipo === "atestado" ? (
+              <>
+                <div>
+                  <dt className="text-xs font-medium text-muted">
+                    Dias de afastamento
+                  </dt>
+                  <dd className="text-ink">{viewDoc.dias ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted">Período</dt>
+                  <dd className="text-ink">
+                    {viewDoc.inicio && viewDoc.fim
+                      ? `${viewDoc.inicio} a ${viewDoc.fim}`
+                      : viewDoc.dataAtestado ?? "—"}
+                  </dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-medium text-muted">Diagnóstico</dt>
+                  <dd className="whitespace-pre-line text-ink">
+                    {viewDoc.diagnostico ?? "—"}
+                  </dd>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <dt className="text-xs font-medium text-muted">
+                    Data da alta
+                  </dt>
+                  <dd className="text-ink">
+                    {fmtDataHoraLocal(viewDoc.dataAlta) ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted">Motivo</dt>
+                  <dd className="text-ink">{viewDoc.motivo ?? "—"}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-medium text-muted">Detalhe</dt>
+                  <dd className="text-ink">{viewDoc.detalhe ?? "—"}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-medium text-muted">Orientações</dt>
+                  <dd className="whitespace-pre-line text-ink">
+                    {viewDoc.orientacoes ?? "—"}
+                  </dd>
+                </div>
+              </>
+            )}
+            {viewDoc.exibirCid && viewDoc.cid10 && (
+              <div>
+                <dt className="text-xs font-medium text-muted">CID-10</dt>
+                <dd className="text-ink">{viewDoc.cid10}</dd>
+              </div>
+            )}
+            {viewDoc.observacao && (
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-medium text-muted">Observação</dt>
+                <dd className="whitespace-pre-line text-ink">
+                  {viewDoc.observacao}
+                </dd>
+              </div>
+            )}
+          </dl>
+        )}
+      </Modal>
+
+      {/* Modal Cancelar (não destrutivo) */}
+      <CancelarDocumentoModal
+        open={!!cancelDoc}
+        onClose={() => setCancelDoc(null)}
+        onConfirm={confirmarCancelamento}
+        pending={pending}
+      />
     </>
   );
 }

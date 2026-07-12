@@ -7,13 +7,22 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
   type AnotacaoEnfermagem,
   type OpcaoPaciente,
 } from "@/lib/data/enfermagem";
-import { registrarAnotacao } from "@/lib/actions/enfermagem";
-import { EmptyState, PacienteSelect } from "./Shared";
+import { registrarAnotacao, editarAnotacao } from "@/lib/actions/enfermagem";
+import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
+import {
+  EmptyState,
+  PacienteSelect,
+  DetalheModal,
+  imprimirDocumento,
+} from "./Shared";
 
 export function AnotacaoTab({
   anotacoes,
@@ -28,6 +37,55 @@ export function AnotacaoTab({
   const [conteudo, setConteudo] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+
+  const [viewing, setViewing] = useState<AnotacaoEnfermagem | null>(null);
+  const [editing, setEditing] = useState<AnotacaoEnfermagem | null>(null);
+  const [editConteudo, setEditConteudo] = useState("");
+  const [cancelando, setCancelando] = useState<AnotacaoEnfermagem | null>(null);
+
+  function abrirEdicao(a: AnotacaoEnfermagem) {
+    setEditConteudo(a.conteudo);
+    setEditing(a);
+  }
+
+  function salvarEdicao() {
+    if (!editing) return;
+    if (!editConteudo.trim()) {
+      toast.error("Escreva a anotação.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await editarAnotacao({
+        id: editing.id,
+        content: editConteudo,
+      });
+      if (res?.ok) {
+        toast.success("Anotação atualizada.");
+        setEditing(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível atualizar.");
+      }
+    });
+  }
+
+  function confirmarCancelamento(motivo: string) {
+    if (!cancelando) return;
+    startTransition(async () => {
+      const res = await cancelarDocumento({
+        tabela: "nursing_notes",
+        id: cancelando.id,
+        motivo,
+      });
+      if (res?.ok) {
+        toast.success("Anotação cancelada.");
+        setCancelando(null);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível cancelar.");
+      }
+    });
+  }
 
   function handleSalvar() {
     if (!pacienteId) {
@@ -108,9 +166,27 @@ export function AnotacaoTab({
                       <Badge status="active">{a.codigo}</Badge>
                       <h3 className="font-semibold text-ink">{a.paciente}</h3>
                     </div>
-                    <span className="flex items-center gap-1.5 text-sm text-muted">
-                      <Clock className="h-4 w-4" /> {a.data}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1.5 text-sm text-muted">
+                        <Clock className="h-4 w-4" /> {a.data}
+                      </span>
+                      <DocumentActions
+                        cancelled={a.cancelledAt != null}
+                        cancelReason={a.cancelReason}
+                        pending={pending}
+                        onView={() => setViewing(a)}
+                        onEdit={() => abrirEdicao(a)}
+                        onPrint={() =>
+                          imprimirDocumento(`Anotação de enfermagem ${a.codigo}`, [
+                            { label: "Paciente", value: a.paciente },
+                            { label: "Profissional", value: a.profissional },
+                            { label: "Data", value: a.data },
+                            { label: "Anotação", value: a.conteudo },
+                          ])
+                        }
+                        onCancel={() => setCancelando(a)}
+                      />
+                    </div>
                   </div>
                   <p className="mt-2 text-sm text-ink">{a.conteudo}</p>
                   <p className="mt-2 flex items-center gap-1.5 text-sm text-muted">
@@ -122,6 +198,59 @@ export function AnotacaoTab({
           </Stagger>
         )}
       </div>
+
+      <DetalheModal
+        open={viewing != null}
+        onClose={() => setViewing(null)}
+        titulo={`Anotação ${viewing?.codigo ?? ""}`}
+        campos={
+          viewing
+            ? [
+                { label: "Paciente", value: viewing.paciente },
+                { label: "Profissional", value: viewing.profissional },
+                { label: "Data", value: viewing.data },
+                { label: "Anotação", value: viewing.conteudo },
+              ]
+            : []
+        }
+      />
+
+      <Modal
+        open={editing != null}
+        onClose={() => setEditing(null)}
+        title="Editar anotação"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setEditing(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={salvarEdicao} disabled={pending}>
+              {pending ? "Salvando…" : "Salvar alterações"}
+            </Button>
+          </>
+        }
+      >
+        <label htmlFor="editar-anotacao" className="block">
+          <span className="mb-1.5 block text-sm font-medium text-ink">
+            Anotação
+          </span>
+          <textarea
+            id="editar-anotacao"
+            rows={6}
+            value={editConteudo}
+            onChange={(e) => setEditConteudo(e.target.value)}
+            className="w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
+        </label>
+      </Modal>
+
+      <CancelarDocumentoModal
+        open={cancelando != null}
+        onClose={() => setCancelando(null)}
+        onConfirm={confirmarCancelamento}
+        pending={pending}
+        titulo="Cancelar anotação"
+      />
     </div>
   );
 }

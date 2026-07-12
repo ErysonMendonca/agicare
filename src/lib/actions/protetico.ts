@@ -4,8 +4,9 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireClinico } from "@/lib/auth";
+import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
-import { getActiveClinicId, DEMO_CLINIC_ID } from "@/lib/tenant";
+import { getActiveClinicId, requireClinic, DEMO_CLINIC_ID } from "@/lib/tenant";
 import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
@@ -133,6 +134,67 @@ export async function registrarArquivoProtetico(
     size_bytes: d.sizeBytes ?? null,
   });
   if (error) return { error: error.message };
+
+  revalidatePath(`/prontuario/${d.patientId}/protetico`);
+  return { ok: true };
+}
+
+const editarSchema = z.object({
+  orderId: z.string().uuid("Pedido inválido."),
+  patientId: z.string().min(1, "Paciente inválido."),
+  teeth: z.string().trim().min(1, "Informe os dentes do trabalho."),
+  workType: z.string().trim().min(1, "Selecione o tipo de trabalho."),
+  urgent: z.boolean().default(false),
+  material: z.string().trim().optional(),
+  color: z.string().trim().optional(),
+  finishLine: z.string().trim().optional(),
+  occlusion: z.string().trim().optional(),
+  clinicalNotes: z.string().trim().optional(),
+});
+
+export type EditarPedidoProteticoInput = z.infer<typeof editarSchema>;
+
+/**
+ * Edita os campos de um pedido protético existente. Autorização: permissão de
+ * módulo `prontuario` / ação `edit`. O update é filtrado por clinic_id
+ * (multitenant, além da RLS) e recusa pedidos já cancelados (`cancelled_at`
+ * not null → read-only).
+ */
+export async function editarPedidoProtetico(
+  input: EditarPedidoProteticoInput,
+): Promise<ActionState> {
+  const parsed = editarSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
+
+  const clinicId = await requireClinic();
+  const d = parsed.data;
+
+  const supabase = await createClient();
+  const { data: updated, error } = await supabase
+    .from("prosthetic_orders")
+    .update({
+      teeth: d.teeth,
+      work_type: d.workType,
+      urgent: d.urgent,
+      material: d.material || null,
+      color: d.color || null,
+      finish_line: d.finishLine || null,
+      occlusion: d.occlusion || null,
+      clinical_notes: d.clinicalNotes || null,
+    })
+    .eq("id", d.orderId)
+    .eq("clinic_id", clinicId)
+    .is("cancelled_at", null)
+    .select("id");
+  if (error) {
+    return { error: "Não foi possível salvar as alterações do pedido." };
+  }
+  if (!updated || updated.length === 0) {
+    return { error: "Pedido não encontrado ou já cancelado." };
+  }
 
   revalidatePath(`/prontuario/${d.patientId}/protetico`);
   return { ok: true };

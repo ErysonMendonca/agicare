@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireClinico } from "@/lib/auth";
+import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
 import { getAtendimentoAtivo } from "@/lib/data/atendimento";
@@ -96,6 +97,71 @@ export async function atualizarStatusExame(
 
   revalidatePath(`/prontuario/${parsed.data.patientId}/exames`);
   revalidatePath(`/prontuario/${parsed.data.patientId}`);
+  return { ok: true };
+}
+
+const editarSchema = z.object({
+  id: z.string().min(1, "Pedido inválido."),
+  patientId: z.string().min(1, "Paciente inválido."),
+  exam_name: z.string().trim().min(1, "Informe o exame."),
+  tuss_code: z.string().trim().optional(),
+  category: z.enum(["laboratorial", "imagem"]),
+  notes: z.string().trim().optional(),
+});
+
+export type EditarPedidoExameInput = z.infer<typeof editarSchema>;
+
+/**
+ * Edita um pedido de exame já existente. Bloqueado se o pedido estiver
+ * cancelado (read-only) e gateado por permissão de prontuário/edit.
+ */
+export async function editarExame(
+  input: EditarPedidoExameInput,
+): Promise<ActionState> {
+  const parsed = editarSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const guard = await requireClinico();
+  if ("error" in guard) return { error: guard.error };
+
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+  const d = parsed.data;
+
+  // Não editar documento cancelado (read-only).
+  const { data: atual, error: readErr } = await supabase
+    .from("exam_orders")
+    .select("cancelled_at")
+    .eq("id", d.id)
+    .eq("patient_id", d.patientId)
+    .eq("clinic_id", clinicId)
+    .maybeSingle();
+  if (readErr) return { error: readErr.message };
+  if (!atual) return { error: "Exame não encontrado." };
+  if (atual.cancelled_at) {
+    return { error: "Este exame está cancelado e não pode ser editado." };
+  }
+
+  const { error } = await supabase
+    .from("exam_orders")
+    .update({
+      exam_name: d.exam_name,
+      tuss_code: d.tuss_code || null,
+      category: d.category,
+      notes: d.notes || null,
+    })
+    .eq("id", d.id)
+    .eq("patient_id", d.patientId)
+    .eq("clinic_id", clinicId);
+  if (error) return { error: error.message };
+
+  await logAccess({ patientId: d.patientId, module: "exames", action: "update" });
+
+  revalidatePath(`/prontuario/${d.patientId}/exames`);
+  revalidatePath(`/prontuario/${d.patientId}`);
   return { ok: true };
 }
 

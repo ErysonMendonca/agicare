@@ -9,6 +9,7 @@ import { getMyProfessionalId } from "@/lib/clinico/professional";
 import { requireClinic } from "@/lib/tenant";
 import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 import { FREQUENCIAS } from "@/lib/data/prescricao";
+import { logAction } from "@/lib/system-log";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -335,24 +336,30 @@ export async function updatePrescricao(
 const excluirSchema = z.object({
   id: z.string().min(1, "Prescrição inválida."),
   patientId: z.string().min(1, "Paciente inválido."),
+  motivo: z
+    .string()
+    .trim()
+    .min(3, "Informe o motivo do cancelamento.")
+    .max(500, "Motivo muito longo (máx. 500 caracteres)."),
 });
 
 /**
- * Exclui uma prescrição.
+ * Cancela uma prescrição (NÃO apaga — padrão 0111).
  *
- * A tabela `prescriptions` não tem coluna de soft-delete (active/status), logo
- * a exclusão é física. Para proteger o registro clínico (LGPD), BLOQUEAMOS a
- * exclusão quando já existe qualquer aprazamento administrado (status
- * 'checado') ligado à prescrição — apagá-la (cascade) apagaria a evidência do
- * que foi aplicado no paciente. Sem checks administrados, o delete da
- * prescrição remove em cascata itens, cuidados e checks pendentes (FKs com
- * `on delete cascade` na migration 0007).
+ * Antes fazia DELETE físico (cascade em itens/cuidados/checks); agora grava
+ * o carimbo de cancelamento em `prescriptions` e a prescrição — bem como seus
+ * itens, cuidados e aprazamentos — permanece no banco, visível e read-only.
+ * Como o cancelamento é não-destrutivo, os aprazamentos já administrados
+ * (status 'checado') não correm risco; mas mantemos o BLOQUEIO histórico por
+ * segurança/clareza clínica: uma prescrição com itens já aplicados não deve
+ * ser cancelada. O nome é mantido por compatibilidade; passou a exigir `motivo`.
  */
 export async function deletePrescricao(
   id: string,
   patientId: string,
+  motivo: string,
 ): Promise<ActionState> {
-  const parsed = excluirSchema.safeParse({ id, patientId });
+  const parsed = excluirSchema.safeParse({ id, patientId, motivo });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
 
@@ -361,9 +368,14 @@ export async function deletePrescricao(
   const denied = await requireAction("prontuario", "delete");
   if (denied) return { error: denied };
 
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada." };
+
+  const clinicId = await requireClinic();
   const supabase = await createClient();
 
-  // Existe algum aprazamento já administrado? Se sim, bloqueia.
+  // Existe algum aprazamento já administrado? Se sim, bloqueia (mesma regra
+  // do antigo delete: prescrição já aplicada no paciente não deve ser cancelada).
   const { count, error: cntErr } = await supabase
     .from("prescription_checks")
     .select("id", { count: "exact", head: true })
@@ -373,17 +385,38 @@ export async function deletePrescricao(
   if ((count ?? 0) > 0) {
     return {
       error:
-        "Não é possível excluir: há itens já administrados (checados) nesta prescrição.",
+        "Não é possível cancelar: há itens já administrados (checados) nesta prescrição.",
     };
   }
 
-  // Exclusão física (cascade remove itens, cuidados e checks pendentes).
-  const { error } = await supabase
+  // Cancelamento não-destrutivo (idempotente: só cancela se ainda ativa).
+  const { data: cancelled, error } = await supabase
     .from("prescriptions")
-    .delete()
+    .update({
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: current.userId,
+      cancel_reason: parsed.data.motivo,
+    })
     .eq("id", parsed.data.id)
-    .eq("patient_id", parsed.data.patientId);
-  if (error) return { error: error.message };
+    .eq("patient_id", parsed.data.patientId)
+    .eq("clinic_id", clinicId)
+    .is("cancelled_at", null)
+    .select("id");
+  if (error) {
+    console.error("deletePrescricao cancelamento falhou:", error.message);
+    return { error: "Não foi possível cancelar a prescrição." };
+  }
+  if (!cancelled || cancelled.length === 0) {
+    return { error: "Prescrição não encontrada ou já cancelada." };
+  }
+
+  await logAction({
+    action: "delete",
+    module: "prontuario",
+    summary: "Cancelou uma prescrição",
+    entity: "prescriptions",
+    entityId: parsed.data.id,
+  });
 
   revalidatePath(`/prontuario/${parsed.data.patientId}/prescricao`);
   revalidatePath(`/prontuario/${parsed.data.patientId}/checagem`);

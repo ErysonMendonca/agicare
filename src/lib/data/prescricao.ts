@@ -79,6 +79,8 @@ const DEMO_PRESCRICOES: Prescricao[] = [
         observacoes: "",
       },
     ],
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -89,7 +91,7 @@ export async function listPrescricoes(patientId: string): Promise<Prescricao[]> 
   const { data, error } = await supabase
     .from("prescriptions")
     .select(
-      "id, notes, created_at, professionals(profiles(full_name)), prescription_items(id, name, concentration, posology, route, duration, frequency, observations), care_orders(id, name, frequency, duration, observations)",
+      "id, notes, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name)), prescription_items(id, name, concentration, posology, route, duration, frequency, observations), care_orders(id, name, frequency, duration, observations)",
     )
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
@@ -130,6 +132,8 @@ export async function listPrescricoes(patientId: string): Promise<Prescricao[]> 
         duracao: (c.duration as string | null) ?? "—",
         observacoes: (c.observations as string | null) ?? "",
       })),
+      cancelledAt: (p.cancelled_at as string | null) ?? null,
+      cancelReason: (p.cancel_reason as string | null) ?? null,
     };
   });
 }

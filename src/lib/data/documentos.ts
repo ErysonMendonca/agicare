@@ -19,6 +19,9 @@ export type Documento = {
   orientacoes: string | null;
   dataAlta: string | null;
   detalhe: string | null;
+  /** Cancelamento (não destrutivo): null = documento ativo. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 function fmtData(iso: string | null): string | null {
@@ -55,6 +58,8 @@ const DEMO_DOCUMENTOS: Documento[] = [
     orientacoes: null,
     dataAlta: null,
     detalhe: null,
+    cancelledAt: null,
+    cancelReason: null,
   },
   {
     id: "demo-doc-2",
@@ -73,6 +78,8 @@ const DEMO_DOCUMENTOS: Documento[] = [
     orientacoes: "Retornar em caso de febre ou piora da dor. Hidratação oral.",
     dataAlta: "11/06/2026 16:30",
     detalhe: "Sintomas resolvidos",
+    cancelledAt: null,
+    cancelReason: null,
   },
 ];
 
@@ -83,7 +90,7 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
   const { data, error } = await supabase
     .from("certificates")
     .select(
-      "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, discharge_at, discharge_detail, created_at, professionals(profiles(full_name))",
+      "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, discharge_at, discharge_detail, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name))",
     )
     .eq("patient_id", patientId)
     // Aba Documentos = só atestado/alta. Receituários têm aba própria.
@@ -117,6 +124,8 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
       orientacoes: (c.post_discharge as string | null) ?? null,
       dataAlta: fmtDataHora((c.discharge_at as string | null) ?? null),
       detalhe: (c.discharge_detail as string | null) ?? null,
+      cancelledAt: (c.cancelled_at as string | null) ?? null,
+      cancelReason: (c.cancel_reason as string | null) ?? null,
     };
   });
 }

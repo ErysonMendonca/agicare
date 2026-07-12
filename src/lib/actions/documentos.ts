@@ -115,6 +115,89 @@ export async function emitirAtestado(input: AtestadoInput): Promise<ActionState>
   return { ok: true };
 }
 
+const editarAtestadoSchema = atestadoSchema.extend({
+  id: z.string().uuid("Documento inválido."),
+});
+
+export type EditarAtestadoInput = z.infer<typeof editarAtestadoSchema>;
+
+/** Edita um atestado já emitido (bloqueado se cancelado). */
+export async function editarAtestado(
+  input: EditarAtestadoInput,
+): Promise<ActionState> {
+  const parsed = editarAtestadoSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const negado = await guardMedico();
+  if (negado) return { error: negado };
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
+
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada." };
+
+  const supabase = await createClient();
+  const clinicId = await requireClinic();
+  const d = parsed.data;
+
+  // Bloqueia edição de documento cancelado (read-only).
+  const { data: atual, error: erroBusca } = await supabase
+    .from("certificates")
+    .select("cancelled_at")
+    .eq("id", d.id)
+    .eq("clinic_id", clinicId)
+    .eq("kind", "atestado")
+    .maybeSingle();
+  if (erroBusca) return { error: "Não foi possível carregar o atestado." };
+  if (!atual) return { error: "Atestado não encontrado nesta clínica." };
+  if (atual.cancelled_at)
+    return { error: "Documento cancelado não pode ser editado." };
+
+  const endDate = addDays(d.dataAtestado, d.dias);
+  let cid10: string | null = null;
+  if (d.cid10 && d.cid10.trim()) {
+    const cid = await resolveCidCode(d.cid10);
+    if (!cid) {
+      return {
+        error:
+          "CID-10 não encontrado no catálogo. Selecione um CID cadastrado em Configurações → Catálogo CID.",
+      };
+    }
+    cid10 = cid.code;
+  }
+
+  const { error } = await supabase
+    .from("certificates")
+    .update({
+      days: d.dias,
+      issue_date: d.dataAtestado,
+      start_date: d.dataAtestado,
+      end_date: endDate,
+      diagnosis: d.diagnostico,
+      cid10,
+      observation: d.observacao || null,
+      show_cid: d.exibirCid,
+    })
+    .eq("id", d.id)
+    .eq("clinic_id", clinicId)
+    .eq("kind", "atestado")
+    .is("cancelled_at", null);
+  if (error) {
+    console.error("editarAtestado update falhou:", error);
+    return { error: "Não foi possível editar o atestado." };
+  }
+
+  await logAction({
+    action: "update",
+    module: "documentos",
+    summary: "Editou um atestado médico",
+    entity: "certificate",
+    entityId: d.id,
+  });
+  revalidatePath(`/prontuario/${d.patientId}/documentos`);
+  return { ok: true };
+}
+
 const altaSchema = z.object({
   patientId: z.string().min(1, "Paciente inválido."),
   dataAlta: z.string().trim().min(1, "Informe a data e hora da alta."),
@@ -189,6 +272,83 @@ export async function darAlta(input: AltaInput): Promise<ActionState> {
     summary: "Registrou uma alta",
     entity: "certificate",
     entityId: d.patientId,
+  });
+  revalidatePath(`/prontuario/${d.patientId}/documentos`);
+  return { ok: true };
+}
+
+const editarAltaSchema = altaSchema.extend({
+  id: z.string().uuid("Documento inválido."),
+});
+
+export type EditarAltaInput = z.infer<typeof editarAltaSchema>;
+
+/** Edita uma alta já registrada (bloqueada se cancelada). */
+export async function editarAlta(input: EditarAltaInput): Promise<ActionState> {
+  const parsed = editarAltaSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const negado = await guardMedico();
+  if (negado) return { error: negado };
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
+
+  const current = await getCurrentUser();
+  if (!current) return { error: "Sessão expirada." };
+
+  const supabase = await createClient();
+  const clinicId = await requireClinic();
+  const d = parsed.data;
+
+  const { data: atual, error: erroBusca } = await supabase
+    .from("certificates")
+    .select("cancelled_at")
+    .eq("id", d.id)
+    .eq("clinic_id", clinicId)
+    .eq("kind", "alta")
+    .maybeSingle();
+  if (erroBusca) return { error: "Não foi possível carregar a alta." };
+  if (!atual) return { error: "Alta não encontrada nesta clínica." };
+  if (atual.cancelled_at)
+    return { error: "Documento cancelado não pode ser editado." };
+
+  let cid10: string | null = null;
+  if (d.cid10 && d.cid10.trim()) {
+    const cid = await resolveCidCode(d.cid10);
+    if (!cid) {
+      return {
+        error:
+          "CID-10 não encontrado no catálogo. Selecione um CID cadastrado em Configurações → Catálogo CID.",
+      };
+    }
+    cid10 = cid.code;
+  }
+
+  const { error } = await supabase
+    .from("certificates")
+    .update({
+      reason: d.motivo,
+      discharge_detail: d.detalhe || null,
+      cid10,
+      observation: d.observacao || null,
+      discharge_at: d.dataAlta,
+      show_cid: d.exibirCid,
+    })
+    .eq("id", d.id)
+    .eq("clinic_id", clinicId)
+    .eq("kind", "alta")
+    .is("cancelled_at", null);
+  if (error) {
+    console.error("editarAlta update falhou:", error);
+    return { error: "Não foi possível editar a alta." };
+  }
+
+  await logAction({
+    action: "update",
+    module: "documentos",
+    summary: "Editou uma alta",
+    entity: "certificate",
+    entityId: d.id,
   });
   revalidatePath(`/prontuario/${d.patientId}/documentos`);
   return { ok: true };

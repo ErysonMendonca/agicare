@@ -4,10 +4,38 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { requireAction } from "@/lib/permissions";
 import { requireClinic } from "@/lib/tenant";
 import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
+
+/**
+ * Guard comum das edições de enfermagem: exige permissão prontuario/edit e
+ * garante que o registro existe na clínica e NÃO está cancelado (read-only).
+ */
+async function guardEdicao(
+  tabela: string,
+  id: string,
+): Promise<{ error: string } | { ok: true }> {
+  const denied = await requireAction("prontuario", "edit");
+  if (denied) return { error: denied };
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from(tabela)
+    .select("cancelled_at")
+    .eq("id", id)
+    .eq("clinic_id", clinicId)
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!data) return { error: "Registro não encontrado." };
+  if (data.cancelled_at) {
+    return { error: "Este registro está cancelado e não pode ser editado." };
+  }
+  return { ok: true };
+}
 
 function revalidate() {
   // Enfermagem virou aba do prontuário; revalida toda a árvore do prontuário.
@@ -382,6 +410,136 @@ export async function registrarSae(
     await supabase.from("care_checks").insert(checks);
   }
 
+  revalidate();
+  return { ok: true };
+}
+
+// ════════════════════════════════════════════════════════════════════
+// EDIÇÃO de registros existentes (gateada por prontuario/edit; bloqueia
+// registros cancelados). Só atualiza os campos de conteúdo.
+// ════════════════════════════════════════════════════════════════════
+
+const editarAnotacaoSchema = z.object({
+  id: z.string().min(1, "Anotação inválida."),
+  content: z.string().trim().min(1, "Escreva a anotação."),
+});
+
+export async function editarAnotacao(
+  input: z.input<typeof editarAnotacaoSchema>,
+): Promise<ActionState> {
+  const parsed = editarAnotacaoSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const guard = await guardEdicao("nursing_notes", parsed.data.id);
+  if ("error" in guard) return { error: guard.error };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("nursing_notes")
+    .update({ content: parsed.data.content })
+    .eq("id", parsed.data.id);
+  if (error) return { error: error.message };
+  revalidate();
+  return { ok: true };
+}
+
+const editarEvolucaoSchema = z.object({
+  id: z.string().min(1, "Evolução inválida."),
+  coren: z.string().trim().optional().or(z.literal("")),
+  assessment: z.string().trim().min(1, "Preencha a avaliação."),
+  reassessment: z.string().trim().optional().or(z.literal("")),
+  conduct: z.string().trim().min(1, "Preencha a conduta."),
+});
+
+export async function editarEvolucao(
+  input: z.input<typeof editarEvolucaoSchema>,
+): Promise<ActionState> {
+  const parsed = editarEvolucaoSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const guard = await guardEdicao("nursing_evolutions", parsed.data.id);
+  if ("error" in guard) return { error: guard.error };
+
+  const d = parsed.data;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("nursing_evolutions")
+    .update({
+      coren: d.coren || null,
+      assessment: d.assessment,
+      reassessment: d.reassessment || null,
+      conduct: d.conduct,
+    })
+    .eq("id", d.id);
+  if (error) return { error: error.message };
+  revalidate();
+  return { ok: true };
+}
+
+const editarProcedimentoSchema = z.object({
+  id: z.string().min(1, "Procedimento inválido."),
+  tuss_code: z.string().trim().optional().or(z.literal("")),
+  name: z.string().trim().min(1, "Informe o procedimento."),
+  materials: z.string().trim().optional().or(z.literal("")),
+  body_site: z.string().trim().optional().or(z.literal("")),
+  notes: z.string().trim().optional().or(z.literal("")),
+});
+
+export async function editarProcedimento(
+  input: z.input<typeof editarProcedimentoSchema>,
+): Promise<ActionState> {
+  const parsed = editarProcedimentoSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const guard = await guardEdicao("nursing_procedures", parsed.data.id);
+  if ("error" in guard) return { error: guard.error };
+
+  const d = parsed.data;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("nursing_procedures")
+    .update({
+      tuss_code: d.tuss_code || null,
+      name: d.name,
+      materials: d.materials || null,
+      body_site: d.body_site || null,
+      notes: d.notes || null,
+    })
+    .eq("id", d.id);
+  if (error) return { error: error.message };
+  revalidate();
+  return { ok: true };
+}
+
+const editarSaeSchema = z.object({
+  id: z.string().min(1, "SAE inválida."),
+  coren: z.string().trim().optional().or(z.literal("")),
+  nanda_diagnosis: z.string().trim().min(1, "Informe o diagnóstico NANDA."),
+  related_factor: z.string().trim().optional().or(z.literal("")),
+  prescription: z.string().trim().min(1, "Informe a prescrição de enfermagem."),
+});
+
+export async function editarSae(
+  input: z.input<typeof editarSaeSchema>,
+): Promise<ActionState> {
+  const parsed = editarSaeSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const guard = await guardEdicao("sae_records", parsed.data.id);
+  if ("error" in guard) return { error: guard.error };
+
+  const d = parsed.data;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("sae_records")
+    .update({
+      coren: d.coren || null,
+      nanda_diagnosis: d.nanda_diagnosis,
+      related_factor: d.related_factor || null,
+      prescription: d.prescription,
+    })
+    .eq("id", d.id);
+  if (error) return { error: error.message };
   revalidate();
   return { ok: true };
 }

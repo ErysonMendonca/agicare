@@ -2,15 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ScrollText, Printer, Save, Trash2 } from "lucide-react";
+import { ScrollText, Printer, Save, X } from "lucide-react";
 import { toast } from "sonner";
-import { useConfirm } from "@/lib/store/confirm";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { cn } from "@/lib/utils";
-import { emitirReceituario, removerReceituario } from "@/lib/actions/receituario";
+import { DocumentActions } from "@/components/clinico/DocumentActions";
+import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
+import { emitirReceituario, editarReceituario } from "@/lib/actions/receituario";
+import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
 import type { Receituario } from "@/lib/data/receituario";
 import type { CidCode } from "@/lib/data/cid";
 import {
@@ -56,12 +59,16 @@ export function ReceituarioClient({
   cidCodes: CidCode[];
 }) {
   const router = useRouter();
-  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [tipo, setTipo] = useState<Tipo>("simples");
   const [texto, setTexto] = useState("");
   const [cid10, setCid10] = useState("");
   const [exibirCid, setExibirCid] = useState(true);
+  // Edição: id do receituário em edição (null = criação).
+  const [editId, setEditId] = useState<string | null>(null);
+  // Visualização read-only e cancelamento.
+  const [viewRec, setViewRec] = useState<Receituario | null>(null);
+  const [cancelRec, setCancelRec] = useState<Receituario | null>(null);
 
   /** Normaliza um CID p/ comparação: maiúsculo, sem espaço e sem ponto. */
   const normCid = (s: string) =>
@@ -103,22 +110,65 @@ export function ReceituarioClient({
       toast.error(MSG_CID_INVALIDO);
       return;
     }
+    const payload = {
+      patientId,
+      tipo,
+      texto: conteudo,
+      cid10: cid10.trim() || undefined,
+      exibirCid,
+    };
     startTransition(async () => {
-      const res = await emitirReceituario({
-        patientId,
-        tipo,
-        texto: conteudo,
-        cid10: cid10.trim() || undefined,
-        exibirCid,
-      });
+      const res = editId
+        ? await editarReceituario({ ...payload, id: editId })
+        : await emitirReceituario(payload);
       if (res?.ok) {
-        toast.success("Receituário emitido.");
-        setTexto("");
-        setCid10("");
-        setExibirCid(true);
+        toast.success(editId ? "Receituário atualizado." : "Receituário emitido.");
+        limparEditor();
         router.refresh();
       } else {
-        toast.error(res?.error ?? "Não foi possível emitir o receituário.");
+        toast.error(res?.error ?? "Não foi possível salvar o receituário.");
+      }
+    });
+  }
+
+  /** Limpa o editor e sai do modo de edição. */
+  function limparEditor() {
+    setEditId(null);
+    setTipo("simples");
+    setTexto("");
+    setCid10("");
+    setExibirCid(true);
+  }
+
+  /** Carrega um receituário no editor para edição. */
+  function abrirEditar(r: Receituario) {
+    setEditId(r.id);
+    setTipo(r.tipo);
+    setTexto(r.texto);
+    setCid10(r.cid10 ?? "");
+    setExibirCid(r.exibirCid);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  /** Confirma o cancelamento (não destrutivo) do receituário selecionado. */
+  function confirmarCancelamento(motivo: string) {
+    const alvo = cancelRec;
+    if (!alvo) return;
+    startTransition(async () => {
+      const res = await cancelarDocumento({
+        tabela: "certificates",
+        id: alvo.id,
+        motivo,
+      });
+      if (res?.ok) {
+        toast.success("Receituário cancelado.");
+        setCancelRec(null);
+        if (editId === alvo.id) limparEditor();
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível cancelar o receituário.");
       }
     });
   }
@@ -131,19 +181,6 @@ export function ReceituarioClient({
       return;
     }
     imprimir(tipo, conteudo, exibirCid ? cid10.trim() : "");
-  }
-
-  async function remover(id: string) {
-    if (!(await confirm({ message: "Remover este receituário?", danger: true, confirmLabel: "Remover" }))) return;
-    startTransition(async () => {
-      const res = await removerReceituario(id);
-      if (res?.ok) {
-        toast.success("Receituário removido.");
-        router.refresh();
-      } else {
-        toast.error(res?.error ?? "Não foi possível remover o receituário.");
-      }
-    });
   }
 
   return (
@@ -229,12 +266,27 @@ export function ReceituarioClient({
           O CID-10 é opcional (LGPD) e deve pertencer ao catálogo do admin.
         </p>
 
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          {editId && (
+            <span className="mr-auto text-xs font-medium text-brand-600">
+              Editando receituário
+            </span>
+          )}
+          {editId && (
+            <Button variant="ghost" onClick={limparEditor} disabled={pending}>
+              <X className="h-4 w-4" /> Cancelar edição
+            </Button>
+          )}
           <Button variant="outline" onClick={imprimirAtual}>
             <Printer className="h-4 w-4" /> Imprimir
           </Button>
           <Button onClick={salvar} disabled={pending}>
-            <Save className="h-4 w-4" /> {pending ? "Salvando…" : "Salvar"}
+            <Save className="h-4 w-4" />{" "}
+            {pending
+              ? "Salvando…"
+              : editId
+                ? "Salvar alterações"
+                : "Salvar"}
           </Button>
         </div>
       </Card>
@@ -270,24 +322,22 @@ export function ReceituarioClient({
                     )}
                     <p className="mt-1 text-xs text-muted">{r.profissional}</p>
                   </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        imprimir(r.tipo, r.texto, r.exibirCid ? r.cid10 ?? "" : "")
+                  <div className="shrink-0">
+                    <DocumentActions
+                      cancelled={!!r.cancelledAt}
+                      cancelReason={r.cancelReason}
+                      pending={pending}
+                      onView={() => setViewRec(r)}
+                      onEdit={() => abrirEditar(r)}
+                      onPrint={() =>
+                        imprimir(
+                          r.tipo,
+                          r.texto,
+                          r.exibirCid ? r.cid10 ?? "" : "",
+                        )
                       }
-                    >
-                      <Printer className="h-4 w-4" /> Imprimir
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => remover(r.id)}
-                      disabled={pending}
-                    >
-                      <Trash2 className="h-4 w-4" /> Remover
-                    </Button>
+                      onCancel={() => setCancelRec(r)}
+                    />
                   </div>
                 </div>
               </Card>
@@ -295,6 +345,58 @@ export function ReceituarioClient({
           ))}
         </Stagger>
       )}
+
+      {/* Modal Visualizar (read-only) */}
+      <Modal
+        open={!!viewRec}
+        onClose={() => setViewRec(null)}
+        title={
+          viewRec?.tipo === "especial"
+            ? "Receituário de Controle Especial"
+            : "Receituário Simples"
+        }
+        subtitle="Visualização do documento (somente leitura)."
+        footer={
+          <Button variant="outline" onClick={() => setViewRec(null)}>
+            Fechar
+          </Button>
+        }
+      >
+        {viewRec && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-medium text-muted">Emitido em</p>
+                <p className="text-ink">{viewRec.dataHora}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted">Profissional</p>
+                <p className="text-ink">{viewRec.profissional}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted">Prescrição</p>
+              <p className="whitespace-pre-line break-words text-ink">
+                {viewRec.texto}
+              </p>
+            </div>
+            {viewRec.exibirCid && viewRec.cid10 && (
+              <div>
+                <p className="text-xs font-medium text-muted">CID-10</p>
+                <p className="text-ink">{viewRec.cid10}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal Cancelar (não destrutivo) */}
+      <CancelarDocumentoModal
+        open={!!cancelRec}
+        onClose={() => setCancelRec(null)}
+        onConfirm={confirmarCancelamento}
+        pending={pending}
+      />
     </div>
   );
 }

@@ -77,6 +77,9 @@ export type Prescricao = {
   observacoes: string;
   medicamentos: PrescricaoMedicamento[];
   cuidados: PrescricaoCuidado[];
+  /** Cancelamento (não destrutivo): null = prescrição ativa. */
+  cancelledAt: string | null;
+  cancelReason: string | null;
 };
 
 // ── Checagem (aprazamentos) ─────────────────────────────────────────
