@@ -12,6 +12,7 @@ import type { ClinicaImpressao } from "@/app/(app)/prontuario/[patientId]/docume
 import type { DadosAtendimentoDoc } from "../../FichaAtendimento";
 import {
   imprimirDocumentosAtendimento,
+  type PacienteFicha,
   type TermoImpressao,
 } from "../../ImpressaoDocumentosAtendimento";
 import { registrarConsentimentosImpressos } from "@/lib/actions/consents";
@@ -22,6 +23,15 @@ import { registrarConsentimentosImpressos } from "@/lib/actions/consents";
 // paciente assina no papel). "Concluir" registra os termos impressos
 // (best-effort) e fecha. Também é a "nova visualização" da Reimpressão.
 // ════════════════════════════════════════════════════════════════
+
+/** Formata birth_date (ISO "YYYY-MM-DD") como dd/MM/aaaa sem bug de fuso. */
+function fmtNascimento(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("pt-BR");
+}
 
 /** Filtra ids reais (persistidos) dos ids de fallback demo (ex.: "demo-consent-0"). */
 const UUID_RE =
@@ -52,11 +62,16 @@ export function DocumentosAtendimentoModal({
   // concluir não devem duplicar as linhas de emissão).
   const [registrado, setRegistrado] = useState(false);
 
-  // Paciente reduzido ao necessário para o cabeçalho do documento.
-  const paciente = {
+  // Paciente + carimbos do atendimento para a identificação da ficha.
+  const paciente: PacienteFicha = {
     nome: item.paciente,
-    registro: item.atendimentoCodigo ?? "",
-    idade: "",
+    nascimento: fmtNascimento(item.pacienteNascimento),
+    idade: item.pacienteIdade ?? "",
+    sexo: item.pacienteSexo ?? "",
+    nomeMae: item.pacienteNomeMae ?? "",
+    prontuario: item.pacienteRegistro ?? "",
+    atendimento: item.atendimentoCodigo ?? "",
+    senha: item.codigo && item.codigo !== "—" ? item.codigo : "",
     convenio: dados.convenio,
   };
 

@@ -19,6 +19,10 @@ export type DadosAtendimentoDoc = {
   respDocumento: string;
   respParentesco: string;
   observacoes: string;
+  /** Responsável pelo Documento = quem abriu o atendimento (check-in). */
+  abertoPor: string;
+  /** Função de quem abriu o atendimento (rótulo do papel). */
+  abertoPorFuncao: string;
 };
 
 /**
@@ -93,6 +97,13 @@ export function FichaAtendimento({
             <Linha rotulo="Data de Entrada" valor={dados.dataEntrada} />
             <Linha rotulo="Gestante" valor={dados.gestante} />
           </Secao>
+
+          {(dados.abertoPor || dados.abertoPorFuncao) && (
+            <Secao titulo="Responsável pelo Documento">
+              <Linha rotulo="Nome" valor={dados.abertoPor} />
+              <Linha rotulo="Função" valor={dados.abertoPorFuncao} />
+            </Secao>
+          )}
 
           <Secao titulo="Convênio">
             <Linha rotulo="Convênio" valor={dados.convenio} />

@@ -223,6 +223,10 @@ export async function checkInTotem(
   const clinicId = await requireClinic();
   const supabase = await createClient();
 
+  // Responsável pelo Documento = quem ABRE o atendimento (faz o check-in).
+  // Gravado agora para constar na Ficha de Detalhe do Atendimento (0112).
+  const current = await getCurrentUser();
+
   if (data.appointmentId) {
     const { data: ap } = await supabase
       .from("appointments")
@@ -311,6 +315,9 @@ export async function checkInTotem(
       status: "aguardando",
       arrived_at: new Date().toISOString(),
       appointment_id: data.appointmentId ?? null,
+      opened_by: current?.userId ?? null,
+      opened_by_name: current?.profile?.full_name ?? null,
+      opened_by_role: current?.profile?.role ?? null,
     })
     .select("id")
     .single();

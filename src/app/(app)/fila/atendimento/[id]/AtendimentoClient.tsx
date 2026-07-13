@@ -20,6 +20,18 @@ import type { ConsentTemplate } from "@/lib/data/consent-templates";
 import type { ClinicaImpressao } from "@/app/(app)/prontuario/[patientId]/documentos/AtestadoImpressao";
 import { DocumentosAtendimentoModal } from "./DocumentosAtendimentoModal";
 
+/** Papel (cru do banco) → rótulo de função exibível na ficha. */
+const FUNCAO_LABEL: Record<string, string> = {
+  admin: "Administrador",
+  medico: "Médico",
+  recepcao: "Recepção",
+  paciente: "Paciente",
+};
+function labelFuncao(role: string | null | undefined): string {
+  if (!role) return "";
+  return FUNCAO_LABEL[role] ?? role;
+}
+
 const FALLBACK: Record<string, string[]> = {
   origem: ["1 - RECEPÇÃO", "2 - PRONTO ATENDIMENTO", "3 - INTERNAÇÃO"],
   medico: ["1 - MÉDICO PADRÃO", "2 - DRA. MARINA SOUZA", "3 - DR. CARLOS EDUARDO"],
@@ -299,6 +311,8 @@ export function AtendimentoClient({
       respDocumento: oMesmo ? "" : readForm("resp_documento"),
       respParentesco: oMesmo ? "" : readForm("resp_parentesco"),
       observacoes: readForm("observacoes"),
+      abertoPor: item.openedByName ?? "",
+      abertoPorFuncao: labelFuncao(item.openedByRole),
     };
   }
 

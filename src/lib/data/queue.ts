@@ -48,7 +48,46 @@ export type FilaItem = {
    * check-in. `undefined`/`true` = completo. Só é populado para agendados.
    */
   registrationComplete?: boolean;
+  /** Nome de quem ABRIU o atendimento (check-in) = "Responsável pelo Documento". */
+  openedByName?: string | null;
+  /** Papel (cru: admin|medico|recepcao|paciente) de quem abriu o atendimento. */
+  openedByRole?: string | null;
+  /** Nome da mãe do paciente (patients.mother_name) — identificação da ficha. */
+  pacienteNomeMae?: string | null;
+  /** Sexo do paciente já rotulado (Masculino/Feminino/Outro) — ficha. */
+  pacienteSexo?: string | null;
+  /** Nº do prontuário do paciente (patients.record_number) — ficha. */
+  pacienteRegistro?: string | null;
+  /** Idade do paciente ("X anos") calculada de birth_date — ficha. */
+  pacienteIdade?: string | null;
 };
+
+/** Sexo cru (banco) → rótulo exibível. Vazio quando não informado. */
+const GENERO_LABEL: Record<string, string> = {
+  masculino: "Masculino",
+  feminino: "Feminino",
+  outro: "Outro",
+};
+function labelSexo(g: string | null | undefined): string {
+  if (!g) return "";
+  return GENERO_LABEL[g.toLowerCase()] ?? g;
+}
+
+/** Idade em anos ("X anos") a partir do birth_date; "" quando ausente/inválido. */
+function calcIdade(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const anos = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000));
+  return anos >= 0 ? `${anos} anos` : "";
+}
+
+/** Nº de prontuário: zero-pad para 6 dígitos quando puramente numérico; senão cru. */
+function fmtRegistro(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "";
+  const s = String(v).trim();
+  return /^\d+$/.test(s) ? s.padStart(6, "0") : s;
+}
 
 /** Mapeia status do banco → rótulo + tom do Badge. */
 function mapStatus(status: string): { label: string; tone: Status } {
@@ -197,6 +236,13 @@ const MOCK: FilaItem[] = [
     status: { label: "Aguardando", tone: "wait" },
     statusRaw: "aguardando",
     priorityRaw: "normal",
+    openedByName: "Recepção Demo",
+    openedByRole: "recepcao",
+    pacienteNomeMae: "Joana Silva Santos",
+    pacienteSexo: "Feminino",
+    pacienteRegistro: "000123",
+    pacienteIdade: "34 anos",
+    pacienteNascimento: "1990-05-20",
   },
   {
     id: "mock-2",
@@ -371,7 +417,7 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
   const { data, error } = await supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, reason), patients(convenio, birth_date), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, opened_by_name, opened_by_role, appointments(starts_at, reason), patients(convenio, birth_date, mother_name, gender, record_number), professionals(profiles(full_name))",
     )
     .eq("id", id)
     .single();
@@ -401,6 +447,14 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
 
   return {
     id: r.id as string,
+    openedByName: (r.opened_by_name as string | null) ?? null,
+    openedByRole: (r.opened_by_role as string | null) ?? null,
+    pacienteNomeMae: (pacienteRow?.mother_name as string | null) ?? null,
+    pacienteSexo: labelSexo(pacienteRow?.gender as string | null),
+    pacienteRegistro: fmtRegistro(
+      pacienteRow?.record_number as string | number | null,
+    ),
+    pacienteIdade: calcIdade(pacienteNascimento),
     patientId: (r.patient_id as string | null) ?? null,
     codigo: r.ticket_code ?? "—",
     atendimentoCodigo: (r.attendance_code as string | null) ?? null,
