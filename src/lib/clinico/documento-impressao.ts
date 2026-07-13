@@ -39,7 +39,7 @@ export function hojeBR(): string {
 }
 
 // ── Cabeçalho (box da clínica + box de carimbo/assinatura) ───────
-function cabecalhoHTML(clinica: ClinicaImpressao): string {
+export function cabecalhoHTML(clinica: ClinicaImpressao): string {
   const sub = [limpo(clinica.endereco), limpo(clinica.telefone)]
     .filter(Boolean)
     .join(" · ");
