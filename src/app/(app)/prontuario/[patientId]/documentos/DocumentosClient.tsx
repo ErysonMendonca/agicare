@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { type Documento } from "@/lib/data/documentos";
 import { type CidCode } from "@/lib/data/cid";
 import { type MotivoAlta, type DetalheAlta } from "@/lib/data/alta";
@@ -336,6 +337,7 @@ export function DocumentosClient({
         <Stagger className="flex flex-col gap-3">
           {documentos.map((d) => {
             const isAtestado = d.tipo === "atestado";
+            const cancelado = !!d.cancelledAt;
             const mostraCid = d.exibirCid && !!d.cid10;
             return (
               <FadeInUp key={d.id}>
@@ -348,6 +350,12 @@ export function DocumentosClient({
                         </Badge>
                         <span className="text-xs text-muted">{d.dataHora}</span>
                       </div>
+                      <div
+                        className={cn(
+                          cancelado &&
+                            "text-status-danger [&_*]:text-status-danger",
+                        )}
+                      >
                       {isAtestado ? (
                         <p className="text-sm text-ink">
                           {d.dias} dia(s) de afastamento
@@ -387,6 +395,7 @@ export function DocumentosClient({
                         </div>
                       )}
                       <p className="mt-1 text-xs text-muted">{d.profissional}</p>
+                      </div>
                     </div>
                     <DocumentActions
                       cancelled={!!d.cancelledAt}

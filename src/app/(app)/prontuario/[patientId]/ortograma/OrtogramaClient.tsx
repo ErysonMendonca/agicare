@@ -451,7 +451,11 @@ function Historico({
                     type="button"
                     onClick={() => !cancelado && abrir(item)}
                     disabled={cancelado}
-                    className="flex flex-1 flex-col items-start gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-default"
+                    className={cn(
+                      "flex flex-1 flex-col items-start gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-default",
+                      cancelado &&
+                        "text-status-danger [&_*]:text-status-danger",
+                    )}
                   >
                     <span className="text-sm font-medium text-ink">
                       {item.dataLabel}

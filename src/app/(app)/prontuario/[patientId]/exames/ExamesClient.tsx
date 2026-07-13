@@ -18,6 +18,7 @@ import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
@@ -259,7 +260,12 @@ export function ExamesClient({
                       <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                         <FlaskConical className="h-5 w-5" />
                       </span>
-                      <div>
+                      <div
+                        className={cn(
+                          cancelado &&
+                            "text-status-danger [&_*]:text-status-danger",
+                        )}
+                      >
                         <p className="font-medium text-ink">{e.exame}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <CategoriaTag categoria={e.categoria} />

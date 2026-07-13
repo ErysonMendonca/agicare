@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
@@ -271,7 +272,12 @@ export function AnamneseClient({
                   <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                     <ClipboardList className="h-5 w-5" />
                   </span>
-                  <div>
+                  <div
+                    className={cn(
+                      a.cancelledAt !== null &&
+                        "text-status-danger [&_*]:text-status-danger",
+                    )}
+                  >
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-ink">{a.specialty}</p>
                       {a.campos?.podo_risco_pre_diabetico === true && (

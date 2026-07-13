@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
@@ -243,7 +244,13 @@ export function EvolucaoTab({
                       />
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-col gap-2 text-sm">
+                  <div
+                    className={cn(
+                      "mt-3 flex flex-col gap-2 text-sm",
+                      e.cancelledAt != null &&
+                        "text-status-danger [&_*]:text-status-danger",
+                    )}
+                  >
                     <div>
                       <span className="font-medium text-ink">Avaliação: </span>
                       <span className="text-muted">{e.avaliacao}</span>

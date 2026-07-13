@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
@@ -141,6 +142,12 @@ export function ProcedimentosTab({
                     />
                   </div>
                 </div>
+                <div
+                  className={cn(
+                    p.cancelledAt != null &&
+                      "text-status-danger [&_*]:text-status-danger",
+                  )}
+                >
                 <p className="mt-2 text-sm text-muted">
                   <span className="font-medium text-ink">Materiais: </span>
                   {p.materiais}
@@ -155,6 +162,7 @@ export function ProcedimentosTab({
                   <span className="flex items-center gap-1.5">
                     <Syringe className="h-4 w-4" /> {p.profissional}
                   </span>
+                </div>
                 </div>
               </Card>
             </FadeInUp>

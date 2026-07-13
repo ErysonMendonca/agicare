@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
@@ -238,7 +239,12 @@ export function PrescricaoClient({
             <FadeInUp key={p.id}>
               <Card className="p-5">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div>
+                  <div
+                    className={cn(
+                      p.cancelledAt !== null &&
+                        "text-status-danger [&_*]:text-status-danger",
+                    )}
+                  >
                     <p className="font-medium text-ink">{p.profissional}</p>
                     <p className="text-xs text-muted">{p.dataHora}</p>
                   </div>
@@ -255,6 +261,12 @@ export function PrescricaoClient({
                   />
                 </div>
 
+                <div
+                  className={cn(
+                    p.cancelledAt !== null &&
+                      "text-status-danger [&_*]:text-status-danger",
+                  )}
+                >
                 {p.medicamentos.length > 0 && (
                   <div className="mb-3">
                     <p className="mb-2 text-xs font-semibold uppercase text-muted">
@@ -303,6 +315,7 @@ export function PrescricaoClient({
                 {p.observacoes && (
                   <p className="mt-3 text-sm text-muted">Obs.: {p.observacoes}</p>
                 )}
+                </div>
               </Card>
             </FadeInUp>
           ))}

@@ -310,7 +310,12 @@ export function ProteticoClient({
                     <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                       <Crown className="h-5 w-5" />
                     </span>
-                    <div>
+                    <div
+                      className={cn(
+                        p.cancelledAt !== null &&
+                          "text-status-danger [&_*]:text-status-danger",
+                      )}
+                    >
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium text-ink">{p.workType}</p>
                         <span className="text-sm text-muted">
@@ -357,7 +362,12 @@ export function ProteticoClient({
                 </div>
 
                 {p.clinicalNotes && (
-                  <p className="mt-3 border-t border-line pt-3 text-sm text-muted">
+                  <p
+                    className={cn(
+                      "mt-3 border-t border-line pt-3 text-sm text-muted",
+                      p.cancelledAt !== null && "text-status-danger",
+                    )}
+                  >
                     {p.clinicalNotes}
                   </p>
                 )}

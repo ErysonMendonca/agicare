@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import { type Cuidado } from "@/lib/data/enfermagem";
@@ -91,7 +92,13 @@ export function ChecagemTab({ cuidados }: { cuidados: Cuidado[] }) {
                       <Clock className="h-4 w-4" />
                       <span className="text-xs font-bold">{c.horario}</span>
                     </span>
-                    <div className="min-w-0 flex-1">
+                    <div
+                      className={cn(
+                        "min-w-0 flex-1",
+                        cancelado &&
+                          "text-status-danger [&_*]:text-status-danger",
+                      )}
+                    >
                       <h3 className="font-semibold text-ink">{c.descricao}</h3>
                       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
                         <span className="flex items-center gap-1.5">
