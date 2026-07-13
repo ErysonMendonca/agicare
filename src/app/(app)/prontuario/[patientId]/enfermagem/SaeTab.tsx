@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
@@ -265,6 +266,12 @@ export function SaeTab({
                       />
                     </div>
                   </div>
+                  <div
+                    className={cn(
+                      r.cancelledAt != null &&
+                        "text-status-danger [&_*]:text-status-danger",
+                    )}
+                  >
                   <p className="mt-1 text-sm text-muted">
                     <span className="font-medium text-ink">Paciente: </span>
                     {r.paciente}
@@ -286,6 +293,7 @@ export function SaeTab({
                     <span className="flex items-center gap-1.5">
                       <BadgeCheck className="h-4 w-4" /> {r.coren}
                     </span>
+                  </div>
                   </div>
                 </Card>
               </FadeInUp>

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
@@ -188,10 +189,17 @@ export function AnotacaoTab({
                       />
                     </div>
                   </div>
-                  <p className="mt-2 text-sm text-ink">{a.conteudo}</p>
-                  <p className="mt-2 flex items-center gap-1.5 text-sm text-muted">
-                    <User className="h-4 w-4" /> {a.profissional}
-                  </p>
+                  <div
+                    className={cn(
+                      a.cancelledAt != null &&
+                        "text-status-danger [&_*]:text-status-danger",
+                    )}
+                  >
+                    <p className="mt-2 text-sm text-ink">{a.conteudo}</p>
+                    <p className="mt-2 flex items-center gap-1.5 text-sm text-muted">
+                      <User className="h-4 w-4" /> {a.profissional}
+                    </p>
+                  </div>
                 </Card>
               </FadeInUp>
             ))}

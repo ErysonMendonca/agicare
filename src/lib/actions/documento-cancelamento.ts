@@ -16,7 +16,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getCurrentUser } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
 import { requireClinic } from "@/lib/tenant";
@@ -86,7 +86,14 @@ export async function cancelarDocumento(
   const clinicId = await requireClinic();
   const { tabela, id, motivo } = parsed.data;
 
-  const supabase = await createClient();
+  // Service-role (ignora RLS): a autorização REAL desta ação é a matriz de
+  // perfis (`requireAction("prontuario","delete")`) acima — configurável por
+  // clínica. As tabelas de documento têm RLS de UPDATE restrita a admin/médico
+  // (0007/0008/0016/0017/0103), o que rejeitaria silenciosamente (0 linhas) um
+  // perfil autorizado pela matriz mas fora do RLS (ex.: recepção com a permissão
+  // concedida). Mantemos o isolamento multitenant com o `.eq("clinic_id")`
+  // EXPLÍCITO abaixo — o service-role NÃO dispensa esse filtro.
+  const supabase = createServiceClient();
   const { data: updated, error } = await supabase
     .from(tabela)
     .update({

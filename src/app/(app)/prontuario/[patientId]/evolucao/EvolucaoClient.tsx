@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import { cn } from "@/lib/utils";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import { type EvolucaoCard } from "@/lib/data/evolucao";
@@ -192,7 +193,12 @@ export function EvolucaoClient({
                     <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                       <Stethoscope className="h-5 w-5" />
                     </span>
-                    <div>
+                    <div
+                      className={cn(
+                        e.cancelledAt !== null &&
+                          "text-status-danger [&_*]:text-status-danger",
+                      )}
+                    >
                       <p className="font-medium text-ink">{e.profissional}</p>
                       <p className="text-xs text-muted">{e.dataHora}</p>
                       <p className="mt-1 line-clamp-2 text-sm text-muted">{e.resumo}</p>

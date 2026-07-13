@@ -314,6 +314,12 @@ export function ReceituarioClient({
                       </Badge>
                       <span className="text-xs text-muted">{r.dataHora}</span>
                     </div>
+                    <div
+                      className={cn(
+                        !!r.cancelledAt &&
+                          "text-status-danger [&_*]:text-status-danger",
+                      )}
+                    >
                     <p className="whitespace-pre-line break-words text-sm text-ink">
                       {r.texto}
                     </p>
@@ -321,6 +327,7 @@ export function ReceituarioClient({
                       <p className="mt-1 text-xs text-muted">CID-10: {r.cid10}</p>
                     )}
                     <p className="mt-1 text-xs text-muted">{r.profissional}</p>
+                    </div>
                   </div>
                   <div className="shrink-0">
                     <DocumentActions
