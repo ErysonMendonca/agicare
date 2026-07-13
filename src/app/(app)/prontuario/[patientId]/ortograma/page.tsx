@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getRole } from "@/lib/auth";
 import { getResumo } from "@/lib/data/prontuario";
+import { getSettings } from "@/lib/data/settings";
 import { getOrtogramaDoAtendimento, listOrtogramas } from "@/lib/data/ortograma";
 import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 import { getProfissionalAtual } from "@/lib/data/profissional-atual";
@@ -43,12 +44,14 @@ export default async function OrtogramaPage({
   if (role !== "admin" && role !== "medico") redirect(`/prontuario/${patientId}`);
 
   // O atendimento em curso decide QUAL ortograma se edita: um por atendimento.
-  const [resumo, profissional, atendimento, historicoBruto] = await Promise.all([
-    getResumo(patientId),
-    getProfissionalAtual(),
-    getAtendimentoAtivo(patientId),
-    listOrtogramas(patientId),
-  ]);
+  const [resumo, settings, profissional, atendimento, historicoBruto] =
+    await Promise.all([
+      getResumo(patientId),
+      getSettings(),
+      getProfissionalAtual(),
+      getAtendimentoAtivo(patientId),
+      listOrtogramas(patientId),
+    ]);
 
   const { atual, herdadoDe } = await getOrtogramaDoAtendimento(
     patientId,
@@ -87,6 +90,12 @@ export default async function OrtogramaPage({
         herdadoDeData={herdadoDe ? formatarData(herdadoDe.createdAt) : null}
         historico={historico}
         cabecalho={{
+          clinica: {
+            nome: settings.clinicName,
+            cnpj: settings.cnpj,
+            endereco: settings.address,
+            telefone: settings.phone,
+          },
           paciente: resumo?.identificacao?.nome ?? "—",
           nascimento: resumo?.identificacao?.nascimento ?? "—",
           prontuario: resumo?.identificacao?.registro ?? "—",
