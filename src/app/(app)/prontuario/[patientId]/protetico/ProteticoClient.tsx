@@ -44,6 +44,22 @@ import { Odontograma } from "@/components/clinico/Odontograma";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
+import {
+  abrirImpressao,
+  esc,
+  identPacienteHTML,
+  limpo,
+  montarDocumentoBase,
+  rodapeAssinaturaProfissional,
+  type ClinicaImpressao,
+} from "@/lib/clinico/documento-impressao";
+
+type PacienteIdent = {
+  nome: string;
+  registro: string;
+  idade: string;
+  convenio: string;
+};
 
 type Anexo = { file: File; kind: KindArquivo };
 
@@ -69,9 +85,13 @@ const STEPS = ["Dados Básicos", "Especificações", "Anexos"] as const;
 
 export function ProteticoClient({
   patientId,
+  clinica,
+  paciente,
   pedidos,
 }: {
   patientId: string;
+  clinica: ClinicaImpressao;
+  paciente: PacienteIdent;
   pedidos: PedidoProtetico[];
 }) {
   const router = useRouter();
@@ -99,7 +119,7 @@ export function ProteticoClient({
   const [cancelar, setCancelar] = useState<PedidoProtetico | null>(null);
 
   function imprimirPedido(p: PedidoProtetico) {
-    imprimirPedidoProtetico(p);
+    imprimirPedidoProtetico(clinica, paciente, p);
   }
 
   function confirmarCancelamento(motivo: string) {
@@ -1020,37 +1040,58 @@ function EditarPedidoModal({
 }
 
 // ── Impressão simples do pedido ──────────────────────────────────
-function imprimirPedidoProtetico(p: PedidoProtetico) {
-  const win = window.open("", "_blank", "width=800,height=600");
-  if (!win) return;
+function imprimirPedidoProtetico(
+  clinica: ClinicaImpressao,
+  paciente: PacienteIdent,
+  p: PedidoProtetico,
+) {
   const linha = (rotulo: string, valor: string) =>
-    `<tr><th style="text-align:left;padding:4px 12px 4px 0;color:#555;font-weight:600;white-space:nowrap;vertical-align:top">${rotulo}</th><td style="padding:4px 0">${valor || "—"}</td></tr>`;
+    `<div class="kv"><span class="k">${esc(rotulo)}</span><span class="v">${esc(valor || "—")}</span></div>`;
+
   const anexos =
     p.arquivos.length > 0
-      ? `<p style="margin-top:16px"><strong>Anexos:</strong></p><ul>${p.arquivos
-          .map((a) => `<li>${a.fileName} — ${rotuloKind(a.kind)}</li>`)
-          .join("")}</ul>`
+      ? `<div class="anexos"><div class="corpo-lbl">Anexos</div><ul>${p.arquivos
+          .map((a) => `<li>${esc(a.fileName)} — ${esc(rotuloKind(a.kind))}</li>`)
+          .join("")}</ul></div>`
       : "";
-  win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Pedido Protético</title>
-    <style>body{font-family:system-ui,Arial,sans-serif;color:#111;padding:32px;max-width:640px;margin:0 auto}
-    h1{font-size:20px;margin:0 0 4px}table{border-collapse:collapse;font-size:14px;width:100%}
-    .sub{color:#666;font-size:13px;margin-bottom:16px}</style></head>
-    <body>
-      <h1>Pedido de Trabalho Protético</h1>
-      <p class="sub">${p.profissional} · ${p.criadoEm}</p>
-      <table>
-        ${linha("Tipo de trabalho", p.workType)}
-        ${linha("Dentes", p.teeth)}
-        ${linha("Material", p.material)}
-        ${linha("Cor / Escala", p.color)}
-        ${linha("Linha de término", p.finishLine)}
-        ${linha("Oclusão", p.occlusion)}
-        ${linha("Prazo", p.dueDate ?? "—")}
-        ${linha("Urgente", p.urgent ? "Sim" : "Não")}
-        ${linha("Observações", p.clinicalNotes)}
-      </table>
-      ${anexos}
-      <script>window.onload=function(){window.print()}</script>
-    </body></html>`);
-  win.document.close();
+
+  const ident = identPacienteHTML(paciente.nome, [
+    { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "Idade", val: limpo(paciente.idade) || "—" },
+    { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
+    { lbl: "Criado em", val: limpo(p.criadoEm) || "—" },
+  ]);
+
+  const corpo = `
+    ${linha("Tipo de trabalho", p.workType)}
+    ${linha("Dentes", p.teeth)}
+    ${linha("Material", p.material)}
+    ${linha("Cor / Escala", p.color)}
+    ${linha("Linha de término", p.finishLine)}
+    ${linha("Oclusão", p.occlusion)}
+    ${linha("Prazo", p.dueDate ?? "—")}
+    ${linha("Urgente", p.urgent ? "Sim" : "Não")}
+    ${linha("Observações", p.clinicalNotes)}
+    ${anexos}`;
+
+  const html = montarDocumentoBase({
+    titulo: "PEDIDO DE TRABALHO PROTÉTICO",
+    clinica,
+    pacienteNome: paciente.nome,
+    identHTML: ident,
+    corpoHTML: corpo,
+    rodapeHTML: rodapeAssinaturaProfissional(
+      limpo(p.profissional) || "Profissional responsável",
+      "Assinatura e carimbo (CRO)",
+    ),
+    cssExtra: `
+      .corpo { min-height: 260px; }
+      .corpo .kv { display: flex; gap: 10px; padding: 5px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+      .corpo .kv .k { color: #555; min-width: 150px; }
+      .corpo .kv .v { font-weight: 500; }
+      .corpo .anexos { margin-top: 10px; }
+      .corpo .anexos ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }`,
+  });
+
+  abrirImpressao(html, "Permita pop-ups para imprimir o pedido protético.");
 }
