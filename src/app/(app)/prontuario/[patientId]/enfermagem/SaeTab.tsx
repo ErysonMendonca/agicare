@@ -24,6 +24,7 @@ import {
   PacienteSelect,
   DetalheModal,
   imprimirDocumento,
+  type DocCabecalho,
 } from "./Shared";
 
 /** Diagnósticos NANDA comuns para acelerar o preenchimento. */
@@ -38,9 +39,11 @@ const DIAGNOSTICOS = [
 ];
 
 export function SaeTab({
+  cabecalho,
   registros,
   pacientes,
 }: {
+  cabecalho: DocCabecalho;
   registros: RegistroSae[];
   pacientes: OpcaoPaciente[];
 }) {
@@ -260,7 +263,7 @@ export function SaeTab({
                         onView={() => setViewing(r)}
                         onEdit={() => abrirEdicao(r)}
                         onPrint={() =>
-                          imprimirDocumento("Registro SAE (NANDA)", camposSae(r))
+                          imprimirDocumento(cabecalho, "Registro SAE (NANDA)", camposSae(r))
                         }
                         onCancel={() => setCancelando(r)}
                       />

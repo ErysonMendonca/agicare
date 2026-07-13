@@ -1,4 +1,5 @@
 import { getResumo } from "@/lib/data/prontuario";
+import { getSettings } from "@/lib/data/settings";
 import {
   listSinaisVitais,
   listAnotacoes,
@@ -24,6 +25,7 @@ export default async function EnfermagemProntuarioPage({
 
   const [
     resumo,
+    settings,
     sinais,
     anotacoes,
     cuidados,
@@ -35,6 +37,7 @@ export default async function EnfermagemProntuarioPage({
     proximoCodigo,
   ] = await Promise.all([
     getResumo(patientId),
+    getSettings(),
     listSinaisVitais(patientId),
     listAnotacoes(patientId),
     listCuidados(patientId),
@@ -51,6 +54,22 @@ export default async function EnfermagemProntuarioPage({
     ? [{ id: patientId, nome: resumo.identificacao.nome }]
     : [];
 
+  const identificacao = resumo?.identificacao ?? null;
+  const cabecalho = {
+    clinica: {
+      nome: settings.clinicName,
+      cnpj: settings.cnpj,
+      endereco: settings.address,
+      telefone: settings.phone,
+    },
+    paciente: {
+      nome: identificacao?.nome ?? "—",
+      registro: identificacao?.registro ?? "—",
+      idade: identificacao?.idade ?? "—",
+      convenio: identificacao?.convenio ?? "—",
+    },
+  };
+
   return (
     <SecaoClinica
       patientId={patientId}
@@ -59,6 +78,7 @@ export default async function EnfermagemProntuarioPage({
       subtitle="Sinais vitais, cuidados, balanço hídrico, escalas e SAE do paciente"
     >
       <EnfermagemProntuarioClient
+        cabecalho={cabecalho}
         pacientes={opcoesPacientes}
         sinais={sinais}
         anotacoes={anotacoes}

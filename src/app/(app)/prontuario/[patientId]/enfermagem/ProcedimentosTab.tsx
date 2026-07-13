@@ -27,12 +27,15 @@ import {
   PacienteSelect,
   DetalheModal,
   imprimirDocumento,
+  type DocCabecalho,
 } from "./Shared";
 
 export function ProcedimentosTab({
+  cabecalho,
   procedimentos,
   pacientes,
 }: {
+  cabecalho: DocCabecalho;
   procedimentos: ProcedimentoEnfermagem[];
   pacientes: OpcaoPaciente[];
 }) {
@@ -134,6 +137,7 @@ export function ProcedimentosTab({
                       onEdit={() => setEditing(p)}
                       onPrint={() =>
                         imprimirDocumento(
+                          cabecalho,
                           "Procedimento de enfermagem",
                           camposProc(p),
                         )
