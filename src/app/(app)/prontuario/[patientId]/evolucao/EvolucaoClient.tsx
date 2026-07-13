@@ -15,6 +15,23 @@ import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoMo
 import { type EvolucaoCard } from "@/lib/data/evolucao";
 import { registrarEvolucao, editarEvolucao } from "@/lib/actions/evolucao";
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
+import {
+  abrirImpressao,
+  corpoTexto,
+  esc,
+  identPacienteHTML,
+  limpo,
+  montarDocumentoBase,
+  rodapeAssinaturaProfissional,
+  type ClinicaImpressao,
+} from "@/lib/clinico/documento-impressao";
+
+type PacienteIdent = {
+  nome: string;
+  registro: string;
+  idade: string;
+  convenio: string;
+};
 
 /** Extrai o valor de um campo rotulado do conteúdo formatado da evolução. */
 function extrairCampo(conteudo: string, label: string): string {
@@ -57,9 +74,13 @@ type TextoKey = (typeof TEXTOS)[number][0];
 
 export function EvolucaoClient({
   patientId,
+  clinica,
+  paciente,
   evolucoes,
 }: {
   patientId: string;
+  clinica: ClinicaImpressao;
+  paciente: PacienteIdent;
   evolucoes: EvolucaoCard[];
 }) {
   const router = useRouter();
@@ -98,6 +119,44 @@ export function EvolucaoClient({
         toast.error(res?.error ?? "Não foi possível atualizar a evolução.");
       }
     });
+  }
+
+  /** Imprime uma evolução como documento próprio no modelo padrão. */
+  function imprimirEvolucao(e: EvolucaoCard) {
+    const ident = identPacienteHTML(paciente.nome, [
+      { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+      { lbl: "Idade", val: limpo(paciente.idade) || "—" },
+      { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
+      { lbl: "Data/hora", val: limpo(e.dataHora) || "—" },
+    ]);
+
+    const extras =
+      e.extras.length > 0
+        ? `<div class="extras"><div class="corpo-lbl">Outros sinais</div>${e.extras
+            .map((x) => `<span class="ex"><b>${esc(x.label)}:</b> ${esc(x.value)}</span>`)
+            .join("")}</div>`
+        : "";
+
+    const corpo = `<div class="texto">${corpoTexto(e.conteudo)}</div>${extras}`;
+
+    const html = montarDocumentoBase({
+      titulo: "EVOLUÇÃO CLÍNICA",
+      clinica,
+      pacienteNome: paciente.nome,
+      identHTML: ident,
+      corpoHTML: corpo,
+      rodapeHTML: rodapeAssinaturaProfissional(
+        limpo(e.profissional) || "Profissional responsável",
+        "Assinatura e carimbo (CRM)",
+      ),
+      cssExtra: `
+        .corpo { min-height: 260px; }
+        .corpo .texto { font-size: 13px; }
+        .corpo .extras { margin-top: 14px; border-top: 1px solid #ccc; padding-top: 8px; }
+        .corpo .ex { display: inline-block; margin-right: 18px; font-size: 12px; }`,
+    });
+
+    abrirImpressao(html, "Permita pop-ups para imprimir a evolução.");
   }
 
   function confirmarCancelamento(motivo: string) {
@@ -210,10 +269,7 @@ export function EvolucaoClient({
                     pending={pending}
                     onView={() => setVer(e)}
                     onEdit={() => abrirEdicao(e)}
-                    onPrint={() => {
-                      setVer(e);
-                      setTimeout(() => window.print(), 50);
-                    }}
+                    onPrint={() => imprimirEvolucao(e)}
                     onCancel={() => setCancelar(e)}
                   />
                 </div>
@@ -383,7 +439,10 @@ export function EvolucaoClient({
         subtitle={ver ? `${ver.profissional} · ${ver.dataHora}` : undefined}
         className="max-w-2xl"
         footer={
-          <Button variant="outline" onClick={() => window.print()}>
+          <Button
+            variant="outline"
+            onClick={() => ver && imprimirEvolucao(ver)}
+          >
             <Printer className="h-4 w-4" /> Imprimir
           </Button>
         }
