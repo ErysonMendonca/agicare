@@ -33,6 +33,22 @@ import {
   enviarResultadoExameEmail,
 } from "@/lib/actions/exames";
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
+import {
+  abrirImpressao,
+  esc,
+  identPacienteHTML,
+  limpo,
+  montarDocumentoBase,
+  rodapeAssinaturaProfissional,
+  type ClinicaImpressao,
+} from "@/lib/clinico/documento-impressao";
+
+type PacienteIdent = {
+  nome: string;
+  registro: string;
+  idade: string;
+  convenio: string;
+};
 
 const CATEGORIA_LABEL: Record<ExamCategoria, string> = {
   laboratorial: "Laboratorial",
@@ -48,45 +64,67 @@ function CategoriaTag({ categoria }: { categoria: ExamCategoria }) {
   );
 }
 
-/** Impressão simples do pedido em uma janela nova. */
-function imprimirExame(e: ExamOrder) {
-  const win = window.open("", "_blank", "width=800,height=600");
-  if (!win) return;
-  const esc = (s: string) =>
-    s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c] ?? c);
-  win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-<title>Pedido de exame</title>
-<style>
-  body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:40px;line-height:1.5}
-  h1{font-size:20px;margin:0 0 4px}
-  .cat{color:#555;font-size:13px;margin-bottom:24px}
-  dt{font-weight:bold;margin-top:12px}
-  dd{margin:0}
-  hr{border:none;border-top:1px solid #ddd;margin:24px 0}
-  .foot{margin-top:48px;font-size:12px;color:#777}
-</style></head><body>
-  <h1>Pedido de Exame</h1>
-  <div class="cat">${esc(CATEGORIA_LABEL[e.categoria])}</div>
-  <dl>
-    <dt>Exame</dt><dd>${esc(e.exame)}</dd>
-    ${e.tuss ? `<dt>Código TUSS</dt><dd>${esc(e.tuss)}</dd>` : ""}
-    <dt>Status</dt><dd>${e.status === "concluido" ? "Concluído" : "Solicitado"}</dd>
-    <dt>Solicitado em</dt><dd>${esc(e.quando)}</dd>
-    ${e.observacoes ? `<dt>Observações</dt><dd>${esc(e.observacoes)}</dd>` : ""}
-  </dl>
-  <hr>
-  <div class="foot">Documento gerado pelo sistema agicare.</div>
-</body></html>`);
-  win.document.close();
-  win.focus();
-  win.print();
+/** Impressão do pedido de exame no modelo padrão (documento-impressao). */
+function imprimirExame(
+  clinica: ClinicaImpressao,
+  paciente: PacienteIdent,
+  e: ExamOrder,
+) {
+  const ident = identPacienteHTML(paciente.nome, [
+    { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "Idade", val: limpo(paciente.idade) || "—" },
+    { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
+    { lbl: "Solicitado em", val: limpo(e.quando) || "—" },
+  ]);
+
+  // Tabela de exames com colunas Código TUSS / Exame / Observação. A Observação
+  // (quando informada) sai impressa aqui, conforme pedido do cliente.
+  const linhaObs = limpo(e.observacoes ?? "");
+  const corpo = `
+    <div class="corpo-lbl">Exame solicitado:</div>
+    <table class="tab">
+      <tr><th style="width:120px">Código TUSS</th><th>Exame</th><th style="width:180px">Observação</th></tr>
+      <tr>
+        <td>${esc(limpo(e.tuss ?? "") || "—")}</td>
+        <td>${esc(e.exame)}</td>
+        <td>${esc(linhaObs || "—")}</td>
+      </tr>
+    </table>
+    <div class="meta">
+      <span><b>Categoria:</b> ${esc(CATEGORIA_LABEL[e.categoria])}</span>
+      <span><b>Status:</b> ${e.status === "concluido" ? "Concluído" : "Solicitado"}</span>
+    </div>`;
+
+  const html = montarDocumentoBase({
+    titulo: "PEDIDO DE EXAMES",
+    clinica,
+    pacienteNome: paciente.nome,
+    identHTML: ident,
+    corpoHTML: corpo,
+    rodapeHTML: rodapeAssinaturaProfissional(
+      "Profissional responsável",
+      "Assinatura e carimbo (CRM)",
+    ),
+    cssExtra: `
+      .corpo { min-height: 260px; }
+      .corpo .tab { width: 100%; border-collapse: collapse; margin: 4px 0 10px; }
+      .corpo .tab th, .corpo .tab td { border: 1px solid #aaa; padding: 5px 8px; font-size: 12px; text-align: left; }
+      .corpo .tab th { background: #f0f0f0; }
+      .corpo .meta { font-size: 12px; display: flex; gap: 24px; }`,
+  });
+
+  abrirImpressao(html, "Permita pop-ups para imprimir o pedido de exame.");
 }
 
 export function ExamesClient({
   patientId,
+  clinica,
+  paciente,
   exames,
 }: {
   patientId: string;
+  clinica: ClinicaImpressao;
+  paciente: PacienteIdent;
   exames: ExamOrder[];
 }) {
   const router = useRouter();
@@ -333,7 +371,7 @@ export function ExamesClient({
                         pending={pending}
                         onView={() => setViewing(e)}
                         onEdit={() => abrirEdicao(e)}
-                        onPrint={() => imprimirExame(e)}
+                        onPrint={() => imprimirExame(clinica, paciente, e)}
                         onCancel={() => setCancelando(e)}
                       />
                     </div>
