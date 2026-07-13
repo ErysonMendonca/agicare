@@ -31,6 +31,7 @@ import { EvolucaoTab } from "./EvolucaoTab";
 import { EscalasTab } from "./EscalasTab";
 import { ProcedimentosTab } from "./ProcedimentosTab";
 import { SaeTab } from "./SaeTab";
+import { type DocCabecalho } from "./Shared";
 
 type TabKey =
   | "sinais"
@@ -59,6 +60,7 @@ const ABAS: Array<{ key: TabKey; label: string; icon: LucideIcon }> = [
  * lista de 1 item que pré-seleciona o paciente nos formulários dos tabs.
  */
 export function EnfermagemProntuarioClient({
+  cabecalho,
   pacientes,
   sinais,
   anotacoes,
@@ -70,6 +72,7 @@ export function EnfermagemProntuarioClient({
   procedimentos,
   sae,
 }: {
+  cabecalho: DocCabecalho;
   pacientes: OpcaoPaciente[];
   sinais: SinalVital[];
   anotacoes: AnotacaoEnfermagem[];
@@ -117,25 +120,38 @@ export function EnfermagemProntuarioClient({
       )}
       {aba === "anotacao" && (
         <AnotacaoTab
+          cabecalho={cabecalho}
           anotacoes={anotacoes}
           pacientes={pacientes}
           proximoCodigo={proximoCodigo}
         />
       )}
-      {aba === "checagem" && <ChecagemTab cuidados={cuidados} />}
+      {aba === "checagem" && (
+        <ChecagemTab cabecalho={cabecalho} cuidados={cuidados} />
+      )}
       {aba === "balanco" && (
         <BalancoTab balanco={balanco} pacientes={pacientes} />
       )}
       {aba === "evolucao" && (
-        <EvolucaoTab evolucoes={evolucoes} pacientes={pacientes} />
+        <EvolucaoTab
+          cabecalho={cabecalho}
+          evolucoes={evolucoes}
+          pacientes={pacientes}
+        />
       )}
       {aba === "escalas" && (
         <EscalasTab escalas={escalas} pacientes={pacientes} />
       )}
       {aba === "procedimentos" && (
-        <ProcedimentosTab procedimentos={procedimentos} pacientes={pacientes} />
+        <ProcedimentosTab
+          cabecalho={cabecalho}
+          procedimentos={procedimentos}
+          pacientes={pacientes}
+        />
       )}
-      {aba === "sae" && <SaeTab registros={sae} pacientes={pacientes} />}
+      {aba === "sae" && (
+        <SaeTab cabecalho={cabecalho} registros={sae} pacientes={pacientes} />
+      )}
     </>
   );
 }

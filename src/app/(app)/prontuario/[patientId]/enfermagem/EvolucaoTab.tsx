@@ -23,6 +23,7 @@ import {
   PacienteSelect,
   DetalheModal,
   imprimirDocumento,
+  type DocCabecalho,
 } from "./Shared";
 
 function Bloco({
@@ -55,9 +56,11 @@ function Bloco({
 }
 
 export function EvolucaoTab({
+  cabecalho,
   evolucoes,
   pacientes,
 }: {
+  cabecalho: DocCabecalho;
   evolucoes: EvolucaoEnfermagem[];
   pacientes: OpcaoPaciente[];
 }) {
@@ -236,6 +239,7 @@ export function EvolucaoTab({
                         onEdit={() => abrirEdicao(e)}
                         onPrint={() =>
                           imprimirDocumento(
+                            cabecalho,
                             "Evolução de enfermagem",
                             camposEvolucao(e),
                           )

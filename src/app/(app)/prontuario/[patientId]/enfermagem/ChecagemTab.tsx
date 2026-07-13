@@ -16,7 +16,12 @@ import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoMo
 import { type Cuidado } from "@/lib/data/enfermagem";
 import { checarCuidado, reaprazarCuidado } from "@/lib/actions/enfermagem";
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
-import { EmptyState, DetalheModal, imprimirDocumento } from "./Shared";
+import {
+  EmptyState,
+  DetalheModal,
+  imprimirDocumento,
+  type DocCabecalho,
+} from "./Shared";
 
 function camposCuidado(c: Cuidado) {
   return [
@@ -29,7 +34,13 @@ function camposCuidado(c: Cuidado) {
   ];
 }
 
-export function ChecagemTab({ cuidados }: { cuidados: Cuidado[] }) {
+export function ChecagemTab({
+  cabecalho,
+  cuidados,
+}: {
+  cabecalho: DocCabecalho;
+  cuidados: Cuidado[];
+}) {
   const [selecionado, setSelecionado] = useState<Cuidado | null>(null);
   const [viewing, setViewing] = useState<Cuidado | null>(null);
   const [cancelando, setCancelando] = useState<Cuidado | null>(null);
@@ -129,7 +140,7 @@ export function ChecagemTab({ cuidados }: { cuidados: Cuidado[] }) {
                         pending={pending}
                         onView={() => setViewing(c)}
                         onPrint={() =>
-                          imprimirDocumento("Checagem de cuidado", camposCuidado(c))
+                          imprimirDocumento(cabecalho, "Checagem de cuidado", camposCuidado(c))
                         }
                         onCancel={() => setCancelando(c)}
                       />

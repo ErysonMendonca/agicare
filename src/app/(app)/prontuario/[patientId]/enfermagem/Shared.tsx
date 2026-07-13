@@ -6,42 +6,66 @@ import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { type OpcaoPaciente } from "@/lib/data/enfermagem";
+import {
+  abrirImpressao,
+  esc,
+  identPacienteHTML,
+  limpo,
+  montarDocumentoBase,
+  rodapeAssinaturaProfissional,
+  type ClinicaImpressao,
+} from "@/lib/clinico/documento-impressao";
 
 /** Par rótulo→valor exibido nos modais de visualização / impressão. */
 export type CampoDetalhe = { label: string; value: string };
 
-/** Impressão simples de um documento de enfermagem em uma janela nova. */
-export function imprimirDocumento(titulo: string, campos: CampoDetalhe[]) {
+/** Cabeçalho dos documentos de enfermagem (clínica + identificação do paciente). */
+export type DocCabecalho = {
+  clinica: ClinicaImpressao;
+  paciente: { nome: string; registro: string; idade: string; convenio: string };
+};
+
+/** Impressão de um documento de enfermagem no modelo padrão compartilhado. */
+export function imprimirDocumento(
+  cabecalho: DocCabecalho,
+  titulo: string,
+  campos: CampoDetalhe[],
+) {
   if (typeof window === "undefined") return;
-  const win = window.open("", "_blank", "width=800,height=600");
-  if (!win) return;
-  const esc = (s: string) =>
-    s.replace(
-      /[&<>]/g,
-      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c] ?? c,
-    );
-  const linhas = campos
+  const { clinica, paciente } = cabecalho;
+
+  const corpo = campos
     .filter((c) => c.value && c.value !== "—")
-    .map((c) => `<dt>${esc(c.label)}</dt><dd>${esc(c.value)}</dd>`)
+    .map(
+      (c) =>
+        `<div class="campo"><span class="k">${esc(c.label)}</span><span class="v">${esc(c.value)}</span></div>`,
+    )
     .join("");
-  win.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
-<title>${esc(titulo)}</title>
-<style>
-  body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:40px;line-height:1.5}
-  h1{font-size:20px;margin:0 0 24px}
-  dt{font-weight:bold;margin-top:12px}
-  dd{margin:0}
-  hr{border:none;border-top:1px solid #ddd;margin:24px 0}
-  .foot{margin-top:48px;font-size:12px;color:#777}
-</style></head><body>
-  <h1>${esc(titulo)}</h1>
-  <dl>${linhas}</dl>
-  <hr>
-  <div class="foot">Documento gerado pelo sistema agicare.</div>
-</body></html>`);
-  win.document.close();
-  win.focus();
-  win.print();
+
+  const ident = identPacienteHTML(paciente.nome, [
+    { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "Idade", val: limpo(paciente.idade) || "—" },
+    { lbl: "Convênio", val: limpo(paciente.convenio) || "—", span: 3 },
+  ]);
+
+  const html = montarDocumentoBase({
+    titulo: titulo.toUpperCase(),
+    clinica,
+    pacienteNome: paciente.nome,
+    identHTML: ident,
+    corpoHTML: corpo || `<p class="corpo-lbl">Sem dados preenchidos.</p>`,
+    rodapeHTML: rodapeAssinaturaProfissional(
+      "Profissional de Enfermagem",
+      "Assinatura e carimbo (COREN)",
+    ),
+    cssExtra: `
+      .corpo { min-height: 260px; }
+      .corpo .campo { border-bottom: 1px solid #e5e5e5; padding: 8px 0; }
+      .corpo .k { display: block; text-transform: uppercase; font-size: 11px; color: #888; }
+      .corpo .v { display: block; font-size: 14px; }`,
+  });
+
+  abrirImpressao(html, "Permita pop-ups para imprimir o documento.");
 }
 
 /** Modal read-only genérico: lista rótulo→valor de um documento. */

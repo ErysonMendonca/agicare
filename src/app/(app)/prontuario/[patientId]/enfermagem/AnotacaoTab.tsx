@@ -23,13 +23,16 @@ import {
   PacienteSelect,
   DetalheModal,
   imprimirDocumento,
+  type DocCabecalho,
 } from "./Shared";
 
 export function AnotacaoTab({
+  cabecalho,
   anotacoes,
   pacientes,
   proximoCodigo,
 }: {
+  cabecalho: DocCabecalho;
   anotacoes: AnotacaoEnfermagem[];
   pacientes: OpcaoPaciente[];
   proximoCodigo: string;
@@ -178,7 +181,7 @@ export function AnotacaoTab({
                         onView={() => setViewing(a)}
                         onEdit={() => abrirEdicao(a)}
                         onPrint={() =>
-                          imprimirDocumento(`Anotação de enfermagem ${a.codigo}`, [
+                          imprimirDocumento(cabecalho, `Anotação de enfermagem ${a.codigo}`, [
                             { label: "Paciente", value: a.paciente },
                             { label: "Profissional", value: a.profissional },
                             { label: "Data", value: a.data },
