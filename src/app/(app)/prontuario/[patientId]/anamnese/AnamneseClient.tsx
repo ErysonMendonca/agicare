@@ -29,6 +29,22 @@ import {
 import { type AnamneseRegistro } from "@/lib/data/anamnese";
 import { gerarAnamnese } from "@/lib/actions/anamnese";
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
+import {
+  abrirImpressao,
+  esc,
+  identPacienteHTML,
+  limpo,
+  montarDocumentoBase,
+  rodapeAssinaturaProfissional,
+  type ClinicaImpressao,
+} from "@/lib/clinico/documento-impressao";
+
+type PacienteIdent = {
+  nome: string;
+  registro: string;
+  idade: string;
+  convenio: string;
+};
 
 type BlocoCampos = { titulo: string; campos: AnamneseField[] };
 
@@ -54,11 +70,15 @@ const textareaCls =
 
 export function AnamneseClient({
   patientId,
+  clinica,
+  paciente,
   anamneses,
   minhaEspecialidade,
   templates,
 }: {
   patientId: string;
+  clinica: ClinicaImpressao;
+  paciente: PacienteIdent;
   anamneses: AnamneseRegistro[];
   minhaEspecialidade: string | null;
   templates: AnamneseTemplate[];
@@ -116,33 +136,41 @@ export function AnamneseClient({
     const linhas = Object.entries(a.campos)
       .map(
         ([key, val]) =>
-          `<div class="campo"><span class="k">${escapeHtml(key)}</span><span class="v">${escapeHtml(
+          `<div class="campo"><span class="k">${esc(key)}</span><span class="v">${esc(
             formatarValor(val),
           )}</span></div>`,
       )
       .join("");
-    const win = window.open("", "_blank", "width=800,height=900");
-    if (!win) return;
-    win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Anamnese — ${escapeHtml(
-      a.specialty,
-    )}</title><style>
-      body{font-family:system-ui,Arial,sans-serif;color:#1a1a1a;padding:32px;max-width:720px;margin:0 auto}
-      h1{font-size:18px;margin:0 0 4px}
-      .meta{color:#666;font-size:13px;margin-bottom:20px}
-      .campo{border-bottom:1px solid #e5e5e5;padding:8px 0}
-      .k{display:block;text-transform:uppercase;font-size:11px;color:#888}
-      .v{display:block;font-size:14px}
-      @media print{body{padding:0}}
-    </style></head><body>
-      <h1>Anamnese — ${escapeHtml(a.specialty)}</h1>
-      <div class="meta">${escapeHtml(a.profissional)} · ${escapeHtml(a.dataHora)} · Atendimento nº ${escapeHtml(
-        a.atendimentoCodigo ?? "—",
-      )}</div>
-      ${linhas}
-    </body></html>`);
-    win.document.close();
-    win.focus();
-    win.print();
+
+    const ident = identPacienteHTML(paciente.nome, [
+      { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+      { lbl: "Atendimento", val: a.atendimentoCodigo ? "#" + a.atendimentoCodigo : "—" },
+      { lbl: "Idade", val: limpo(paciente.idade) || "—" },
+      { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
+      { lbl: "Especialidade", val: limpo(a.specialty) || "—" },
+      { lbl: "Data", val: limpo(a.dataHora) || "—" },
+    ]);
+
+    const cssExtra = `
+      .corpo { min-height: 280px; }
+      .corpo .campo { border-bottom: 1px solid #e5e5e5; padding: 8px 0; }
+      .corpo .k { display: block; text-transform: uppercase; font-size: 11px; color: #888; }
+      .corpo .v { display: block; font-size: 14px; }`;
+
+    const html = montarDocumentoBase({
+      titulo: "ANAMNESE",
+      clinica,
+      pacienteNome: paciente.nome,
+      identHTML: ident,
+      corpoHTML: linhas || `<p class="corpo-lbl">Sem campos preenchidos.</p>`,
+      rodapeHTML: rodapeAssinaturaProfissional(
+        limpo(a.profissional) || "Profissional responsável",
+        "Assinatura e carimbo (CRM)",
+      ),
+      cssExtra,
+    });
+
+    abrirImpressao(html, "Permita pop-ups para imprimir a anamnese.");
   }
 
   // Regra: só gera quem é da especialidade da ficha (em demo, minha = null → liberado).
@@ -364,15 +392,6 @@ export function AnamneseClient({
       />
     </>
   );
-}
-
-/** Escapa texto para injeção segura na janela de impressão. */
-function escapeHtml(valor: string): string {
-  return valor
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /** Distingue assinaturas novas (imagem base64) de registros legados (texto). */
