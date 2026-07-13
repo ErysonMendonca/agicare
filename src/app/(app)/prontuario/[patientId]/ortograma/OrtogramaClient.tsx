@@ -34,6 +34,7 @@ import {
   type OrtogramaVersao,
 } from "@/lib/actions/ortograma";
 import { imprimirOrtograma } from "./OrtogramaImpressao";
+import { type ClinicaImpressao } from "@/lib/clinico/documento-impressao";
 import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
@@ -71,6 +72,7 @@ export interface OrtogramaClientProps {
   herdadoDeData: string | null;
   historico: OrtogramaHistoricoItem[];
   cabecalho: {
+    clinica: ClinicaImpressao;
     paciente: string;
     nascimento: string;
     prontuario: string;

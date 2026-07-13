@@ -1,4 +1,12 @@
-import { toast } from "sonner";
+import {
+  abrirImpressao,
+  esc,
+  identPacienteHTML,
+  limpo,
+  montarDocumentoBase,
+  rodapeAssinaturaProfissional,
+  type ClinicaImpressao,
+} from "@/lib/clinico/documento-impressao";
 import {
   ARCO_INFERIOR,
   ARCO_SUPERIOR,
@@ -48,6 +56,7 @@ import {
 // ════════════════════════════════════════════════════════════════
 
 export type CabecalhoOrtograma = {
+  clinica: ClinicaImpressao;
   paciente: string;
   nascimento: string;
   prontuario: string;
@@ -57,14 +66,6 @@ export type CabecalhoOrtograma = {
   /** Nº do atendimento (queue_entries.attendance_code) em que foi gerado. */
   atendimento?: string;
 };
-
-/** "—" (placeholder do data layer) → vazio, para não poluir o documento. */
-const limpo = (v: string) => (v && v !== "—" ? v : "");
-
-/** Escapa texto para inserção segura no documento de impressão. */
-function esc(v: string): string {
-  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 /** Atributos comuns dos traços — o documento é P&B, tudo em preto. */
 const TRACO = 'fill="none" stroke="#111" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"';
@@ -235,100 +236,70 @@ function montarDocumento(
     ? `<p class="obs-livre">${esc(notes.trim()).replace(/\n/g, "<br />")}</p>`
     : "";
 
-  const campo = (rotulo: string, valor: string) =>
-    `<div><span class="label">${esc(rotulo)}</span><strong>${
-      esc(limpo(valor)) || "—"
-    }</strong></div>`;
+  const ident = identPacienteHTML(cab.paciente, [
+    { lbl: "Data de nascimento", val: limpo(cab.nascimento) || "—" },
+    { lbl: "Prontuário", val: limpo(cab.prontuario) || "—" },
+    { lbl: "Atendimento nº", val: limpo(cab.atendimento ?? "") || "—" },
+    { lbl: "Data", val: limpo(cab.data) || "—" },
+  ]);
 
-  return `<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8" />
-<title>Ortograma — ${esc(cab.paciente)}</title>
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: black; margin: 28px; line-height: 1.4; }
-  h1 { font-size: 16px; letter-spacing: 2px; text-align: center; margin: 0 0 18px; }
-  .cab { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 20px;
-         border: 1px solid black; padding: 12px; font-size: 12px; margin-bottom: 20px; }
-  .cab .label { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .5px; color: dimgray; }
-  .arco { margin-bottom: 18px; }
-  .arco h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px; }
-  .lados { display: flex; justify-content: space-around; font-size: 9px;
-           text-transform: uppercase; letter-spacing: .5px; color: dimgray; margin-bottom: 2px; }
-  .arco-tab { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  /* Sem bordas: o desenho do dente é a célula. A marcação já se lê pelo símbolo. */
-  .dente { text-align: center; padding: 1px 0; vertical-align: middle; }
-  .dente.marcado { background: transparent; }
-  .num { font-size: 9px; color: dimgray; padding: 2px 0; }
-  /* Proporções dos viewBox: oclusal 36x36 (quadrado), vestibular 36x64. */
-  .oclusal { width: 26px; height: 26px; display: block; margin: 0 auto; }
-  .vestibular { width: 24px; height: 43px; display: block; margin: 0 auto; }
-  .linha-media { width: 6px; border: 0; border-left: 2px solid black; }
-  .paineis { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; }
-  .painel { border: 1px solid black; padding: 10px 12px; }
-  .painel h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px; }
-  .painel ul { margin: 0; padding-left: 0; list-style: none; font-size: 11px; }
-  .painel li { margin-bottom: 3px; }
-  .sim { display: inline-block; width: 16px; font-weight: bold; }
-  .obs-lista li { margin-bottom: 2px; }
-  .obs-livre { font-size: 11px; margin: 8px 0 0; padding-top: 8px; border-top: 1px dashed dimgray; white-space: pre-wrap; }
-  .vazio { font-size: 11px; color: dimgray; margin: 0; }
-  table.resumo { width: 100%; border-collapse: collapse; font-size: 11px; }
-  table.resumo td { padding: 2px 0; }
-  table.resumo td.n { text-align: right; font-weight: bold; }
-  .sign { margin-top: 48px; text-align: center; }
-  .sign-line { width: 280px; margin: 0 auto; border-top: 1px solid black; padding-top: 6px; font-size: 12px; }
-  .sign-sub { font-size: 10px; color: dimgray; }
-  .foot { margin-top: 20px; font-size: 9px; color: gray; text-align: center; }
-  @media print { body { margin: 12mm; } .painel, .dente { break-inside: avoid; } }
-</style>
-</head>
-<body>
-  <h1>ORTOGRAMA</h1>
-
-  <div class="cab">
-    ${campo("Paciente", cab.paciente)}
-    ${campo("Data de nascimento", cab.nascimento)}
-    ${campo("Prontuário", cab.prontuario)}
-    ${campo("Atendimento nº", cab.atendimento ?? "—")}
-    ${campo("Data", cab.data)}
-    ${campo("Profissional", cab.profissional)}
-    ${campo("CRO", cab.cro)}
-  </div>
-
-  ${arco("Arco superior", ARCO_SUPERIOR, marcas)}
-  ${arco("Arco inferior", ARCO_INFERIOR, marcas)}
-
-  <div class="paineis">
-    <div class="painel">
-      <h3>Legenda</h3>
-      <ul>${legenda}</ul>
+  const corpo = `
+    ${arco("Arco superior", ARCO_SUPERIOR, marcas)}
+    ${arco("Arco inferior", ARCO_INFERIOR, marcas)}
+    <div class="paineis">
+      <div class="painel">
+        <h3>Legenda</h3>
+        <ul>${legenda}</ul>
+      </div>
+      <div class="painel">
+        <h3>Resumo</h3>
+        <table class="resumo"><tbody>${linhasResumo}</tbody></table>
+      </div>
     </div>
-    <div class="painel">
-      <h3>Resumo</h3>
-      <table class="resumo"><tbody>${linhasResumo}</tbody></table>
-    </div>
-  </div>
+    <div class="painel" style="margin-top:14px">
+      <h3>Observações / Anotações</h3>
+      ${auto}
+      ${livre}
+    </div>`;
 
-  <div class="painel" style="margin-top:14px">
-    <h3>Observações / Anotações</h3>
-    ${auto}
-    ${livre}
-  </div>
+  const cssExtra = `
+    /* Corpo do ortograma: sem a moldura padrão (o desenho é o conteúdo). */
+    .corpo { border: none; padding: 0; min-height: auto; }
+    .arco { margin-bottom: 18px; }
+    .arco h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px; }
+    .lados { display: flex; justify-content: space-around; font-size: 9px; text-transform: uppercase; letter-spacing: .5px; color: #555; margin-bottom: 2px; }
+    .arco-tab { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .dente { text-align: center; padding: 1px 0; vertical-align: middle; }
+    .num { font-size: 9px; color: #555; padding: 2px 0; }
+    .oclusal { width: 26px; height: 26px; display: block; margin: 0 auto; }
+    .vestibular { width: 24px; height: 43px; display: block; margin: 0 auto; }
+    .linha-media { width: 6px; border: 0; border-left: 2px solid #111; }
+    .paineis { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; }
+    .painel { border: 1px solid #888; padding: 10px 12px; }
+    .painel h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px; }
+    .painel ul { margin: 0; padding-left: 0; list-style: none; font-size: 11px; }
+    .painel li { margin-bottom: 3px; }
+    .sim { display: inline-block; width: 16px; font-weight: bold; }
+    .obs-lista li { margin-bottom: 2px; }
+    .obs-livre { font-size: 11px; margin: 8px 0 0; padding-top: 8px; border-top: 1px dashed #555; white-space: pre-wrap; }
+    .vazio { font-size: 11px; color: #555; margin: 0; }
+    table.resumo { width: 100%; border-collapse: collapse; font-size: 11px; }
+    table.resumo td { padding: 2px 0; }
+    table.resumo td.n { text-align: right; font-weight: bold; }
+    @media print { .painel, .dente { break-inside: avoid; } }`;
 
-  <div class="sign">
-    <div class="sign-line">
-      ${esc(limpo(cab.profissional) || "Profissional responsável")}
-      <div class="sign-sub">Assinatura e carimbo${
-        limpo(cab.cro) ? ` — ${esc(cab.cro)}` : " (CRO)"
-      }</div>
-    </div>
-  </div>
-
-  <div class="foot">Documento gerado eletronicamente pelo agicare.</div>
-</body>
-</html>`;
+  return montarDocumentoBase({
+    titulo: "ORTOGRAMA",
+    clinica: cab.clinica,
+    pacienteNome: cab.paciente,
+    identHTML: ident,
+    corpoHTML: corpo,
+    rodapeHTML: rodapeAssinaturaProfissional(
+      limpo(cab.profissional) || "Profissional responsável",
+      limpo(cab.cro) ? `Assinatura e carimbo — ${cab.cro}` : "Assinatura e carimbo (CRO)",
+    ),
+    cssExtra,
+  });
 }
 
 /** Abre o ortograma numa janela nova e dispara a impressão (só o documento). */
@@ -337,13 +308,8 @@ export function imprimirOrtograma(
   marcas: Marca[],
   notes: string,
 ): void {
-  const win = window.open("", "_blank", "width=900,height=1040");
-  if (!win) {
-    toast.error("Permita pop-ups para imprimir o ortograma.");
-    return;
-  }
-  win.document.write(montarDocumento(cab, marcas, notes));
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 150);
+  abrirImpressao(
+    montarDocumento(cab, marcas, notes),
+    "Permita pop-ups para imprimir o ortograma.",
+  );
 }
