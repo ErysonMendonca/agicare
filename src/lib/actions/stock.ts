@@ -14,7 +14,27 @@ import {
   linhaCompleta,
   type ProdutoImportRow,
   type ImportarProdutosResult,
+  type FalhaImportacao,
 } from "@/lib/estoque/import-produtos-shared";
+
+/** Traduz o erro do Postgres numa razão curta e amigável por linha. */
+function motivoFalhaInsert(error: { code?: string; message?: string }): string {
+  switch (error.code) {
+    case "23502":
+      return "Campo obrigatório faltando.";
+    case "23505":
+      return "Já existe (registro duplicado).";
+    case "23514":
+      return "Valor fora do permitido.";
+    case "22007":
+    case "22008":
+      return "Data de validade inválida.";
+    case "22P02":
+      return "Valor inválido (tipo incorreto).";
+    default:
+      return "Não foi possível gravar esta linha.";
+  }
+}
 
 export type ActionState =
   | { error?: string; ok?: boolean; id?: string }
@@ -1223,24 +1243,38 @@ export async function importarProdutosEmMassa(
   }));
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("stock_products")
-    .insert(registros)
-    .select("id");
 
-  if (error) {
-    console.error("importarProdutosEmMassa falhou:", error.message);
-    return { error: "Não foi possível importar os produtos." };
+  // Caminho feliz: insere tudo num único statement (rápido).
+  const bulk = await supabase.from("stock_products").insert(registros).select("id");
+
+  const falhas: FalhaImportacao[] = [];
+  let inseridos = 0;
+
+  if (!bulk.error) {
+    inseridos = bulk.data?.length ?? 0;
+  } else {
+    // Uma linha derrubou o lote inteiro (insert é atômico). Refaz LINHA A LINHA
+    // para gravar as boas e reportar exatamente quais falharam e por quê.
+    for (let i = 0; i < registros.length; i++) {
+      const { error } = await supabase.from("stock_products").insert(registros[i]);
+      if (error) {
+        falhas.push({
+          nome: registros[i].name,
+          motivo: motivoFalhaInsert(error),
+        });
+      } else {
+        inseridos += 1;
+      }
+    }
   }
 
-  const inseridos = data?.length ?? 0;
   await logAction({
     action: "create",
     module: "estoque",
-    summary: `Importou ${inseridos} produto(s) em massa (Excel)`,
+    summary: `Importou ${inseridos} produto(s) em massa (Excel)${falhas.length ? ` — ${falhas.length} falha(s)` : ""}`,
     entity: "stock_products",
   });
 
   revalidateEstoque();
-  return { ok: true, inseridos };
+  return { ok: true, inseridos, falhas };
 }
