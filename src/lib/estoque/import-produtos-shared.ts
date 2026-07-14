@@ -69,6 +69,9 @@ export function chaveNome(descricao: string): string {
     .replace(/\s+/g, " ");
 }
 
+/** Falha de uma linha específica no insert (reporte por produto). */
+export type FalhaImportacao = { nome: string; motivo: string };
+
 export type ImportarProdutosResult =
-  | { ok: true; inseridos: number }
+  | { ok: true; inseridos: number; falhas: FalhaImportacao[] }
   | { ok?: false; error: string };

@@ -26,6 +26,7 @@ import {
   linhaCompleta,
   chaveNome,
   type ProdutoImportRow,
+  type FalhaImportacao,
 } from "@/lib/estoque/import-produtos-shared";
 import { importarProdutosEmMassa } from "@/lib/actions/stock";
 
@@ -87,6 +88,9 @@ export function ImportarProdutosClient({
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<GridRow[]>([]);
   const [salvando, setSalvando] = useState(false);
+  const [falhas, setFalhas] = useState<FalhaImportacao[]>([]);
+  // Erro/dica de upload (persistente, com orientação de como corrigir).
+  const [erroUpload, setErroUpload] = useState<{ titulo: string; dica: string } | null>(null);
 
   // Nomes já cadastrados na clínica (normalizados) p/ detectar duplicados.
   const existentesSet = useMemo(
@@ -178,75 +182,144 @@ export function ImportarProdutosClient({
   // ---- Upload / parse -------------------------------------------------------
   const handleFile = useCallback(
     async (file: File) => {
+      // Falha guiada: mostra a dica na tela (persistente) + toast, e para.
+      const falhar = (titulo: string, dica: string) => {
+        setErroUpload({ titulo, dica });
+        toast.error(titulo);
+      };
+      setErroUpload(null);
+      setFalhas([]);
+
+      // 1) Formato do arquivo — antes de tentar ler.
+      const ext = file.name.toLowerCase().split(".").pop() ?? "";
+      if (!["xlsx", "xls"].includes(ext)) {
+        falhar(
+          `Formato não suportado (.${ext || "?"}).`,
+          'Envie uma planilha Excel .xlsx. Clique em "Baixar modelo .xlsx", preencha nele e envie esse arquivo.',
+        );
+        return;
+      }
+
+      let wb: XLSX.WorkBook;
       try {
-        const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: "array" });
-        const sheetName =
-          wb.SheetNames.find((n) => n.toLowerCase() === "produtos") ??
-          wb.SheetNames[0];
-        const ws = wb.Sheets[sheetName];
-        if (!ws) {
-          toast.error("Planilha vazia ou sem aba de dados.");
-          return;
-        }
-        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
-          defval: "",
-        });
-        if (json.length === 0) {
-          toast.error("Nenhuma linha encontrada na planilha.");
-          return;
-        }
-        // Valida que existe a coluna Descrição (case-insensitive).
-        const chaves = Object.keys(json[0]);
-        const kDescricao = chaves.find(
-          (k) => k.trim().toLowerCase() === "descrição" || k.trim().toLowerCase() === "descricao",
-        );
-        if (!kDescricao) {
-          toast.error('A planilha precisa ter a coluna "Descrição".');
-          return;
-        }
-        const kUnidade = chaves.find((k) => k.trim().toLowerCase() === "unidade");
-        const kQtd = chaves.find((k) => k.trim().toLowerCase() === "quantidade");
-        const kBarras = chaves.find(
-          (k) =>
-            k.trim().toLowerCase() === "código de barras" ||
-            k.trim().toLowerCase() === "codigo de barras",
-        );
-
-        const parsed: GridRow[] = json
-          .map((r) => {
-            const descricao = String(r[kDescricao] ?? "").trim();
-            const unidade = kUnidade ? String(r[kUnidade] ?? "").trim() : "";
-            return novaGridRow({
-              descricao,
-              unidade: unidade || "un",
-              quantidade: kQtd ? parseQuantidade(r[kQtd]) : 0,
-              codigoBarras: kBarras ? codigoBarrasTexto(r[kBarras]) : "",
-              grupo: "",
-              classificacao: "",
-              subclassificacao: "",
-              lote: "",
-              validade: "",
-            });
-          })
-          .filter((r) => r.descricao !== "");
-
-        if (parsed.length === 0) {
-          toast.error("Nenhuma linha com Descrição preenchida.");
-          return;
-        }
-        if (parsed.length > MAX_IMPORT) {
-          toast.error(
-            `A planilha tem ${parsed.length} produtos. O máximo por importação é ${MAX_IMPORT} — divida em partes.`,
-          );
-          return;
-        }
-        setRows(parsed);
-        toast.success(
-          `${parsed.length} produto(s) carregado(s). Classifique cada um antes de salvar.`,
-        );
+        wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
       } catch {
-        toast.error("Não foi possível ler o arquivo. Envie um .xlsx válido.");
+        falhar(
+          "Não foi possível ler o arquivo.",
+          "Ele pode estar corrompido ou não ser um Excel válido. Baixe o modelo e preencha nele.",
+        );
+        return;
+      }
+
+      // 2) Aba de dados — preferir "Produtos"; avisar se preencheu na errada.
+      const temProdutos = wb.SheetNames.some((n) => n.toLowerCase() === "produtos");
+      const sheetName =
+        wb.SheetNames.find((n) => n.toLowerCase() === "produtos") ??
+        wb.SheetNames[0];
+      const ws = sheetName ? wb.Sheets[sheetName] : undefined;
+      if (!ws) {
+        falhar(
+          "A planilha não tem nenhuma aba com dados.",
+          "Use o modelo e preencha os produtos na aba \"Produtos\".",
+        );
+        return;
+      }
+      if (!temProdutos && sheetName.toLowerCase() === "instruções") {
+        falhar(
+          'Você preencheu na aba errada ("Instruções").',
+          'Preencha os produtos na aba "Produtos" do modelo e envie novamente.',
+        );
+        return;
+      }
+
+      const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+        defval: "",
+      });
+
+      // 3) Cabeçalho / coluna Descrição.
+      const chaves = json.length > 0 ? Object.keys(json[0]) : [];
+      const kDescricao = chaves.find(
+        (k) =>
+          k.trim().toLowerCase() === "descrição" ||
+          k.trim().toLowerCase() === "descricao",
+      );
+      if (!kDescricao) {
+        falhar(
+          'Não encontrei a coluna "Descrição".',
+          'A 1ª linha da aba precisa ser o cabeçalho (Descrição, Unidade, Quantidade, Código de barras). Se você colocou um título acima do cabeçalho, remova essa linha. Na dúvida, baixe o modelo.',
+        );
+        return;
+      }
+
+      // 4) Conteúdo.
+      if (json.length === 0) {
+        falhar(
+          "A planilha só tem o cabeçalho, sem produtos.",
+          "Preencha pelo menos uma linha na aba \"Produtos\".",
+        );
+        return;
+      }
+
+      const kUnidade = chaves.find((k) => k.trim().toLowerCase() === "unidade");
+      const kQtd = chaves.find((k) => k.trim().toLowerCase() === "quantidade");
+      const kBarras = chaves.find(
+        (k) =>
+          k.trim().toLowerCase() === "código de barras" ||
+          k.trim().toLowerCase() === "codigo de barras",
+      );
+
+      let qtdInvalidas = 0; // Quantidade preenchida mas não numérica → virou 0.
+      const parsed: GridRow[] = json
+        .map((r) => {
+          const descricao = String(r[kDescricao] ?? "").trim();
+          const unidade = kUnidade ? String(r[kUnidade] ?? "").trim() : "";
+          const qtdRaw = kQtd ? r[kQtd] : "";
+          const quantidade = parseQuantidade(qtdRaw);
+          if (
+            descricao !== "" &&
+            String(qtdRaw ?? "").trim() !== "" &&
+            quantidade === 0 &&
+            String(qtdRaw).trim() !== "0"
+          ) {
+            qtdInvalidas += 1;
+          }
+          return novaGridRow({
+            descricao,
+            unidade: unidade || "un",
+            quantidade,
+            codigoBarras: kBarras ? codigoBarrasTexto(r[kBarras]) : "",
+            grupo: "",
+            classificacao: "",
+            subclassificacao: "",
+            lote: "",
+            validade: "",
+          });
+        })
+        .filter((r) => r.descricao !== "");
+
+      if (parsed.length === 0) {
+        falhar(
+          "Nenhuma linha tem Descrição preenchida.",
+          'A coluna "Descrição" é obrigatória em cada produto. Preencha e envie novamente.',
+        );
+        return;
+      }
+      if (parsed.length > MAX_IMPORT) {
+        falhar(
+          `A planilha tem ${parsed.length} produtos (máx. ${MAX_IMPORT}).`,
+          `Divida em arquivos de até ${MAX_IMPORT} produtos e importe em partes.`,
+        );
+        return;
+      }
+
+      setRows(parsed);
+      toast.success(
+        `${parsed.length} produto(s) carregado(s). Classifique cada um antes de salvar.`,
+      );
+      if (qtdInvalidas > 0) {
+        toast.warning(
+          `${qtdInvalidas} linha(s) tinham Quantidade inválida e ficaram como 0 — ajuste na grade se precisar.`,
+        );
       }
     },
     [],
@@ -314,6 +387,7 @@ export function ImportarProdutosClient({
   const salvar = useCallback(async () => {
     if (bloqueado) return;
     setSalvando(true);
+    setFalhas([]);
     try {
       // Envia só as linhas incluídas + completas; descarta campos de UI
       // (_id, manterDup) antes de mandar ao servidor.
@@ -321,19 +395,44 @@ export function ImportarProdutosClient({
         ({ _id: _drop, manterDup: _m, ...r }) => r,
       );
       const res = await importarProdutosEmMassa(payload);
-      if (res.ok) {
+      if (!res.ok) {
+        toast.error(res.error ?? "Falha ao importar produtos.");
+        return;
+      }
+      // Tudo entrou → sucesso e sai da tela.
+      if (res.falhas.length === 0) {
         toast.success(`${res.inseridos} produtos importados`);
         router.push("/estoque");
         router.refresh();
-      } else {
-        toast.error(res.error ?? "Falha ao importar produtos.");
+        return;
       }
+      // Importação PARCIAL: mantém na grade só as linhas que falharam
+      // (as que entraram somem) + os duplicados excluídos, e lista os motivos.
+      setFalhas(res.falhas);
+      const chavesFalhas = new Set(res.falhas.map((f) => chaveNome(f.nome)));
+      setRows((prev) =>
+        prev.filter(
+          (r) =>
+            !(incluida(r) && linhaCompleta(r)) ||
+            chavesFalhas.has(chaveNome(r.descricao)),
+        ),
+      );
+      if (res.inseridos > 0) {
+        toast.warning(
+          `${res.inseridos} importado(s), ${res.falhas.length} com erro — veja os motivos abaixo.`,
+        );
+      } else {
+        toast.error(
+          `Nenhum produto importado — ${res.falhas.length} com erro. Veja os motivos abaixo.`,
+        );
+      }
+      router.refresh();
     } catch {
       toast.error("Erro inesperado ao importar produtos.");
     } finally {
       setSalvando(false);
     }
-  }, [bloqueado, paraSalvar, router]);
+  }, [bloqueado, paraSalvar, incluida, router]);
 
   return (
     <Stagger className="mt-6 space-y-4">
@@ -368,8 +467,51 @@ export function ImportarProdutosClient({
               grade.
             </p>
           </div>
+
+          {/* Dica de formato (guia ANTES do upload) */}
+          <ul className="mt-3 space-y-1 border-t border-line pt-3 text-xs text-muted">
+            <li>• Arquivo <strong>.xlsx</strong> (use o modelo). Aba de dados: <strong>Produtos</strong>.</li>
+            <li>• 1ª linha = cabeçalho: <strong>Descrição</strong> (obrigatória), Unidade, Quantidade, Código de barras. Sem título acima do cabeçalho.</li>
+            <li>• Código de barras: formate a coluna como <strong>Texto</strong> (evita perder zeros / virar 7,8E+12).</li>
+            <li>• Classificação, Lote e Validade são preenchidos aqui na grade — não na planilha.</li>
+          </ul>
+
+          {/* Erro de upload com orientação de como corrigir */}
+          {erroUpload && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-status-danger/30 bg-status-danger/5 p-3 text-sm">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-danger" />
+              <div>
+                <p className="font-medium text-status-danger">{erroUpload.titulo}</p>
+                <p className="mt-0.5 text-muted">{erroUpload.dica}</p>
+              </div>
+            </div>
+          )}
         </Card>
       </FadeInUp>
+
+      {/* Falhas por linha após uma importação parcial */}
+      {falhas.length > 0 && (
+        <FadeInUp>
+          <Card className="border-status-danger/30 p-5">
+            <div className="mb-2 flex items-center gap-2 text-sm font-medium text-status-danger">
+              <AlertTriangle className="h-4 w-4" />
+              {falhas.length} produto(s) não foram importados
+            </div>
+            <p className="mb-3 text-xs text-muted">
+              Estas linhas continuam na grade abaixo para você corrigir e salvar
+              de novo. As demais já foram importadas.
+            </p>
+            <ul className="space-y-1 text-sm">
+              {falhas.map((f, i) => (
+                <li key={i} className="flex flex-wrap gap-x-2">
+                  <span className="font-medium text-ink">{f.nome || "(sem nome)"}</span>
+                  <span className="text-status-danger">— {f.motivo}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </FadeInUp>
+      )}
 
       {rows.length > 0 && (
         <FadeInUp>
@@ -457,7 +599,11 @@ export function ImportarProdutosClient({
           <div className="flex flex-wrap items-center justify-end gap-3">
             <Button
               variant="ghost"
-              onClick={() => setRows([])}
+              onClick={() => {
+                setRows([]);
+                setFalhas([]);
+                setErroUpload(null);
+              }}
               disabled={salvando}
             >
               Limpar tudo
