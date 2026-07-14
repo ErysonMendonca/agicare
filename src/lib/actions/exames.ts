@@ -19,6 +19,7 @@ const criarSchema = z.object({
   tuss_code: z.string().trim().optional(),
   category: z.enum(["laboratorial", "imagem"]).default("laboratorial"),
   notes: z.string().trim().optional(),
+  laterality: z.string().trim().optional(),
 });
 
 export type CriarPedidoExameInput = z.infer<typeof criarSchema>;
@@ -58,6 +59,7 @@ export async function criarPedidoExame(
     category: d.category,
     status: "solicitado",
     notes: d.notes || null,
+    laterality: d.laterality && d.laterality !== "Não se aplica" ? d.laterality : null,
   });
   if (error) return { error: error.message };
 
@@ -107,6 +109,7 @@ const editarSchema = z.object({
   tuss_code: z.string().trim().optional(),
   category: z.enum(["laboratorial", "imagem"]),
   notes: z.string().trim().optional(),
+  laterality: z.string().trim().optional(),
 });
 
 export type EditarPedidoExameInput = z.infer<typeof editarSchema>;
@@ -152,6 +155,7 @@ export async function editarExame(
       tuss_code: d.tuss_code || null,
       category: d.category,
       notes: d.notes || null,
+      laterality: d.laterality && d.laterality !== "Não se aplica" ? d.laterality : null,
     })
     .eq("id", d.id)
     .eq("patient_id", d.patientId)
