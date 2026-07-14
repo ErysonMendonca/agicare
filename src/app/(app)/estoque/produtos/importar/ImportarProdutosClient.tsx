@@ -24,6 +24,7 @@ import {
   COLUNAS_MODELO,
   linhaVazia,
   linhaCompleta,
+  chaveNome,
   type ProdutoImportRow,
 } from "@/lib/estoque/import-produtos-shared";
 import { importarProdutosEmMassa } from "@/lib/actions/stock";
@@ -56,8 +57,12 @@ function codigoBarrasTexto(raw: unknown): string {
   return String(raw ?? "").trim();
 }
 
-/** Linha da grade com id estável (React key) — o id não vai para o servidor. */
-type GridRow = ProdutoImportRow & { _id: string };
+/** Linha da grade com id estável (React key) e flag de UI — nada disso vai
+ *  para o servidor. `manterDup` = importar mesmo sendo duplicado. */
+type GridRow = ProdutoImportRow & { _id: string; manterDup?: boolean };
+
+/** Info de duplicidade calculada por linha. */
+type DupInfo = { plan: boolean; exist: boolean };
 
 let _seq = 0;
 function novaGridRow(base?: ProdutoImportRow): GridRow {
@@ -73,16 +78,65 @@ function opcoes(nos: ProductCategoryNode[], valor: string): string[] {
 
 export function ImportarProdutosClient({
   categorias,
+  nomesExistentes,
 }: {
   categorias: ProductCategoryNode[];
+  nomesExistentes: string[];
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<GridRow[]>([]);
   const [salvando, setSalvando] = useState(false);
 
-  const prontos = useMemo(() => rows.filter(linhaCompleta).length, [rows]);
-  const temIncompleta = rows.length > 0 && prontos < rows.length;
+  // Nomes já cadastrados na clínica (normalizados) p/ detectar duplicados.
+  const existentesSet = useMemo(
+    () => new Set(nomesExistentes.map(chaveNome).filter((k) => k !== "")),
+    [nomesExistentes],
+  );
+
+  // Duplicidade por linha: `plan` = nome repetido ANTES na própria planilha;
+  // `exist` = nome já existe no catálogo da clínica.
+  const dupInfo = useMemo(() => {
+    const seen = new Set<string>();
+    const info: Record<string, DupInfo> = {};
+    for (const r of rows) {
+      const k = chaveNome(r.descricao);
+      const plan = k !== "" && seen.has(k);
+      const exist = k !== "" && existentesSet.has(k);
+      if (k !== "") seen.add(k);
+      info[r._id] = { plan, exist };
+    }
+    return info;
+  }, [rows, existentesSet]);
+
+  const isDup = useCallback(
+    (r: GridRow) => {
+      const d = dupInfo[r._id];
+      return !!d && (d.plan || d.exist);
+    },
+    [dupInfo],
+  );
+  // Uma linha ENTRA no salvamento se não for duplicada, ou se o usuário marcou
+  // "importar assim mesmo". Duplicadas não-mantidas são ignoradas (não bloqueiam).
+  const incluida = useCallback(
+    (r: GridRow) => !isDup(r) || !!r.manterDup,
+    [isDup],
+  );
+
+  const paraSalvar = useMemo(
+    () => rows.filter((r) => incluida(r) && linhaCompleta(r)),
+    [rows, incluida],
+  );
+  const incluidasIncompletas = useMemo(
+    () => rows.filter((r) => incluida(r) && !linhaCompleta(r)).length,
+    [rows, incluida],
+  );
+  const duplicadosExcluidos = useMemo(
+    () => rows.filter((r) => isDup(r) && !r.manterDup).length,
+    [rows, isDup],
+  );
+  const bloqueado = paraSalvar.length === 0 || incluidasIncompletas > 0;
+  const prontos = paraSalvar.length;
 
   // ---- Baixar modelo .xlsx --------------------------------------------------
   const baixarModelo = useCallback(() => {
@@ -213,6 +267,28 @@ export function ImportarProdutosClient({
     setRows((prev) => [...prev, novaGridRow()]);
   }, []);
 
+  const toggleManter = useCallback((id: string) => {
+    setRows((prev) =>
+      prev.map((r) => (r._id === id ? { ...r, manterDup: !r.manterDup } : r)),
+    );
+  }, []);
+
+  // Remove as linhas duplicadas que NÃO foram marcadas "importar assim mesmo".
+  // Recalcula a duplicidade aqui dentro para não depender de estado defasado.
+  const removerDuplicados = useCallback(() => {
+    setRows((prev) => {
+      const seen = new Set<string>();
+      return prev.filter((r) => {
+        const k = chaveNome(r.descricao);
+        const plan = k !== "" && seen.has(k);
+        const exist = k !== "" && existentesSet.has(k);
+        if (k !== "") seen.add(k);
+        const dup = plan || exist;
+        return !dup || r.manterDup; // mantém não-duplicados e os forçados
+      });
+    });
+  }, [existentesSet]);
+
   const copiarClassificacao = useCallback(() => {
     setRows((prev) => {
       if (prev.length === 0) return prev;
@@ -236,11 +312,14 @@ export function ImportarProdutosClient({
 
   // ---- Salvar ---------------------------------------------------------------
   const salvar = useCallback(async () => {
-    if (temIncompleta || rows.length === 0) return;
+    if (bloqueado) return;
     setSalvando(true);
     try {
-      // Descarta o _id (interno da UI) antes de enviar ao servidor.
-      const payload: ProdutoImportRow[] = rows.map(({ _id: _drop, ...r }) => r);
+      // Envia só as linhas incluídas + completas; descarta campos de UI
+      // (_id, manterDup) antes de mandar ao servidor.
+      const payload: ProdutoImportRow[] = paraSalvar.map(
+        ({ _id: _drop, manterDup: _m, ...r }) => r,
+      );
       const res = await importarProdutosEmMassa(payload);
       if (res.ok) {
         toast.success(`${res.inseridos} produtos importados`);
@@ -254,7 +333,7 @@ export function ImportarProdutosClient({
     } finally {
       setSalvando(false);
     }
-  }, [rows, temIncompleta, router]);
+  }, [bloqueado, paraSalvar, router]);
 
   return (
     <Stagger className="mt-6 space-y-4">
@@ -297,22 +376,37 @@ export function ImportarProdutosClient({
           <Card className="overflow-hidden">
             {/* Barra de status + conveniências */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-              <div className="flex items-center gap-2 text-sm">
-                {temIncompleta ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                {incluidasIncompletas > 0 ? (
                   <AlertTriangle className="h-4 w-4 text-status-warn" />
                 ) : (
                   <CheckCircle2 className="h-4 w-4 text-status-ok" />
                 )}
                 <span className="font-medium text-ink">
-                  {prontos} de {rows.length} prontos
+                  {prontos} para salvar
                 </span>
-                {temIncompleta && (
-                  <span className="text-muted">
-                    — classifique as linhas destacadas
+                <span className="text-muted">de {rows.length} linha(s)</span>
+                {incluidasIncompletas > 0 && (
+                  <span className="text-status-warn">
+                    · {incluidasIncompletas} a classificar
+                  </span>
+                )}
+                {duplicadosExcluidos > 0 && (
+                  <span className="text-status-danger">
+                    · {duplicadosExcluidos} duplicado(s) fora
                   </span>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {duplicadosExcluidos > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={removerDuplicados}
+                  >
+                    <Trash2 className="h-4 w-4" /> Remover duplicados
+                  </Button>
+                )}
                 <Button size="sm" variant="ghost" onClick={copiarClassificacao}>
                   <CopyCheck className="h-4 w-4" /> Copiar classificação da 1ª
                   linha
@@ -344,8 +438,11 @@ export function ImportarProdutosClient({
                       key={r._id}
                       row={r}
                       categorias={categorias}
+                      dupPlanilha={dupInfo[r._id]?.plan ?? false}
+                      dupExistente={dupInfo[r._id]?.exist ?? false}
                       onChange={updateRow}
                       onRemove={removeRow}
+                      onToggleManter={toggleManter}
                     />
                   ))}
                 </tbody>
@@ -368,16 +465,16 @@ export function ImportarProdutosClient({
             <Button
               variant="primary"
               onClick={salvar}
-              disabled={temIncompleta || rows.length === 0 || salvando}
+              disabled={bloqueado || salvando}
               title={
-                temIncompleta
-                  ? "Classifique todas as linhas antes de salvar"
+                bloqueado
+                  ? "Classifique as linhas incluídas antes de salvar"
                   : undefined
               }
             >
               {salvando
                 ? "Salvando..."
-                : `Salvar ${rows.length} produto${rows.length > 1 ? "s" : ""}`}
+                : `Salvar ${prontos} produto${prontos !== 1 ? "s" : ""}`}
             </Button>
           </div>
         </FadeInUp>
@@ -392,15 +489,24 @@ export function ImportarProdutosClient({
 const LinhaGrade = memo(function LinhaGrade({
   row,
   categorias,
+  dupPlanilha,
+  dupExistente,
   onChange,
   onRemove,
+  onToggleManter,
 }: {
   row: GridRow;
   categorias: ProductCategoryNode[];
+  dupPlanilha: boolean;
+  dupExistente: boolean;
   onChange: (id: string, patch: Partial<ProdutoImportRow>) => void;
   onRemove: (id: string) => void;
+  onToggleManter: (id: string) => void;
 }) {
   const completa = linhaCompleta(row);
+  const duplicado = dupPlanilha || dupExistente;
+  // Duplicado sem "importar assim mesmo" → destaque vermelho e fora do save.
+  const dupExcluido = duplicado && !row.manterDup;
 
   const noGrupo = categorias.find((g) => g.label === row.grupo);
   const noClassif = noGrupo?.children.find((c) => c.label === row.classificacao);
@@ -412,14 +518,14 @@ const LinhaGrade = memo(function LinhaGrade({
   const semGrupo = row.grupo === "";
   const semClassif = row.classificacao === "";
 
+  const trCls = dupExcluido
+    ? "border-b border-l-2 border-l-status-danger border-line bg-status-danger/5 last:border-b-0"
+    : completa
+      ? "border-b border-line last:border-0"
+      : "border-b border-l-2 border-l-status-warn border-line bg-status-warn/5 last:border-b-0";
+
   return (
-    <tr
-      className={
-        completa
-          ? "border-b border-line last:border-0"
-          : "border-b border-l-2 border-l-status-warn border-line bg-status-warn/5 last:border-b-0"
-      }
-    >
+    <tr className={trCls}>
       <td className="px-3 py-2 align-top">
         <Input
           aria-label="Descrição"
@@ -430,6 +536,29 @@ const LinhaGrade = memo(function LinhaGrade({
           onChange={(e) => onChange(row._id, { descricao: e.target.value })}
           className="min-w-[220px]"
         />
+        {duplicado && (
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span
+              className={
+                "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium " +
+                (dupExcluido
+                  ? "bg-status-danger/10 text-status-danger"
+                  : "bg-muted/10 text-muted")
+              }
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {dupExistente ? "Já existe no estoque" : "Repetido na planilha"}
+            </span>
+            <label className="flex cursor-pointer items-center gap-1 text-[11px] text-muted">
+              <input
+                type="checkbox"
+                checked={!!row.manterDup}
+                onChange={() => onToggleManter(row._id)}
+              />
+              Importar assim mesmo
+            </label>
+          </div>
+        )}
       </td>
       <td className="px-3 py-2 align-top">
         <Input
