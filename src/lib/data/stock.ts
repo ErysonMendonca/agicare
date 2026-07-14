@@ -62,6 +62,23 @@ function fmtValidade(iso: string | null): string {
 }
 
 /** Lista produtos de estoque: do banco quando configurado, mock no modo demo. */
+/**
+ * Nomes/Descrições dos produtos JÁ cadastrados na clínica (RLS escopa por
+ * clinic_id). Usado pela importação em massa para detectar duplicados contra
+ * o catálogo existente. Só nomes ativos e inativos entram (duplicado é
+ * duplicado independente do status). Resiliente: erro → lista vazia.
+ */
+export async function listNomesProdutosClinica(): Promise<string[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stock_products")
+    .select("name");
+  if (error || !data) return [];
+  return data
+    .map((p) => (p.name as string | null) ?? "")
+    .filter((n) => n !== "");
+}
+
 export async function listStockProducts(): Promise<ProdutoEstoque[]> {
 
   const supabase = await createClient();

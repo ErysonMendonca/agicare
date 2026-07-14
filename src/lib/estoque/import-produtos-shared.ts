@@ -55,6 +55,20 @@ export function linhaCompleta(r: ProdutoImportRow): boolean {
   );
 }
 
+/**
+ * Chave de comparação de duplicidade por NOME/Descrição: minúsculas, sem
+ * acentos, espaços colapsados. Usada tanto para duplicados DENTRO da planilha
+ * quanto contra os produtos JÁ cadastrados na clínica.
+ */
+export function chaveNome(descricao: string): string {
+  return descricao
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 export type ImportarProdutosResult =
   | { ok: true; inseridos: number }
   | { ok?: false; error: string };
