@@ -28,6 +28,34 @@ import {
 } from "@/lib/estoque/import-produtos-shared";
 import { importarProdutosEmMassa } from "@/lib/actions/stock";
 
+/** Teto por importação (espelha o limite da Server Action). */
+const MAX_IMPORT = 1000;
+
+/** Quantidade tolerante a decimal com vírgula (pt-BR) e a texto/lixo → 0. */
+function parseQuantidade(raw: unknown): number {
+  if (typeof raw === "number") return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  let s = String(raw ?? "").trim();
+  if (s === "") return 0;
+  // Se tem vírgula, é pt-BR: ponto vira separador de milhar, vírgula é decimal.
+  // Sem vírgula, mantém como está (ponto = decimal ou inteiro).
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * Código de barras SEM notação científica: se o Excel entregou um número
+ * (ex.: 7891234567890), converte para inteiro em string em vez de "7.8e12".
+ * (Zeros à esquerda já se perdem no próprio Excel — por isso o modelo pede
+ * a coluna como texto.)
+ */
+function codigoBarrasTexto(raw: unknown): string {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return Number.isInteger(raw) ? raw.toFixed(0) : String(raw);
+  }
+  return String(raw ?? "").trim();
+}
+
 /** Linha da grade com id estável (React key) — o id não vai para o servidor. */
 type GridRow = ProdutoImportRow & { _id: string };
 
@@ -60,35 +88,34 @@ export function ImportarProdutosClient({
   const baixarModelo = useCallback(() => {
     const wb = XLSX.utils.book_new();
 
-    const exemplo = [
-      "Dipirona Sódica 500mg/mL",
-      "un",
-      100,
-      "7891234567890",
-    ];
-    const wsProdutos = XLSX.utils.aoa_to_sheet([
-      [...COLUNAS_MODELO],
-      exemplo,
-    ]);
-    wsProdutos["!cols"] = [{ wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 20 }];
+    // SÓ o cabeçalho — sem linha de exemplo de dados (uma linha de exemplo
+    // acabaria importada como produto real se o usuário não a apagasse).
+    const wsProdutos = XLSX.utils.aoa_to_sheet([[...COLUNAS_MODELO]]);
+    wsProdutos["!cols"] = [{ wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 22 }];
+    // Formata a coluna "Código de barras" (D) como TEXTO para o Excel não
+    // converter o código em número (que perde zeros à esquerda / vira 7.8E+12).
+    // Marca o cabeçalho como texto e deixa o formato de coluna como '@'.
+    const d1 = wsProdutos["D1"];
+    if (d1) d1.z = "@";
     XLSX.utils.book_append_sheet(wb, wsProdutos, "Produtos");
 
     const wsInstrucoes = XLSX.utils.aoa_to_sheet([
       ["Como usar este modelo"],
       [""],
-      ["1. Preencha uma linha por produto na aba \"Produtos\"."],
-      ["2. Colunas obrigatórias na planilha: Descrição."],
+      ['1. Preencha uma linha por produto na aba "Produtos".'],
+      ["2. Coluna obrigatória na planilha: Descrição."],
       ["   Unidade (ex.: un, cx, mL), Quantidade e Código de barras são opcionais."],
-      ["3. Salve o arquivo e faça o upload na tela Importar Produtos."],
-      [
-        "4. Na tela você vai CLASSIFICAR cada produto (Grupo, Classificação e",
-      ],
-      [
-        "   Subclassificação) e informar Lote/Validade — não preencha isso aqui.",
-      ],
-      ["5. Confira a grade e clique em Salvar."],
+      ["3. Quantidade: use ponto ou vírgula para decimais (ex.: 1.5 ou 1,5)."],
+      ["4. Código de barras: formate a coluna como TEXTO (ou comece com um"],
+      ["   apóstrofo ') para não perder zeros à esquerda nem virar 7,8E+12."],
+      ["5. NÃO preencha classificação/lote/validade aqui — isso é feito na tela."],
+      ["6. Salve o arquivo e faça o upload na tela Importar Produtos."],
+      ["7. Na tela: classifique cada produto (Grupo, Classificação,"],
+      ["   Subclassificação) e informe Lote/Validade; depois clique em Salvar."],
+      [""],
+      ["Exemplo de linha (aba Produtos): Dipirona Sódica 500mg/mL | un | 100 | 7891234567890"],
     ]);
-    wsInstrucoes["!cols"] = [{ wch: 70 }];
+    wsInstrucoes["!cols"] = [{ wch: 80 }];
     XLSX.utils.book_append_sheet(wb, wsInstrucoes, "Instruções");
 
     XLSX.writeFile(wb, "modelo-produtos-agicare.xlsx");
@@ -136,14 +163,11 @@ export function ImportarProdutosClient({
           .map((r) => {
             const descricao = String(r[kDescricao] ?? "").trim();
             const unidade = kUnidade ? String(r[kUnidade] ?? "").trim() : "";
-            const qtdRaw = kQtd ? r[kQtd] : 0;
-            const quantidade = Number(qtdRaw);
-            const codigoBarras = kBarras ? String(r[kBarras] ?? "").trim() : "";
             return novaGridRow({
               descricao,
               unidade: unidade || "un",
-              quantidade: Number.isFinite(quantidade) ? quantidade : 0,
-              codigoBarras,
+              quantidade: kQtd ? parseQuantidade(r[kQtd]) : 0,
+              codigoBarras: kBarras ? codigoBarrasTexto(r[kBarras]) : "",
               grupo: "",
               classificacao: "",
               subclassificacao: "",
@@ -155,6 +179,12 @@ export function ImportarProdutosClient({
 
         if (parsed.length === 0) {
           toast.error("Nenhuma linha com Descrição preenchida.");
+          return;
+        }
+        if (parsed.length > MAX_IMPORT) {
+          toast.error(
+            `A planilha tem ${parsed.length} produtos. O máximo por importação é ${MAX_IMPORT} — divida em partes.`,
+          );
           return;
         }
         setRows(parsed);
