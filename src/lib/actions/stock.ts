@@ -10,6 +10,11 @@ import {
   listItensPrescritosPaciente,
   type ItemPrescrito,
 } from "@/lib/data/stock";
+import {
+  linhaCompleta,
+  type ProdutoImportRow,
+  type ImportarProdutosResult,
+} from "@/lib/estoque/import-produtos-shared";
 
 export type ActionState =
   | { error?: string; ok?: boolean; id?: string }
@@ -1168,4 +1173,74 @@ export async function fecharInventario(id: string): Promise<ActionState> {
   });
   revalidateEstoque();
   return { ok: true };
+}
+
+// ── Importação em massa de produtos (Excel) ─────────────────────────
+// Recebe as linhas já preenchidas/classificadas na grade da tela de
+// importação e insere todas em `stock_products` numa única operação.
+// Gate de GESTOR (mesmo do cadastro), escopo por clinic_id. Categorias são
+// gravadas como LABEL de texto (mesmo modelo do cadastro atual; a 0105 é
+// aditiva). code/code_number ficam a cargo do trigger 0058.
+export async function importarProdutosEmMassa(
+  rows: ProdutoImportRow[],
+): Promise<ImportarProdutosResult> {
+  const clinicId = await getActiveClinicId();
+  if (!clinicId) return { error: SEM_CLINICA_ERR };
+
+  const gestor = await isGestor();
+  if (!gestor) {
+    return { error: "Apenas o gestor pode importar produtos." };
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { error: "Nenhum produto para importar." };
+  }
+  if (rows.length > 1000) {
+    return { error: "Importe no máximo 1000 produtos por vez." };
+  }
+
+  // Só entram linhas COMPLETAS (Descrição + as 3 categorias). Se alguma linha
+  // veio incompleta, barra tudo — a tela já bloqueia, isto é defesa no servidor.
+  const incompletas = rows.filter((r) => !linhaCompleta(r));
+  if (incompletas.length > 0) {
+    return {
+      error: `${incompletas.length} produto(s) sem Descrição ou classificação completa.`,
+    };
+  }
+
+  const registros = rows.map((r) => ({
+    clinic_id: clinicId,
+    name: r.descricao.trim(),
+    unit: r.unidade.trim() || "un",
+    quantity: Number.isFinite(r.quantidade) && r.quantidade > 0 ? r.quantidade : 0,
+    barcode: r.codigoBarras.trim() || null,
+    product_group: r.grupo.trim(),
+    classification: r.classificacao.trim(),
+    subclassification: r.subclassificacao.trim(),
+    lot: r.lote.trim() || null,
+    expiry: r.validade.trim() || null,
+    active: true,
+  }));
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("stock_products")
+    .insert(registros)
+    .select("id");
+
+  if (error) {
+    console.error("importarProdutosEmMassa falhou:", error.message);
+    return { error: "Não foi possível importar os produtos." };
+  }
+
+  const inseridos = data?.length ?? 0;
+  await logAction({
+    action: "create",
+    module: "estoque",
+    summary: `Importou ${inseridos} produto(s) em massa (Excel)`,
+    entity: "stock_products",
+  });
+
+  revalidateEstoque();
+  return { ok: true, inseridos };
 }
