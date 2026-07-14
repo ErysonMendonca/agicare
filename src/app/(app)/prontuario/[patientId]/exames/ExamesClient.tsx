@@ -23,6 +23,7 @@ import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
   EXAMES_TUSS,
+  LATERALIDADES,
   type ExamCategoria,
   type ExamOrder,
 } from "@/lib/clinico/exames-shared";
@@ -77,16 +78,18 @@ function imprimirExame(
     { lbl: "Solicitado em", val: limpo(e.quando) || "—" },
   ]);
 
-  // Tabela de exames com colunas Código TUSS / Exame / Observação. A Observação
-  // (quando informada) sai impressa aqui, conforme pedido do cliente.
+  // Tabela: Código TUSS / Exame / Lateralidade / Observação. Lateralidade e
+  // Observação (quando informadas) saem impressas aqui, conforme pedido do cliente.
   const linhaObs = limpo(e.observacoes ?? "");
+  const linhaLat = limpo(e.lateralidade ?? "");
   const corpo = `
     <div class="corpo-lbl">Exame solicitado:</div>
     <table class="tab">
-      <tr><th style="width:120px">Código TUSS</th><th>Exame</th><th style="width:180px">Observação</th></tr>
+      <tr><th style="width:100px">Código TUSS</th><th>Exame</th><th style="width:90px">Lateralidade</th><th style="width:150px">Observação</th></tr>
       <tr>
         <td>${esc(limpo(e.tuss ?? "") || "—")}</td>
         <td>${esc(e.exame)}</td>
+        <td>${esc(linhaLat || "—")}</td>
         <td>${esc(linhaObs || "—")}</td>
       </tr>
     </table>
@@ -140,6 +143,7 @@ export function ExamesClient({
 
   const [tuss, setTuss] = useState(EXAMES_TUSS[0]?.tuss ?? "");
   const [observacoes, setObservacoes] = useState("");
+  const [lateralidade, setLateralidade] = useState<string>(LATERALIDADES[0]);
 
   // Estado do modal de edição
   const [editExame, setEditExame] = useState("");
@@ -147,6 +151,7 @@ export function ExamesClient({
   const [editCategoria, setEditCategoria] =
     useState<ExamCategoria>("laboratorial");
   const [editObs, setEditObs] = useState("");
+  const [editLat, setEditLat] = useState<string>(LATERALIDADES[0]);
 
   const selecionado = useMemo(
     () => EXAMES_TUSS.find((e) => e.tuss === tuss) ?? null,
@@ -156,6 +161,7 @@ export function ExamesClient({
   function reset() {
     setTuss(EXAMES_TUSS[0]?.tuss ?? "");
     setObservacoes("");
+    setLateralidade(LATERALIDADES[0]);
   }
 
   function abrirEdicao(e: ExamOrder) {
@@ -163,6 +169,7 @@ export function ExamesClient({
     setEditTuss(e.tuss ?? "");
     setEditCategoria(e.categoria);
     setEditObs(e.observacoes ?? "");
+    setEditLat(e.lateralidade ?? LATERALIDADES[0]);
     setEditing(e);
   }
 
@@ -178,6 +185,7 @@ export function ExamesClient({
         tuss_code: selecionado.tuss,
         category: selecionado.categoria,
         notes: observacoes.trim() || undefined,
+        laterality: lateralidade,
       });
       if (res?.ok) {
         toast.success("Exame solicitado.");
@@ -204,6 +212,7 @@ export function ExamesClient({
         tuss_code: editTuss.trim() || undefined,
         category: editCategoria,
         notes: editObs.trim() || undefined,
+        laterality: editLat,
       });
       if (res?.ok) {
         toast.success("Exame atualizado.");
@@ -319,6 +328,9 @@ export function ExamesClient({
                               TUSS {e.tuss}
                             </span>
                           )}
+                          {e.lateralidade && (
+                            <Badge status="active">{e.lateralidade}</Badge>
+                          )}
                           <span className="text-xs text-muted">
                             · {e.quando}
                           </span>
@@ -420,6 +432,20 @@ export function ExamesClient({
           </div>
         )}
 
+        <div className="mt-5">
+          <Select
+            label="Lateralidade"
+            value={lateralidade}
+            onChange={(ev) => setLateralidade(ev.target.value)}
+          >
+            {LATERALIDADES.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </Select>
+        </div>
+
         <label className="mt-5 block">
           <span className="mb-1.5 block text-sm font-medium text-ink">
             Observações
@@ -473,6 +499,10 @@ export function ExamesClient({
             <div>
               <dt className="font-medium text-ink">Solicitado em</dt>
               <dd className="text-muted">{viewing.quando}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-ink">Lateralidade</dt>
+              <dd className="text-muted">{viewing.lateralidade ?? "—"}</dd>
             </div>
             <div className="sm:col-span-2">
               <dt className="font-medium text-ink">Observações</dt>
@@ -532,6 +562,17 @@ export function ExamesClient({
               <option value="imagem">Imagem</option>
             </Select>
           </div>
+          <Select
+            label="Lateralidade"
+            value={editLat}
+            onChange={(ev) => setEditLat(ev.target.value)}
+          >
+            {LATERALIDADES.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </Select>
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-ink">
               Observações

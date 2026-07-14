@@ -12,12 +12,22 @@ export type ExamOrder = {
   categoria: ExamCategoria;
   status: ExamStatus;
   observacoes: string | null;
+  /** Lateralidade (Direito/Esquerdo/Bilateral/…); null quando não se aplica. */
+  lateralidade: string | null;
   /** Data/hora da solicitação já formatada (pt-BR). */
   quando: string;
   /** Cancelamento (não destrutivo): null = pedido ativo. */
   cancelledAt: string | null;
   cancelReason: string | null;
 };
+
+/** Opções de lateralidade (documento de imagem/procedimento). */
+export const LATERALIDADES = [
+  "Não se aplica",
+  "Direito",
+  "Esquerdo",
+  "Bilateral",
+] as const;
 
 /** Item do catálogo TUSS (código oficial p/ faturamento). */
 export type TussExame = {
