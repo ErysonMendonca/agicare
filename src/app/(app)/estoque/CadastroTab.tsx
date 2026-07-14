@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Package, MapPin, Pencil, Plus } from "lucide-react";
+import { Search, Package, MapPin, Pencil, Plus, FileSpreadsheet } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -50,12 +50,22 @@ export function CadastroTab({
             Catálogo de medicamentos, materiais e insumos
           </p>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => router.push("/estoque/produtos/novo")}
-        >
-          <Plus className="h-4 w-4" /> Novo Produto
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {gestor && (
+            <Button
+              variant="outline"
+              onClick={() => router.push("/estoque/produtos/importar")}
+            >
+              <FileSpreadsheet className="h-4 w-4" /> Importar Excel
+            </Button>
+          )}
+          <Button
+            variant="primary"
+            onClick={() => router.push("/estoque/produtos/novo")}
+          >
+            <Plus className="h-4 w-4" /> Novo Produto
+          </Button>
+        </div>
       </div>
 
       <Card className="mt-4 p-4">

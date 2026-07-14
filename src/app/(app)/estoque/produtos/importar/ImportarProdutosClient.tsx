@@ -1,0 +1,519 @@
+"use client";
+
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import * as XLSX from "xlsx";
+import {
+  Upload,
+  Download,
+  FileSpreadsheet,
+  Trash2,
+  Plus,
+  CopyCheck,
+  CheckCircle2,
+  AlertTriangle,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Stagger, FadeInUp } from "@/components/ui/Motion";
+import type { ProductCategoryNode } from "@/lib/data/product-categories";
+import {
+  COLUNAS_MODELO,
+  linhaVazia,
+  linhaCompleta,
+  type ProdutoImportRow,
+} from "@/lib/estoque/import-produtos-shared";
+import { importarProdutosEmMassa } from "@/lib/actions/stock";
+
+/** Linha da grade com id estável (React key) — o id não vai para o servidor. */
+type GridRow = ProdutoImportRow & { _id: string };
+
+let _seq = 0;
+function novaGridRow(base?: ProdutoImportRow): GridRow {
+  _seq += 1;
+  return { ...(base ?? linhaVazia()), _id: `r${Date.now()}_${_seq}` };
+}
+
+/** Rótulos ativos de um nível + valor legado (para não sumir). */
+function opcoes(nos: ProductCategoryNode[], valor: string): string[] {
+  const ativos = nos.filter((n) => n.active).map((n) => n.label);
+  return valor && !ativos.includes(valor) ? [valor, ...ativos] : ativos;
+}
+
+export function ImportarProdutosClient({
+  categorias,
+}: {
+  categorias: ProductCategoryNode[];
+}) {
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [rows, setRows] = useState<GridRow[]>([]);
+  const [salvando, setSalvando] = useState(false);
+
+  const prontos = useMemo(() => rows.filter(linhaCompleta).length, [rows]);
+  const temIncompleta = rows.length > 0 && prontos < rows.length;
+
+  // ---- Baixar modelo .xlsx --------------------------------------------------
+  const baixarModelo = useCallback(() => {
+    const wb = XLSX.utils.book_new();
+
+    const exemplo = [
+      "Dipirona Sódica 500mg/mL",
+      "un",
+      100,
+      "7891234567890",
+    ];
+    const wsProdutos = XLSX.utils.aoa_to_sheet([
+      [...COLUNAS_MODELO],
+      exemplo,
+    ]);
+    wsProdutos["!cols"] = [{ wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsProdutos, "Produtos");
+
+    const wsInstrucoes = XLSX.utils.aoa_to_sheet([
+      ["Como usar este modelo"],
+      [""],
+      ["1. Preencha uma linha por produto na aba \"Produtos\"."],
+      ["2. Colunas obrigatórias na planilha: Descrição."],
+      ["   Unidade (ex.: un, cx, mL), Quantidade e Código de barras são opcionais."],
+      ["3. Salve o arquivo e faça o upload na tela Importar Produtos."],
+      [
+        "4. Na tela você vai CLASSIFICAR cada produto (Grupo, Classificação e",
+      ],
+      [
+        "   Subclassificação) e informar Lote/Validade — não preencha isso aqui.",
+      ],
+      ["5. Confira a grade e clique em Salvar."],
+    ]);
+    wsInstrucoes["!cols"] = [{ wch: 70 }];
+    XLSX.utils.book_append_sheet(wb, wsInstrucoes, "Instruções");
+
+    XLSX.writeFile(wb, "modelo-produtos-agicare.xlsx");
+  }, []);
+
+  // ---- Upload / parse -------------------------------------------------------
+  const handleFile = useCallback(
+    async (file: File) => {
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const sheetName =
+          wb.SheetNames.find((n) => n.toLowerCase() === "produtos") ??
+          wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        if (!ws) {
+          toast.error("Planilha vazia ou sem aba de dados.");
+          return;
+        }
+        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+          defval: "",
+        });
+        if (json.length === 0) {
+          toast.error("Nenhuma linha encontrada na planilha.");
+          return;
+        }
+        // Valida que existe a coluna Descrição (case-insensitive).
+        const chaves = Object.keys(json[0]);
+        const kDescricao = chaves.find(
+          (k) => k.trim().toLowerCase() === "descrição" || k.trim().toLowerCase() === "descricao",
+        );
+        if (!kDescricao) {
+          toast.error('A planilha precisa ter a coluna "Descrição".');
+          return;
+        }
+        const kUnidade = chaves.find((k) => k.trim().toLowerCase() === "unidade");
+        const kQtd = chaves.find((k) => k.trim().toLowerCase() === "quantidade");
+        const kBarras = chaves.find(
+          (k) =>
+            k.trim().toLowerCase() === "código de barras" ||
+            k.trim().toLowerCase() === "codigo de barras",
+        );
+
+        const parsed: GridRow[] = json
+          .map((r) => {
+            const descricao = String(r[kDescricao] ?? "").trim();
+            const unidade = kUnidade ? String(r[kUnidade] ?? "").trim() : "";
+            const qtdRaw = kQtd ? r[kQtd] : 0;
+            const quantidade = Number(qtdRaw);
+            const codigoBarras = kBarras ? String(r[kBarras] ?? "").trim() : "";
+            return novaGridRow({
+              descricao,
+              unidade: unidade || "un",
+              quantidade: Number.isFinite(quantidade) ? quantidade : 0,
+              codigoBarras,
+              grupo: "",
+              classificacao: "",
+              subclassificacao: "",
+              lote: "",
+              validade: "",
+            });
+          })
+          .filter((r) => r.descricao !== "");
+
+        if (parsed.length === 0) {
+          toast.error("Nenhuma linha com Descrição preenchida.");
+          return;
+        }
+        setRows(parsed);
+        toast.success(
+          `${parsed.length} produto(s) carregado(s). Classifique cada um antes de salvar.`,
+        );
+      } catch {
+        toast.error("Não foi possível ler o arquivo. Envie um .xlsx válido.");
+      }
+    },
+    [],
+  );
+
+  // ---- Mutação de linha (estável por id) ------------------------------------
+  const updateRow = useCallback((id: string, patch: Partial<ProdutoImportRow>) => {
+    setRows((prev) =>
+      prev.map((r) => (r._id === id ? { ...r, ...patch } : r)),
+    );
+  }, []);
+
+  const removeRow = useCallback((id: string) => {
+    setRows((prev) => prev.filter((r) => r._id !== id));
+  }, []);
+
+  const addRow = useCallback(() => {
+    setRows((prev) => [...prev, novaGridRow()]);
+  }, []);
+
+  const copiarClassificacao = useCallback(() => {
+    setRows((prev) => {
+      if (prev.length === 0) return prev;
+      const primeira = prev[0];
+      if (
+        !primeira.grupo ||
+        !primeira.classificacao ||
+        !primeira.subclassificacao
+      ) {
+        toast.error("Classifique a 1ª linha completamente primeiro.");
+        return prev;
+      }
+      return prev.map((r) => ({
+        ...r,
+        grupo: primeira.grupo,
+        classificacao: primeira.classificacao,
+        subclassificacao: primeira.subclassificacao,
+      }));
+    });
+  }, []);
+
+  // ---- Salvar ---------------------------------------------------------------
+  const salvar = useCallback(async () => {
+    if (temIncompleta || rows.length === 0) return;
+    setSalvando(true);
+    try {
+      // Descarta o _id (interno da UI) antes de enviar ao servidor.
+      const payload: ProdutoImportRow[] = rows.map(({ _id: _drop, ...r }) => r);
+      const res = await importarProdutosEmMassa(payload);
+      if (res.ok) {
+        toast.success(`${res.inseridos} produtos importados`);
+        router.push("/estoque");
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Falha ao importar produtos.");
+      }
+    } catch {
+      toast.error("Erro inesperado ao importar produtos.");
+    } finally {
+      setSalvando(false);
+    }
+  }, [rows, temIncompleta, router]);
+
+  return (
+    <Stagger className="mt-6 space-y-4">
+      {/* Ações de arquivo */}
+      <FadeInUp>
+        <Card className="p-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="outline" onClick={baixarModelo}>
+              <Download className="h-4 w-4" /> Baixar modelo .xlsx
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="h-4 w-4" /> Enviar planilha
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="sr-only"
+              aria-label="Selecionar planilha de produtos"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleFile(f);
+                e.target.value = ""; // permite reenviar o mesmo arquivo
+              }}
+            />
+            <p className="flex items-center gap-2 text-sm text-muted">
+              <FileSpreadsheet className="h-4 w-4" />
+              Baixe o modelo, preencha e envie. A classificação é feita aqui na
+              grade.
+            </p>
+          </div>
+        </Card>
+      </FadeInUp>
+
+      {rows.length > 0 && (
+        <FadeInUp>
+          <Card className="overflow-hidden">
+            {/* Barra de status + conveniências */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+              <div className="flex items-center gap-2 text-sm">
+                {temIncompleta ? (
+                  <AlertTriangle className="h-4 w-4 text-status-warn" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-status-ok" />
+                )}
+                <span className="font-medium text-ink">
+                  {prontos} de {rows.length} prontos
+                </span>
+                {temIncompleta && (
+                  <span className="text-muted">
+                    — classifique as linhas destacadas
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" variant="ghost" onClick={copiarClassificacao}>
+                  <CopyCheck className="h-4 w-4" /> Copiar classificação da 1ª
+                  linha
+                </Button>
+                <Button size="sm" variant="ghost" onClick={addRow}>
+                  <Plus className="h-4 w-4" /> Adicionar linha
+                </Button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1100px] text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs uppercase text-muted">
+                    <th className="px-3 py-3 font-medium">Descrição *</th>
+                    <th className="px-3 py-3 font-medium">Un.</th>
+                    <th className="px-3 py-3 font-medium">Qtd.</th>
+                    <th className="px-3 py-3 font-medium">Grupo *</th>
+                    <th className="px-3 py-3 font-medium">Classificação *</th>
+                    <th className="px-3 py-3 font-medium">Subclassificação *</th>
+                    <th className="px-3 py-3 font-medium">Lote</th>
+                    <th className="px-3 py-3 font-medium">Validade</th>
+                    <th className="px-3 py-3 text-right font-medium">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <LinhaGrade
+                      key={r._id}
+                      row={r}
+                      categorias={categorias}
+                      onChange={updateRow}
+                      onRemove={removeRow}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </FadeInUp>
+      )}
+
+      {rows.length > 0 && (
+        <FadeInUp>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => setRows([])}
+              disabled={salvando}
+            >
+              Limpar tudo
+            </Button>
+            <Button
+              variant="primary"
+              onClick={salvar}
+              disabled={temIncompleta || rows.length === 0 || salvando}
+              title={
+                temIncompleta
+                  ? "Classifique todas as linhas antes de salvar"
+                  : undefined
+              }
+            >
+              {salvando
+                ? "Salvando..."
+                : `Salvar ${rows.length} produto${rows.length > 1 ? "s" : ""}`}
+            </Button>
+          </div>
+        </FadeInUp>
+      )}
+    </Stagger>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Linha memoizada: só re-renderiza quando SUA row muda (grades grandes).
+// ---------------------------------------------------------------------------
+const LinhaGrade = memo(function LinhaGrade({
+  row,
+  categorias,
+  onChange,
+  onRemove,
+}: {
+  row: GridRow;
+  categorias: ProductCategoryNode[];
+  onChange: (id: string, patch: Partial<ProdutoImportRow>) => void;
+  onRemove: (id: string) => void;
+}) {
+  const completa = linhaCompleta(row);
+
+  const noGrupo = categorias.find((g) => g.label === row.grupo);
+  const noClassif = noGrupo?.children.find((c) => c.label === row.classificacao);
+
+  const opcoesGrupo = opcoes(categorias, row.grupo);
+  const opcoesClassif = opcoes(noGrupo?.children ?? [], row.classificacao);
+  const opcoesSub = opcoes(noClassif?.children ?? [], row.subclassificacao);
+
+  const semGrupo = row.grupo === "";
+  const semClassif = row.classificacao === "";
+
+  return (
+    <tr
+      className={
+        completa
+          ? "border-b border-line last:border-0"
+          : "border-b border-l-2 border-l-status-warn border-line bg-status-warn/5 last:border-b-0"
+      }
+    >
+      <td className="px-3 py-2 align-top">
+        <Input
+          aria-label="Descrição"
+          value={row.descricao}
+          error={
+            row.descricao.trim().length < 2 ? "Mín. 2 caracteres" : undefined
+          }
+          onChange={(e) => onChange(row._id, { descricao: e.target.value })}
+          className="min-w-[220px]"
+        />
+      </td>
+      <td className="px-3 py-2 align-top">
+        <Input
+          aria-label="Unidade"
+          value={row.unidade}
+          onChange={(e) => onChange(row._id, { unidade: e.target.value })}
+          className="w-16"
+        />
+      </td>
+      <td className="px-3 py-2 align-top">
+        <Input
+          aria-label="Quantidade"
+          type="number"
+          min={0}
+          value={Number.isFinite(row.quantidade) ? row.quantidade : 0}
+          onChange={(e) =>
+            onChange(row._id, { quantidade: Number(e.target.value) || 0 })
+          }
+          className="w-20"
+        />
+      </td>
+      <td className="px-3 py-2 align-top">
+        <Select
+          aria-label="Grupo"
+          value={row.grupo}
+          onChange={(e) =>
+            onChange(row._id, {
+              grupo: e.target.value,
+              classificacao: "",
+              subclassificacao: "",
+            })
+          }
+          className="min-w-[160px]"
+        >
+          <option value="">Selecione</option>
+          {opcoesGrupo.map((label) => (
+            <option key={label} value={label}>
+              {label}
+            </option>
+          ))}
+        </Select>
+      </td>
+      <td className="px-3 py-2 align-top">
+        <Select
+          aria-label="Classificação"
+          value={row.classificacao}
+          disabled={semGrupo}
+          title={semGrupo ? "Selecione um grupo primeiro" : undefined}
+          onChange={(e) =>
+            onChange(row._id, {
+              classificacao: e.target.value,
+              subclassificacao: "",
+            })
+          }
+          className="min-w-[160px]"
+        >
+          <option value="">
+            {semGrupo ? "Selecione um grupo antes" : "Selecione"}
+          </option>
+          {opcoesClassif.map((label) => (
+            <option key={label} value={label}>
+              {label}
+            </option>
+          ))}
+        </Select>
+      </td>
+      <td className="px-3 py-2 align-top">
+        <Select
+          aria-label="Subclassificação"
+          value={row.subclassificacao}
+          disabled={semClassif}
+          title={semClassif ? "Selecione uma classificação primeiro" : undefined}
+          onChange={(e) =>
+            onChange(row._id, { subclassificacao: e.target.value })
+          }
+          className="min-w-[160px]"
+        >
+          <option value="">
+            {semClassif ? "Selecione uma classificação antes" : "Selecione"}
+          </option>
+          {opcoesSub.map((label) => (
+            <option key={label} value={label}>
+              {label}
+            </option>
+          ))}
+        </Select>
+      </td>
+      <td className="px-3 py-2 align-top">
+        <Input
+          aria-label="Lote"
+          value={row.lote}
+          onChange={(e) => onChange(row._id, { lote: e.target.value })}
+          className="w-24"
+        />
+      </td>
+      <td className="px-3 py-2 align-top">
+        <Input
+          aria-label="Validade"
+          type="date"
+          value={row.validade}
+          onChange={(e) => onChange(row._id, { validade: e.target.value })}
+          className="w-40"
+        />
+      </td>
+      <td className="px-3 py-2 text-right align-top">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onRemove(row._id)}
+          aria-label="Remover linha"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </td>
+    </tr>
+  );
+});
