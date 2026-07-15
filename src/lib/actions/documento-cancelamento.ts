@@ -31,7 +31,10 @@ export type ActionState = { error?: string; ok?: boolean } | undefined;
  * Todas possuem coluna `clinic_id` (add em 0020_multitenant / create em 0103),
  * portanto o update é sempre filtrado por clínica.
  */
-export const DOC_TABELAS = [
+// ponytail: NÃO exportar — arquivo "use server" só pode exportar funções async.
+// Exportar este const (valor de runtime) quebra o carregamento do módulo e
+// derruba TODAS as server actions das telas de documento (500 ao salvar).
+const DOC_TABELAS = [
   "certificates",
   "prescriptions",
   "anamneses",
@@ -44,6 +47,7 @@ export const DOC_TABELAS = [
   "sae_records",
   "prosthetic_orders",
   "dental_charts",
+  "procedure_documents",
 ] as const;
 
 export type DocTabela = (typeof DOC_TABELAS)[number];
