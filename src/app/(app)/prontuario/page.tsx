@@ -60,7 +60,7 @@ export default async function ProntuarioPage({
   const isHoje = !todoPeriodo && dataSelecionada === hoje;
 
   const base = isHoje
-    ? await listQueue({ specialty: queueSpecialty })
+    ? await listQueue({ specialty: queueSpecialty, date: dataSelecionada })
     : await listAtendimentosPorData(todoPeriodo ? null : dataSelecionada, {
         specialty: queueSpecialty,
       });

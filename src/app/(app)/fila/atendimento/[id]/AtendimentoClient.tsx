@@ -58,6 +58,12 @@ function resolveOptions(
   }));
 }
 
+/** Um valor "de verdade": ignora null/vazio e o placeholder "—" da fila. */
+function preenchido(v: string | null | undefined): boolean {
+  const t = (v ?? "").trim();
+  return t !== "" && t !== "—";
+}
+
 function norm(s: string): string {
   return s
     .normalize("NFD")
@@ -117,15 +123,14 @@ export function AtendimentoClient({
   const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
 
-  const [convenio, setConvenio] = useState<string>(() => {
-    const limpo = (v: string | null | undefined) =>
-      v && v !== "—" ? v : "";
-    const doCadastro = limpo(item.convenioCadastro);
-    const doItem = limpo(item.convenio);
-    return (
-      doCadastro || doItem || resolveOptions(attendanceOptions, "convenio")[0]?.value || ""
-    );
-  });
+  // Convênio SEMPRE editável, mas já vem preenchido: prioriza o convênio do
+  // CADASTRO do paciente (patients.convenio); senão o do agendamento; senão a 1ª opção.
+  const convenioInicial =
+    (preenchido(item.convenioCadastro) && item.convenioCadastro!.trim()) ||
+    (preenchido(item.convenio) && item.convenio!.trim()) ||
+    resolveOptions(attendanceOptions, "convenio")[0]?.value ||
+    "";
+  const [convenio, setConvenio] = useState<string>(convenioInicial);
   const [plano, setPlano] = useState("");
   const isParticular = /particular/i.test(convenio);
   // Paciente maior de idade → o responsável já nasce como "O MESMO" (não precisa
@@ -163,7 +168,9 @@ export function AtendimentoClient({
   const oCarater = resolveOptions(attendanceOptions, "carater");
   const oProced = resolveOptions(attendanceOptions, "procedencia");
   const oCentro = resolveOptions(attendanceOptions, "centro_custo");
-  const oConv = resolveOptions(attendanceOptions, "convenio");
+  // Garante que o convênio pré-preenchido (do cadastro) apareça na lista mesmo
+  // que não esteja nas opções configuradas — senão o Select não o exibiria.
+  const oConv = comAgendamento(resolveOptions(attendanceOptions, "convenio"), convenioInicial).options;
   const oPlano = resolveOptions(attendanceOptions, "plano");
   const oParent = resolveOptions(attendanceOptions, "parentesco");
 
@@ -178,8 +185,7 @@ export function AtendimentoClient({
         .map((p) => ({ id: p.id, label: p.nome, value: p.nome }));
       const ag = (item.medico ?? "").trim();
       if (
-        ag &&
-        norm(ag) !== "" &&
+        preenchido(ag) &&
         !filtrados.some((o) => norm(o.value) === norm(ag))
       ) {
         return [{ id: `ag-${ag}`, label: ag, value: ag }, ...filtrados];
@@ -190,13 +196,17 @@ export function AtendimentoClient({
   );
 
   const profOptions = profOptionsFor(especSel);
-  const [profSel, setProfSel] = useState(prof.value);
+  // Profissional travado só quando o agendamento já trouxe um (item.medico real).
+  // Sem profissional definido, a recepção escolhe ou deixa "A definir" (opcional).
+  const medicoTravado = preenchido(item.medico);
+  const [profSel, setProfSel] = useState(medicoTravado ? prof.value : "");
 
   function trocarEspecialidade(nova: string) {
     setEspecSel(nova);
     const opts = profOptionsFor(nova);
     if (!opts.some((o) => o.value === profSel)) {
-      setProfSel(opts[0]?.value ?? "");
+      // Volta para "A definir" (""); recepção repica o profissional da nova especialidade.
+      setProfSel(medicoTravado ? profSel : "");
     }
     markDirty();
   }
@@ -548,16 +558,17 @@ export function AtendimentoClient({
                 </Select>
                 {!!item.especialidade && <input type="hidden" name="especialidade" value={especSel} />}
                 <Select
-                  name={item.medico ? undefined : "medico"}
+                  name={medicoTravado ? undefined : "medico"}
                   label="Profissional"
                   value={profSel}
                   onChange={(e) => {
                     setProfSel(e.target.value);
                     markDirty();
                   }}
-                  disabled={!!item.medico}
+                  disabled={medicoTravado}
                 >
-                  {profOptions.length === 0 ? (
+                  {!medicoTravado && <option value="">A definir</option>}
+                  {profOptions.length === 0 && medicoTravado ? (
                     <option value="" disabled>
                       Nenhum profissional vinculado a esta especialidade
                     </option>
@@ -569,7 +580,7 @@ export function AtendimentoClient({
                     ))
                   )}
                 </Select>
-                {!!item.medico && <input type="hidden" name="medico" value={profSel} />}
+                {medicoTravado && <input type="hidden" name="medico" value={profSel} />}
                 <Select
                   name={item.tipoAtendimento ? undefined : "encaminhamento"}
                   label="Tipo de Atendimento *"
@@ -634,10 +645,9 @@ export function AtendimentoClient({
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <Select
-                  name={item.convenio ? undefined : "convenio"}
+                  name="convenio"
                   label="Convênio *"
                   value={convenio}
-                  disabled={!!item.convenio}
                   onChange={(e) => {
                     const v = e.target.value;
                     setConvenio(v);
@@ -651,7 +661,6 @@ export function AtendimentoClient({
                     </option>
                   ))}
                 </Select>
-                {!!item.convenio && <input type="hidden" name="convenio" value={convenio} />}
                 <Select
                   label={isParticular ? "Plano" : "Plano *"}
                   value={isParticular ? "" : plano}
