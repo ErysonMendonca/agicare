@@ -1,0 +1,36 @@
+# Normalização de fim de linha (evita ruído CRLF↔LF em máquinas Windows/WSL).
+# Regra padrão: todo arquivo de texto é armazenado no repositório com LF e
+# convertido/checado como LF na árvore de trabalho, independente do SO.
+* text=auto eol=lf
+
+# Código-fonte e configs do projeto — sempre LF.
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.jsx   text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.scss  text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+*.sql   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.svg   text eol=lf
+*.sh    text eol=lf
+
+# Binários — nunca aplicar conversão de fim de linha.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.pdf   binary
