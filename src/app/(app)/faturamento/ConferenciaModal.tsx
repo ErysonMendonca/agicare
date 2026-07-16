@@ -255,17 +255,18 @@ export function ConferenciaModal({
           <table className="w-full text-sm mb-6 border-collapse">
             <thead>
               <tr className="border-b border-line">
-                <th className="text-left py-2 font-medium">Descrição</th>
-                <th className="text-right py-2 font-medium">Valor</th>
+                <th className="text-left py-2 font-medium">Procedimento</th>
+                <th className="text-right py-2 font-medium">Qtd</th>
+                <th className="text-right py-2 font-medium">Valor Unit.</th>
+                <th className="text-right py-2 font-medium">Valor Total</th>
               </tr>
             </thead>
             <tbody>
               {itens.map((i, idx) => (
                 <tr key={idx} className="border-b border-line">
-                  <td className="py-2">
-                    {i.descricao}
-                    {i.qtd > 1 ? ` (×${i.qtd})` : ""}
-                  </td>
+                  <td className="py-2">{i.descricao}</td>
+                  <td className="text-right py-2">{i.qtd}</td>
+                  <td className="text-right py-2">{formatBRL(i.valor)}</td>
                   <td className="text-right py-2">
                     {formatBRL(i.valor * i.qtd)}
                   </td>
@@ -273,20 +274,26 @@ export function ConferenciaModal({
               ))}
               {descontoNum > 0 && (
                 <tr className="border-b border-line">
-                  <td className="py-2 text-red-600">Desconto</td>
+                  <td className="py-2 text-red-600" colSpan={3}>
+                    Desconto
+                  </td>
                   <td className="text-right py-2 text-red-600">-{formatBRL(descontoNum)}</td>
                 </tr>
               )}
               {acrescimoNum > 0 && (
                 <tr className="border-b border-line">
-                  <td className="py-2 text-brand-600">Acréscimo</td>
+                  <td className="py-2 text-brand-600" colSpan={3}>
+                    Acréscimo
+                  </td>
                   <td className="text-right py-2 text-brand-600">{formatBRL(acrescimoNum)}</td>
                 </tr>
               )}
             </tbody>
             <tfoot>
               <tr>
-                <td className="font-bold py-2">TOTAL PAGO</td>
+                <td className="font-bold py-2" colSpan={3}>
+                  TOTAL PAGO
+                </td>
                 <td className="text-right font-bold py-2">
                   {formatBRL(
                     somenteLeitura && totalSalvo != null

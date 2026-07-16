@@ -7,6 +7,7 @@ import { type Identificacao } from "@/lib/data/prontuario";
 import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 import { logAccess } from "@/lib/audit";
 import { getRole } from "@/lib/auth";
+import { PapelDocumentoProvider } from "@/components/clinico/PapelDocumentoContext";
 import { PacienteCard } from "./PacienteCard";
 import { ClinicoNav } from "./ClinicoNav";
 import { FinalizarAtendimentoButton } from "./FinalizarAtendimentoButton";
@@ -70,7 +71,11 @@ export async function SecaoClinica({
         <>
           <PacienteCard id={identificacao} extra={finalActions} />
           <ClinicoNav patientId={patientId} userRole={role} />
-          {children}
+          {/* Médico não edita documentos — só o botão "Editar" some (visualizar,
+              imprimir e cancelar seguem disponíveis). Regra apenas de UI. */}
+          <PapelDocumentoProvider ocultarEdicao={role === "medico"}>
+            {children}
+          </PapelDocumentoProvider>
         </>
       ) : (
         <Card className="p-10 text-center text-sm text-muted">

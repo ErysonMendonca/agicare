@@ -3,7 +3,6 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Plus,
   Check,
   Crown,
   Clock,
@@ -96,7 +95,6 @@ export function ProteticoClient({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -155,10 +153,6 @@ export function ProteticoClient({
     setOcclusion("");
     setClinicalNotes("");
     setAnexos([]);
-  }
-
-  function fechar() {
-    setOpen(false);
   }
 
   function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -234,7 +228,6 @@ export function ProteticoClient({
         } else {
           toast.success("Pedido protético criado.");
         }
-        setOpen(false);
         reset();
         router.refresh();
         return;
@@ -290,7 +283,6 @@ export function ProteticoClient({
         );
       }
 
-      setOpen(false);
       reset();
       router.refresh();
     });
@@ -298,168 +290,32 @@ export function ProteticoClient({
 
   return (
     <>
-      <div className="mb-4 flex justify-end">
-        <Button
-          onClick={() => {
-            reset();
-            setOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" /> Novo Pedido Protético
-        </Button>
-      </div>
+      {/* Formulário inline: novo pedido protético (wizard de 3 etapas) */}
+      <Card className="mb-4 p-4 sm:p-6">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+              <Crown className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold text-ink">
+                Novo Pedido Protético
+              </h2>
+              <p className="mt-0.5 text-sm text-muted">
+                Etapa {step + 1} de {STEPS.length} · {STEPS[step]}
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={reset}
+            disabled={pending}
+          >
+            <X className="h-4 w-4" /> Limpar formulário
+          </Button>
+        </div>
 
-      {/* Lista de pedidos */}
-      {pedidos.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center px-5 py-16 text-center">
-          <span className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-muted-surface text-muted">
-            <Crown className="h-7 w-7" />
-          </span>
-          <p className="font-medium text-ink">Nenhum pedido protético</p>
-          <p className="mt-1 max-w-md text-sm text-muted">
-            Abra o primeiro pedido de trabalho ao laboratório de prótese.
-          </p>
-        </Card>
-      ) : (
-        <Stagger className="flex flex-col gap-3">
-          {pedidos.map((p) => (
-            <FadeInUp key={p.id}>
-              <Card className="p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                      <Crown className="h-5 w-5" />
-                    </span>
-                    <div
-                      className={cn(
-                        p.cancelledAt !== null &&
-                          "text-status-danger [&_*]:text-status-danger",
-                      )}
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium text-ink">{p.workType}</p>
-                        <span className="text-sm text-muted">
-                          · Dentes {p.teeth}
-                        </span>
-                        {p.urgent && (
-                          <Badge status="danger">
-                            <AlertTriangle className="h-3 w-3" /> Urgente
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted">
-                        {p.profissional} · {p.criadoEm}
-                      </p>
-                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
-                        {p.material !== "—" && <span>Material: {p.material}</span>}
-                        {p.color !== "—" && <span>Cor: {p.color}</span>}
-                        {p.finishLine && <span>Término: {p.finishLine}</span>}
-                        {p.occlusion && <span>Oclusão: {p.occlusion}</span>}
-                        {p.dueDate && (
-                          <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" /> Prazo {p.dueDate}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    {!p.cancelledAt && (
-                      <Badge status={p.status === "aberto" ? "wait" : "ok"}>
-                        {p.status}
-                      </Badge>
-                    )}
-                    <DocumentActions
-                      cancelled={p.cancelledAt !== null}
-                      cancelReason={p.cancelReason}
-                      pending={pending}
-                      onView={() => setVerPedido(p)}
-                      onEdit={() => setEditar(p)}
-                      onPrint={() => imprimirPedido(p)}
-                      onCancel={() => setCancelar(p)}
-                    />
-                  </div>
-                </div>
-
-                {p.clinicalNotes && (
-                  <p
-                    className={cn(
-                      "mt-3 border-t border-line pt-3 text-sm text-muted",
-                      p.cancelledAt !== null && "text-status-danger",
-                    )}
-                  >
-                    {p.clinicalNotes}
-                  </p>
-                )}
-
-                {p.arquivos.length > 0 && (
-                  <div className="mt-3 border-t border-line pt-3">
-                    <p className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
-                      <Paperclip className="h-3.5 w-3.5" />
-                      {p.arquivos.length} anexo(s)
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {p.arquivos.map((a) => {
-                        const Icon = iconeKind(a.kind);
-                        return (
-                          <span
-                            key={a.id}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-xs text-ink"
-                          >
-                            <Icon className="h-3.5 w-3.5 text-brand-600" />
-                            <span className="max-w-[180px] truncate">
-                              {a.fileName}
-                            </span>
-                            <span className="text-muted">
-                              · {rotuloKind(a.kind)}
-                              {a.sizeBytes != null
-                                ? ` · ${fmtTamanho(a.sizeBytes)}`
-                                : ""}
-                            </span>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            </FadeInUp>
-          ))}
-        </Stagger>
-      )}
-
-      {/* Modal: stepper de 3 etapas */}
-      <Modal
-        open={open}
-        onClose={fechar}
-        title="Novo Pedido Protético"
-        subtitle={`Etapa ${step + 1} de ${STEPS.length} · ${STEPS[step]}`}
-        className="max-w-3xl"
-        footer={
-          <>
-            {step > 0 ? (
-              <Button
-                variant="outline"
-                onClick={() => setStep((s) => s - 1)}
-                disabled={pending}
-              >
-                Voltar
-              </Button>
-            ) : (
-              <Button variant="outline" onClick={fechar} disabled={pending}>
-                Cancelar
-              </Button>
-            )}
-            {step < STEPS.length - 1 ? (
-              <Button onClick={avancar}>Avançar</Button>
-            ) : (
-              <Button onClick={concluir} disabled={pending || !temScan}>
-                {pending ? "Enviando…" : "Concluir Pedido"}
-              </Button>
-            )}
-          </>
-        }
-      >
         {/* Indicador de etapas */}
         <ol className="mb-6 flex items-center gap-2">
           {STEPS.map((label, i) => {
@@ -500,9 +356,9 @@ export function ProteticoClient({
               <span className="mb-2 block text-sm font-medium text-ink">
                 Dentes do trabalho <span className="text-red-500">*</span>
               </span>
-              <Odontograma 
-                selectedTeeth={teeth.split(",").map(t => t.trim()).filter(Boolean)} 
-                onChange={(arr) => setTeeth(arr.join(", "))} 
+              <Odontograma
+                selectedTeeth={teeth.split(",").map((t) => t.trim()).filter(Boolean)}
+                onChange={(arr) => setTeeth(arr.join(", "))}
               />
               <span className="mt-1.5 block text-xs text-muted">
                 Dentes selecionados: {teeth || "Nenhum"}
@@ -753,7 +609,146 @@ export function ProteticoClient({
             </div>
           </div>
         )}
-      </Modal>
+
+        {/* Navegação do wizard */}
+        <div className="mt-6 flex items-center justify-end gap-3 border-t border-line pt-4">
+          {step > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setStep((s) => s - 1)}
+              disabled={pending}
+            >
+              Voltar
+            </Button>
+          )}
+          {step < STEPS.length - 1 ? (
+            <Button onClick={avancar}>Avançar</Button>
+          ) : (
+            <Button onClick={concluir} disabled={pending || !temScan}>
+              {pending ? "Enviando…" : "Concluir Pedido"}
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      {/* Lista de pedidos */}
+      {pedidos.length === 0 ? (
+        <Card className="flex flex-col items-center justify-center px-5 py-16 text-center">
+          <span className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-muted-surface text-muted">
+            <Crown className="h-7 w-7" />
+          </span>
+          <p className="font-medium text-ink">Nenhum pedido protético</p>
+          <p className="mt-1 max-w-md text-sm text-muted">
+            Abra o primeiro pedido de trabalho ao laboratório de prótese.
+          </p>
+        </Card>
+      ) : (
+        <Stagger className="flex flex-col gap-3">
+          {pedidos.map((p) => (
+            <FadeInUp key={p.id}>
+              <Card className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                      <Crown className="h-5 w-5" />
+                    </span>
+                    <div
+                      className={cn(
+                        p.cancelledAt !== null &&
+                          "text-status-danger [&_*]:text-status-danger",
+                      )}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-ink">{p.workType}</p>
+                        <span className="text-sm text-muted">
+                          · Dentes {p.teeth}
+                        </span>
+                        {p.urgent && (
+                          <Badge status="danger">
+                            <AlertTriangle className="h-3 w-3" /> Urgente
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {p.profissional} · {p.criadoEm}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
+                        {p.material !== "—" && <span>Material: {p.material}</span>}
+                        {p.color !== "—" && <span>Cor: {p.color}</span>}
+                        {p.finishLine && <span>Término: {p.finishLine}</span>}
+                        {p.occlusion && <span>Oclusão: {p.occlusion}</span>}
+                        {p.dueDate && (
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" /> Prazo {p.dueDate}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    {!p.cancelledAt && (
+                      <Badge status={p.status === "aberto" ? "wait" : "ok"}>
+                        {p.status}
+                      </Badge>
+                    )}
+                    <DocumentActions
+                      cancelled={p.cancelledAt !== null}
+                      cancelReason={p.cancelReason}
+                      pending={pending}
+                      onView={() => setVerPedido(p)}
+                      onEdit={() => setEditar(p)}
+                      onPrint={() => imprimirPedido(p)}
+                      onCancel={() => setCancelar(p)}
+                    />
+                  </div>
+                </div>
+
+                {p.clinicalNotes && (
+                  <p
+                    className={cn(
+                      "mt-3 border-t border-line pt-3 text-sm text-muted",
+                      p.cancelledAt !== null && "text-status-danger",
+                    )}
+                  >
+                    {p.clinicalNotes}
+                  </p>
+                )}
+
+                {p.arquivos.length > 0 && (
+                  <div className="mt-3 border-t border-line pt-3">
+                    <p className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-muted">
+                      <Paperclip className="h-3.5 w-3.5" />
+                      {p.arquivos.length} anexo(s)
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {p.arquivos.map((a) => {
+                        const Icon = iconeKind(a.kind);
+                        return (
+                          <span
+                            key={a.id}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1 text-xs text-ink"
+                          >
+                            <Icon className="h-3.5 w-3.5 text-brand-600" />
+                            <span className="max-w-[180px] truncate">
+                              {a.fileName}
+                            </span>
+                            <span className="text-muted">
+                              · {rotuloKind(a.kind)}
+                              {a.sizeBytes != null
+                                ? ` · ${fmtTamanho(a.sizeBytes)}`
+                                : ""}
+                            </span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </FadeInUp>
+          ))}
+        </Stagger>
+      )}
 
       {/* Visualizar (somente leitura) */}
       <VerPedidoModal

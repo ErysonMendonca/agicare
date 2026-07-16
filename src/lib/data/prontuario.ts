@@ -411,17 +411,22 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
 
   const genero = (p.gender as string | null) ?? "";
 
-  // Número de atendimento = senha (ticket_code) da entrada de fila mais recente
-  // do paciente — é o "Registro Atendimento" usado na lista do prontuário. NÃO é
-  // o CPF. Sem entrada na fila (paciente fora de atendimento) → "—".
+  // "Registro" do paciente = nº de prontuário sequencial (patients.record_number,
+  // 0057), zero-pad a 6 dígitos. É o que sai nos documentos de impressão — NUNCA
+  // a senha da fila (ticket_code): a senha não pode aparecer dentro dos documentos.
+  const registroProntuario =
+    p.record_number != null
+      ? String(p.record_number as number).padStart(6, "0")
+      : "—";
+  // Numeração de atendimento (ficha) da entrada de fila mais recente do paciente;
+  // usada no cabeçalho ("Atendimento nº"). Sem entrada → null.
   const { data: ultimaEntrada } = await supabase
     .from("queue_entries")
-    .select("ticket_code, attendance_code, insurance")
+    .select("attendance_code, insurance")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const numeroAtendimento = (ultimaEntrada?.ticket_code as string | null) || "—";
   // Numeração de atendimento (ficha) da mesma entrada; null fora de atendimento.
   const atendimentoCodigo =
     (ultimaEntrada?.attendance_code as string | null) ?? null;
@@ -467,7 +472,7 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
   return {
     identificacao: {
       nome: (p.full_name as string) ?? "—",
-      registro: numeroAtendimento,
+      registro: registroProntuario,
       atendimentoCodigo,
       idade: calcIdade(p.birth_date as string | null),
       nascimento: fmtData(p.birth_date as string | null),

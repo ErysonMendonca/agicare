@@ -4,6 +4,7 @@ import { Ban, Eye, Pencil, Printer } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { useOcultarEdicao } from "./PapelDocumentoContext";
 
 export interface DocumentActionsProps {
   /** Documento cancelado → read-only total (só exibe o selo "Cancelado"). */
@@ -37,6 +38,9 @@ export function DocumentActions({
   size = "sm",
   pending = false,
 }: DocumentActionsProps) {
+  // Médico: o botão "Editar" é suprimido em todos os menus de documento.
+  const ocultarEdicao = useOcultarEdicao();
+
   if (cancelled) {
     return (
       <div className="flex items-center">
@@ -64,7 +68,12 @@ export function DocumentActions({
     danger?: boolean;
   }[] = [
     { key: "view", label: "Visualizar", icon: Eye, onClick: onView },
-    { key: "edit", label: "Editar", icon: Pencil, onClick: onEdit },
+    {
+      key: "edit",
+      label: "Editar",
+      icon: Pencil,
+      onClick: ocultarEdicao ? undefined : onEdit,
+    },
     { key: "print", label: "Imprimir", icon: Printer, onClick: onPrint },
     {
       key: "cancel",
