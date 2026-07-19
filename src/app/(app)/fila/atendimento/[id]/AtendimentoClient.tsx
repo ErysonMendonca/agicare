@@ -379,9 +379,23 @@ export function AtendimentoClient({
       toast.error("Selecione o tipo de atendimento.");
       return;
     }
-    if (!isParticular && !plano) {
-      toast.error("Selecione o plano do convênio.");
-      return;
+    if (!isParticular) {
+      if (!plano) {
+        toast.error("Selecione o plano do convênio.");
+        return;
+      }
+      if (!readForm("carteira")) {
+        toast.error("Informe o número da carteirinha.");
+        return;
+      }
+      if (!readForm("validade")) {
+        toast.error("Informe a validade da carteirinha.");
+        return;
+      }
+      if (!readForm("validador")) {
+        toast.error("Informe o validador de convênio.");
+        return;
+      }
     }
 
     startTransition(async () => {
@@ -687,20 +701,20 @@ export function AtendimentoClient({
                 </Select>
                 <Input
                   name="carteira"
-                  label="Número da Carteirinha"
+                  label={isParticular ? "Número da Carteirinha" : "Número da Carteirinha *"}
                   placeholder="Número da carteirinha"
                   disabled={isParticular}
                 />
                 <Input
                   type="date"
                   name="validade"
-                  label="Validade da Carteirinha"
+                  label={isParticular ? "Validade da Carteirinha" : "Validade da Carteirinha *"}
                   disabled={isParticular}
                 />
                 <div className="sm:col-span-2">
                   <Input
                     name="validador"
-                    label="Validador de Convênio"
+                    label={isParticular ? "Validador de Convênio" : "Validador de Convênio *"}
                     placeholder="Código do validador"
                     disabled={isParticular}
                     hint={

@@ -237,7 +237,6 @@ export function AtendimentoAtivoCard({
                 <li key={p.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
                   <span className="text-ink">{p.nome}</span>
                   <span className="flex items-center gap-3">
-                    <span className="text-muted">{brl(p.valor)}</span>
                     {emAtendimento && (
                       <button
                         type="button"

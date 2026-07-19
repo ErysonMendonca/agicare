@@ -67,11 +67,12 @@ export async function salvarDocumentoProcedimentos(input: {
   if (!ativo?.queueEntryId)
     return { error: "Nenhum atendimento em andamento para este paciente." };
 
-  // Fotografa os procedimentos JÁ registrados no atendimento (nome + preço).
+  // Fotografa os procedimentos PENDENTES do atendimento (ainda não documentados).
   const { data: execs, error: execErr } = await supabase
     .from("procedure_executions")
-    .select("procedure_id, amount, procedures(name)")
-    .eq("queue_entry_id", ativo.queueEntryId);
+    .select("id, procedure_id, amount, procedures(name)")
+    .eq("queue_entry_id", ativo.queueEntryId)
+    .is("document_id", null);
   if (execErr) return { error: "Não foi possível ler os procedimentos." };
   if (!execs || execs.length === 0)
     return { error: "Adicione ao menos um procedimento antes de gerar o documento." };
@@ -109,6 +110,16 @@ export async function salvarDocumentoProcedimentos(input: {
     await supabase.from("procedure_documents").delete().eq("id", documentId);
     return { error: "Não foi possível salvar os procedimentos do documento." };
   }
+
+  // "Consome" os procedimentos: saem da lista de registro do médico, mas
+  // continuam em procedure_executions para o faturamento cobrar no check-out.
+  await supabase
+    .from("procedure_executions")
+    .update({ document_id: documentId })
+    .in(
+      "id",
+      execs.map((e) => e.id as string),
+    );
 
   // Auditoria sem dado clínico: só a quantidade de itens.
   await logAction({

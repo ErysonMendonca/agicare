@@ -79,7 +79,9 @@ export async function listProcedimentosAtendimento(
   let query = supabase
     .from("procedure_executions")
     .select("id, amount, procedures(name)")
-    .eq("queue_entry_id", queueEntryId);
+    .eq("queue_entry_id", queueEntryId)
+    // Só os pendentes: procedimentos já fotografados num documento saem da lista.
+    .is("document_id", null);
   // Defesa em profundidade: além da RLS, escopa pela clínica ativa.
   if (clinicId) query = query.eq("clinic_id", clinicId);
   const { data, error } = await query.order("created_at", { ascending: true });
