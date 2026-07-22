@@ -38,7 +38,7 @@ const RISCO: Record<string, { label: string; dot: string; text: string }> = {
   azul: { label: "Azul — Não urgente", dot: "bg-blue-600", text: "text-blue-700" },
 };
 
-export function ResumoView({ resumo }: { resumo: Resumo }) {
+export function ResumoView({ resumo, userRole }: { resumo: Resumo; userRole?: string | null }) {
   const [aba, setAba] = useState<Aba>("resumo");
   const [baixandoAnexo, setBaixandoAnexo] = useState(false);
   const { patientId } = useParams<{ patientId: string }>();
@@ -69,7 +69,7 @@ export function ResumoView({ resumo }: { resumo: Resumo }) {
           navegação única (Resumo/Evolução/Anamnese/…). Resumo fica ativo aqui. */}
       <div>
         <PacienteCard id={id} />
-        {patientId && <ClinicoNav patientId={patientId} />}
+        {patientId && <ClinicoNav patientId={patientId} userRole={userRole} />}
 
         {/* Dados complementares de identificação do paciente. */}
         <Card className="p-5">
