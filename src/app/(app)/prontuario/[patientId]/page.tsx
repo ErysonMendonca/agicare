@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { getResumo } from "@/lib/data/prontuario";
+import { getRole } from "@/lib/auth";
 import { logAccess } from "@/lib/audit";
 import { ResumoView } from "./ResumoView";
 
@@ -12,7 +13,7 @@ export default async function ProntuarioResumoPage({
   params: Promise<{ patientId: string }>;
 }) {
   const { patientId } = await params;
-  const resumo = await getResumo(patientId);
+  const [resumo, role] = await Promise.all([getResumo(patientId), getRole()]);
 
   // Auditoria LGPD: registra o acesso ao prontuário (best-effort; logAccess
   // jamais lança, então não bloqueia a renderização se a trilha falhar).
@@ -42,7 +43,7 @@ export default async function ProntuarioResumoPage({
       />
 
       {resumo ? (
-        <ResumoView resumo={resumo} />
+        <ResumoView resumo={resumo} userRole={role} />
       ) : (
         <Card className="p-10 text-center text-sm text-muted">
           Paciente não encontrado ou sem permissão de acesso.

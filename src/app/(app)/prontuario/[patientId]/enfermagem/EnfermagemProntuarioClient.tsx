@@ -51,7 +51,7 @@ const ABAS: Array<{ key: TabKey; label: string; icon: LucideIcon }> = [
   { key: "evolucao", label: "Evolução", icon: Activity },
   { key: "escalas", label: "Escalas", icon: Gauge },
   { key: "procedimentos", label: "Procedimentos", icon: Syringe },
-  { key: "sae", label: "SAE", icon: Brain },
+  { key: "sae", label: "Processo de Enfermagem PE", icon: Brain },
 ];
 
 /**

@@ -6,6 +6,7 @@ import {
   Activity,
   Stethoscope,
   Syringe,
+  Pill,
   ClipboardList,
   FileText,
   Bone,
@@ -21,6 +22,10 @@ export function ClinicoNav({ patientId, userRole }: { patientId: string; userRol
   const pathname = usePathname();
   const base = `/prontuario/${patientId}`;
 
+  const isMedico = userRole === "medico" || userRole === "admin";
+  const isEnfermagem =
+    userRole === "enfermeiro" || userRole === "tecnico_enfermagem";
+
   const tabs = [
     { href: base, label: "Resumo", icon: Activity, exact: true },
     { href: `${base}/anamnese`, label: "Anamnese", icon: ClipboardList },
@@ -33,11 +38,22 @@ export function ClinicoNav({ patientId, userRole }: { patientId: string; userRol
     { href: `${base}/historico`, label: "Histórico", icon: History },
   ];
 
-  if (userRole === "enfermeiro" || userRole === "tecnico_enfermagem") {
-    // Logo após "Protético" — por âncora, não por índice fixo (a lista cresce).
-    const depoisDoProtetico =
-      tabs.findIndex((t) => t.href === `${base}/protetico`) + 1;
-    tabs.splice(depoisDoProtetico, 0, {
+  // Âncora estável: inserir logo após "Protético" (a lista cresce com o tempo).
+  const depoisDoProtetico = () =>
+    tabs.findIndex((t) => t.href === `${base}/protetico`) + 1;
+
+  // Prescrição: ato médico → visível para médico/admin.
+  if (isMedico) {
+    tabs.splice(depoisDoProtetico(), 0, {
+      href: `${base}/prescricao`,
+      label: "Prescrição",
+      icon: Pill,
+    });
+  }
+
+  // Enfermagem: equipe de enfermagem + médico/admin (para visualizar os registros).
+  if (isEnfermagem || isMedico) {
+    tabs.splice(depoisDoProtetico(), 0, {
       href: `${base}/enfermagem`,
       label: "Enfermagem",
       icon: HeartPulse,
