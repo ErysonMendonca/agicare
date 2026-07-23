@@ -22,6 +22,7 @@ type Clinica = {
 type Paciente = {
   nome: string;
   registro: string;
+  cpf: string;
   atendimentoCodigo: string | null;
   idade: string;
   convenio: string;
@@ -67,6 +68,7 @@ function montarDocumento(
 
   const ident = identPacienteHTML(paciente.nome, [
     { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
     { lbl: "Atendimento", val: paciente.atendimentoCodigo ? "#" + paciente.atendimentoCodigo : "—" },
     { lbl: "Idade", val: limpo(paciente.idade) || "—" },
     { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
@@ -96,7 +98,7 @@ function montarDocumento(
     corpoHTML: corpo,
     rodapeHTML: rodapeAssinaturaProfissional(
       limpo(prescricao.profissional) || "Profissional responsável",
-      "Assinatura e carimbo (CRM)",
+      limpo(prescricao.conselho) ? `Assinatura e carimbo — ${prescricao.conselho}` : "Assinatura e carimbo",
     ),
     cssExtra,
   });
@@ -171,6 +173,9 @@ export function ReceitaClient({
           <p>
             <span className="text-muted">Registro:</span>{" "}
             {limpo(paciente.registro) || "—"}
+          </p>
+          <p>
+            <span className="text-muted">CPF:</span> {limpo(paciente.cpf) || "—"}
           </p>
           <p>
             <span className="text-muted">Atendimento:</span>{" "}
@@ -248,7 +253,11 @@ export function ReceitaClient({
         <div className="mt-16 text-center">
           <div className="mx-auto w-72 border-t border-ink pt-1.5 text-sm">
             {limpo(prescricao.profissional) || "Profissional responsável"}
-            <p className="text-xs text-muted">Assinatura e carimbo (CRM)</p>
+            <p className="text-xs text-muted">
+              {limpo(prescricao.conselho)
+                ? `Assinatura e carimbo — ${prescricao.conselho}`
+                : "Assinatura e carimbo"}
+            </p>
           </div>
         </div>
       </div>

@@ -21,13 +21,35 @@ export type { ClinicaImpressao };
 export type PacienteImpressao = {
   nome: string;
   registro: string;
+  cpf: string;
   idade: string;
   convenio: string;
 };
 
+/**
+ * Número por extenso (0–99) — suficiente para dias de afastamento. Ex.: 5 →
+ * "cinco", 21 → "vinte e um". Fora do intervalo, cai no próprio numeral.
+ */
+function porExtenso(n: number): string {
+  const unidades = [
+    "zero", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito",
+    "nove", "dez", "onze", "doze", "treze", "quatorze", "quinze", "dezesseis",
+    "dezessete", "dezoito", "dezenove",
+  ];
+  const dezenas = [
+    "", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta",
+    "setenta", "oitenta", "noventa",
+  ];
+  if (n < 0 || n > 99 || !Number.isInteger(n)) return String(n);
+  if (n < 20) return unidades[n];
+  const d = Math.floor(n / 10);
+  const u = n % 10;
+  return u === 0 ? dezenas[d] : `${dezenas[d]} e ${unidades[u]}`;
+}
+
 function corpoAtestado(paciente: PacienteImpressao, doc: Documento): string {
   const dias = doc.dias ?? 0;
-  const diasTxt = `${dias} (${dias === 1 ? "um" : dias}) dia${dias === 1 ? "" : "s"}`;
+  const diasTxt = `${dias} (${porExtenso(dias)}) dia${dias === 1 ? "" : "s"}`;
   const cidVisivel = doc.exibirCid && !!limpo(doc.cid10 ?? "");
 
   const texto = `
@@ -61,8 +83,9 @@ function montarDocumento(
 ): string {
   const ident = identPacienteHTML(paciente.nome, [
     { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
     { lbl: "Idade", val: limpo(paciente.idade) || "—" },
-    { lbl: "Convênio", val: limpo(paciente.convenio) || "—", span: 3 },
+    { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
   ]);
 
   return montarDocumentoBase({
@@ -73,7 +96,7 @@ function montarDocumento(
     corpoHTML: corpoAtestado(paciente, doc),
     rodapeHTML: rodapeAssinaturaProfissional(
       limpo(doc.profissional) || "Profissional responsável",
-      "Assinatura e carimbo (CRM)",
+      limpo(doc.conselho) ? `Assinatura e carimbo — ${doc.conselho}` : "Assinatura e carimbo",
     ),
   });
 }

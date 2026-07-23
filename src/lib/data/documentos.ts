@@ -1,10 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { extrairConselho } from "@/lib/clinico/conselho";
 
 export type Documento = {
   id: string;
   tipo: "atestado" | "alta";
   dataHora: string;
   profissional: string;
+  /** Registro do conselho do autor já formatado ("CRM-SP 12345") ou "—". */
+  conselho: string;
   /** Atestado */
   dias: number | null;
   dataAtestado: string | null;
@@ -46,6 +49,7 @@ const DEMO_DOCUMENTOS: Documento[] = [
     tipo: "atestado",
     dataHora: "12/06/2026 09:00",
     profissional: "Dra. Ana Beatriz Costa",
+    conselho: "CRM-SP 123456",
     dias: 3,
     dataAtestado: "12/06/2026",
     inicio: "12/06/2026",
@@ -66,6 +70,7 @@ const DEMO_DOCUMENTOS: Documento[] = [
     tipo: "alta",
     dataHora: "11/06/2026 16:30",
     profissional: "Dr. Carlos Eduardo",
+    conselho: "CRM-SP 654321",
     dias: null,
     dataAtestado: null,
     inicio: null,
@@ -90,7 +95,7 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
   const { data, error } = await supabase
     .from("certificates")
     .select(
-      "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, discharge_at, discharge_detail, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name))",
+      "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, discharge_at, discharge_detail, created_at, cancelled_at, cancel_reason, professionals(council_name, council_uf, council_number, council_reg, profiles(full_name))",
     )
     .eq("patient_id", patientId)
     // Aba Documentos = só atestado/alta. Receituários têm aba própria.
@@ -112,6 +117,7 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
       tipo: ((c.kind as string) === "alta" ? "alta" : "atestado") as Documento["tipo"],
       dataHora: fmtDataHora(c.created_at as string | null),
       profissional: profile?.full_name ?? "—",
+      conselho: extrairConselho(c.professionals),
       dias: c.days != null ? Number(c.days) : null,
       dataAtestado: fmtData(c.issue_date as string | null),
       inicio: fmtData(c.start_date as string | null),

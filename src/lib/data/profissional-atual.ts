@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getActiveClinicId } from "@/lib/tenant";
+import { formatarConselho } from "@/lib/clinico/conselho";
 
 /**
  * Identificação do profissional LOGADO para cabeçalhos de documentos clínicos
@@ -34,27 +35,4 @@ export async function getProfissionalAtual(): Promise<ProfissionalAtual | null> 
     .maybeSingle();
 
   return { nome, conselho: formatarConselho(data) };
-}
-
-type LinhaConselho = {
-  council_name?: string | null;
-  council_uf?: string | null;
-  council_number?: string | null;
-  council_reg?: string | null;
-};
-
-/**
- * "CRO-BA 12345" a partir dos campos detalhados (0070). Cai em `council_reg`
- * (campo legado, texto livre) quando o detalhado não foi preenchido.
- */
-function formatarConselho(linha: LinhaConselho | null): string {
-  const nome = linha?.council_name?.trim();
-  const uf = linha?.council_uf?.trim();
-  const numero = linha?.council_number?.trim();
-
-  if (nome && numero) {
-    const orgao = uf ? `${nome}-${uf}` : nome;
-    return `${orgao} ${numero}`;
-  }
-  return linha?.council_reg?.trim() || "—";
 }

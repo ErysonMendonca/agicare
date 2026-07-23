@@ -74,6 +74,8 @@ export type Prescricao = {
   id: string;
   dataHora: string;
   profissional: string;
+  /** Registro do conselho do autor já formatado ("CRM-SP 12345") ou "—". */
+  conselho: string;
   observacoes: string;
   medicamentos: PrescricaoMedicamento[];
   cuidados: PrescricaoCuidado[];

@@ -8,6 +8,10 @@ import {
   limpo,
   type ClinicaImpressao,
 } from "@/lib/clinico/documento-impressao";
+import type { ProfissionalImpressao } from "./ReceituarioSimplesImpressao";
+
+/** Validade legal da receita de controle especial (Portaria 344/98): 30 dias. */
+const VALIDADE_DIAS = 30;
 
 // ════════════════════════════════════════════════════════════════
 // Impressão A4 do RECEITUÁRIO DE CONTROLE ESPECIAL (Portaria 344/98).
@@ -35,6 +39,7 @@ function montarVia(
   paciente: PacienteImpressaoEspecial,
   texto: string,
   via: string,
+  profissional: ProfissionalImpressao,
   cid: string,
 ): string {
   const cidade = [limpo(paciente.cidade), limpo(paciente.uf)].filter(Boolean).join(" / ");
@@ -43,6 +48,10 @@ function montarVia(
     { lbl: "Cidade", val: cidade },
     { lbl: "CEP", val: limpo(paciente.cep) },
   ]);
+
+  const emitente = [limpo(profissional.nome), limpo(profissional.conselho)]
+    .filter(Boolean)
+    .join(" — ");
 
   return `
   <div class="via">
@@ -54,7 +63,11 @@ function montarVia(
     <div class="presc">${corpoTexto(texto)}</div>
 
     ${limpo(cid) ? `<div class="data">CID-10: ${esc(cid)}</div>` : ""}
-    <div class="data">Data: ${esc(hojeBR())}</div>
+    <div class="data">Data: ${esc(hojeBR())} &nbsp;·&nbsp; Validade: ${VALIDADE_DIAS} dias a contar da emissão</div>
+    <div class="emitente">
+      <span class="emitente-lbl">Emitente:</span>
+      ${esc(emitente || "Profissional responsável")}
+    </div>
 
     <div class="blocos">
       <div class="bloco">
@@ -83,6 +96,7 @@ function montarDocumento(
   clinica: ClinicaImpressao,
   paciente: PacienteImpressaoEspecial,
   texto: string,
+  profissional: ProfissionalImpressao,
   cid: string,
 ): string {
   return `<!doctype html>
@@ -112,6 +126,8 @@ function montarDocumento(
   .corpo-lbl { font-size: 12px; color: #555; margin-top: 6px; }
   .presc { border: 1px solid #888; padding: 10px; min-height: 180px; font-size: 13px; margin-top: 4px; }
   .data { font-size: 12px; margin: 10px 0; }
+  .emitente { font-size: 12px; margin: 4px 0 10px; }
+  .emitente-lbl { color: #555; }
   .blocos { display: flex; gap: 12px; margin-top: 8px; }
   .bloco { flex: 1; border: 1px solid #888; padding: 8px 10px; min-height: 150px; }
   .bloco-tit { font-size: 10px; font-weight: bold; text-align: center; border-bottom: 1px solid #888; padding-bottom: 4px; margin-bottom: 8px; }
@@ -123,8 +139,8 @@ function montarDocumento(
 </style>
 </head>
 <body>
-  ${montarVia(clinica, { ...paciente }, texto, "1ª VIA FARMÁCIA", cid).replace('class="via"', 'class="via primeira"')}
-  ${montarVia(clinica, { ...paciente }, texto, "2ª VIA PACIENTE", cid)}
+  ${montarVia(clinica, { ...paciente }, texto, "1ª VIA FARMÁCIA", profissional, cid).replace('class="via"', 'class="via primeira"')}
+  ${montarVia(clinica, { ...paciente }, texto, "2ª VIA PACIENTE", profissional, cid)}
 </body>
 </html>`;
 }
@@ -134,10 +150,11 @@ export function imprimirReceituarioEspecial(
   clinica: ClinicaImpressao,
   paciente: PacienteImpressaoEspecial,
   texto: string,
+  profissional: ProfissionalImpressao,
   cid = "",
 ): void {
   abrirImpressao(
-    montarDocumento(clinica, paciente, texto, cid),
+    montarDocumento(clinica, paciente, texto, profissional, cid),
     "Permita pop-ups para imprimir o receituário.",
   );
 }

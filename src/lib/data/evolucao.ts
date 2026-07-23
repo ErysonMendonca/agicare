@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { extrairConselho } from "@/lib/clinico/conselho";
 
 /** Rótulos dos campos da evolução, na ordem de impressão. */
 export const EVOLUCAO_CAMPOS = [
@@ -16,6 +17,8 @@ export type EvolucaoCard = {
   id: string;
   dataHora: string;
   profissional: string;
+  /** Registro do conselho do autor já formatado ("CRM-SP 12345") ou "—". */
+  conselho: string;
   /** Primeira linha (queixa principal) para o resumo do card. */
   resumo: string;
   /** Conteúdo completo formatado (para Ver / Imprimir). */
@@ -50,6 +53,7 @@ const DEMO_EVOLUCOES: EvolucaoCard[] = [
     id: "demo-evo-1",
     dataHora: "12/06/2026 08:30",
     profissional: "Dra. Ana Beatriz Costa",
+    conselho: "CRM-SP 123456",
     resumo: "Dor torácica leve há 2 dias.",
     conteudo:
       "Queixa Principal: Dor torácica leve há 2 dias.\n\n" +
@@ -72,7 +76,7 @@ export async function listEvolucoes(patientId: string): Promise<EvolucaoCard[]> 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("medical_records")
-    .select("id, content, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name))")
+    .select("id, content, created_at, cancelled_at, cancel_reason, professionals(council_name, council_uf, council_number, council_reg, profiles(full_name))")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
 
@@ -114,6 +118,7 @@ export async function listEvolucoes(patientId: string): Promise<EvolucaoCard[]> 
       id: r.id as string,
       dataHora: fmtDataHora(r.created_at as string | null),
       profissional: profile?.full_name ?? "—",
+      conselho: extrairConselho(r.professionals),
       resumo: primeira || "Evolução clínica registrada.",
       conteudo,
       extras,

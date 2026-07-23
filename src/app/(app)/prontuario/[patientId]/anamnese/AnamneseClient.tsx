@@ -165,7 +165,7 @@ export function AnamneseClient({
       corpoHTML: linhas || `<p class="corpo-lbl">Sem campos preenchidos.</p>`,
       rodapeHTML: rodapeAssinaturaProfissional(
         limpo(a.profissional) || "Profissional responsável",
-        "Assinatura e carimbo (CRM)",
+        limpo(a.conselho) ? `Assinatura e carimbo — ${a.conselho}` : "Assinatura e carimbo",
       ),
       cssExtra,
     });

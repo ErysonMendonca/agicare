@@ -85,6 +85,7 @@ export default async function ReceitaPage({
         paciente={{
           nome: identificacao.nome,
           registro: identificacao.registro,
+          cpf: identificacao.cpf,
           atendimentoCodigo: identificacao.atendimentoCodigo,
           idade: identificacao.idade,
           convenio: identificacao.convenio,

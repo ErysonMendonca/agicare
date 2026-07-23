@@ -45,6 +45,7 @@ export default async function DocumentosPage({
         paciente={{
           nome: identificacao?.nome ?? "—",
           registro: identificacao?.registro ?? "—",
+          cpf: identificacao?.cpf ?? "—",
           idade: identificacao?.idade ?? "—",
           convenio: identificacao?.convenio ?? "—",
         }}

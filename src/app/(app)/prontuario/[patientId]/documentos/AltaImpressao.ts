@@ -46,8 +46,9 @@ function montarDocumento(
 ): string {
   const ident = identPacienteHTML(limpo(paciente.nome) || "—", [
     { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
     { lbl: "Idade", val: limpo(paciente.idade) || "—" },
-    { lbl: "Convênio", val: limpo(paciente.convenio) || "—", span: 3 },
+    { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
   ]);
 
   return montarDocumentoBase({
@@ -58,7 +59,7 @@ function montarDocumento(
     corpoHTML: corpoAlta(paciente, doc),
     rodapeHTML: rodapeAssinaturaProfissional(
       limpo(doc.profissional) || "Profissional responsável",
-      "Assinatura e carimbo (CRM)",
+      limpo(doc.conselho) ? `Assinatura e carimbo — ${doc.conselho}` : "Assinatura e carimbo",
     ),
   });
 }
