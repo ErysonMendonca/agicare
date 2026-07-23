@@ -70,6 +70,7 @@ function imprimirExame(
   clinica: ClinicaImpressao,
   paciente: PacienteIdent,
   e: ExamOrder,
+  profissional: { nome: string; conselho: string },
 ) {
   const ident = identPacienteHTML(paciente.nome, [
     { lbl: "Registro", val: limpo(paciente.registro) || "—" },
@@ -105,8 +106,8 @@ function imprimirExame(
     identHTML: ident,
     corpoHTML: corpo,
     rodapeHTML: rodapeAssinaturaProfissional(
-      "Profissional responsável",
-      "Assinatura e carimbo (CRM)",
+      limpo(profissional.nome) || "Profissional responsável",
+      limpo(profissional.conselho) ? `Assinatura e carimbo — ${profissional.conselho}` : "Assinatura e carimbo",
     ),
     cssExtra: `
       .corpo { min-height: 260px; }
@@ -124,11 +125,13 @@ export function ExamesClient({
   clinica,
   paciente,
   exames,
+  profissional,
 }: {
   patientId: string;
   clinica: ClinicaImpressao;
   paciente: PacienteIdent;
   exames: ExamOrder[];
+  profissional: { nome: string; conselho: string };
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -383,7 +386,7 @@ export function ExamesClient({
                         pending={pending}
                         onView={() => setViewing(e)}
                         onEdit={() => abrirEdicao(e)}
-                        onPrint={() => imprimirExame(clinica, paciente, e)}
+                        onPrint={() => imprimirExame(clinica, paciente, e, profissional)}
                         onCancel={() => setCancelando(e)}
                       />
                     </div>

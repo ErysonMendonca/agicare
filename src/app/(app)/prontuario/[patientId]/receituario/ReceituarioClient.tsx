@@ -50,6 +50,7 @@ export function ReceituarioClient({
   endereco,
   receituarios,
   cidCodes,
+  profissional,
 }: {
   patientId: string;
   clinica: ClinicaImpressao;
@@ -57,6 +58,7 @@ export function ReceituarioClient({
   endereco: Endereco;
   receituarios: Receituario[];
   cidCodes: CidCode[];
+  profissional: { nome: string; conselho: string };
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -91,9 +93,9 @@ export function ReceituarioClient({
   /** Dispara a impressão do conteúdo conforme o tipo (CID opcional). */
   function imprimir(t: Tipo, conteudo: string, cid = "") {
     if (t === "especial") {
-      imprimirReceituarioEspecial(clinica, pacienteEspecial, conteudo, cid);
+      imprimirReceituarioEspecial(clinica, pacienteEspecial, conteudo, profissional, cid);
     } else {
-      imprimirReceituarioSimples(clinica, paciente, conteudo, cid);
+      imprimirReceituarioSimples(clinica, paciente, conteudo, profissional, cid);
     }
   }
 

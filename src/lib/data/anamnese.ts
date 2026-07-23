@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { extrairConselho } from "@/lib/clinico/conselho";
 
 // Re-exporta o motor PURO (config) para conveniência em Server Components.
 export {
@@ -14,6 +15,8 @@ export type AnamneseRegistro = {
   specialty: string;
   dataHora: string;
   profissional: string;
+  /** Registro do conselho do autor já formatado ("CRM-SP 12345") ou "—". */
+  conselho: string;
   consentimento: boolean;
   assinatura: string | null;
   campos: Record<string, unknown>;
@@ -40,6 +43,7 @@ const DEMO_ANAMNESES: AnamneseRegistro[] = [
     specialty: "Podológico",
     dataHora: "10/06/2026 10:15",
     profissional: "Dra. Ana Beatriz Costa",
+    conselho: "CRM-SP 123456",
     consentimento: true,
     assinatura: "Ana Beatriz Costa",
     campos: {
@@ -62,7 +66,7 @@ export async function listAnamneses(
   const { data, error } = await supabase
     .from("anamneses")
     .select(
-      "id, specialty, fields, consent_given, signature, created_at, cancelled_at, cancel_reason, queue_entries(attendance_code), professionals(profiles(full_name))",
+      "id, specialty, fields, consent_given, signature, created_at, cancelled_at, cancel_reason, queue_entries(attendance_code), professionals(council_name, council_uf, council_number, council_reg, profiles(full_name))",
     )
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
@@ -86,6 +90,7 @@ export async function listAnamneses(
       specialty: (a.specialty as string | null) ?? "—",
       dataHora: fmtDataHora(a.created_at as string | null),
       profissional: profile?.full_name ?? "—",
+      conselho: extrairConselho(a.professionals),
       consentimento: !!a.consent_given,
       assinatura: (a.signature as string | null) ?? null,
       campos: (a.fields as Record<string, unknown> | null) ?? {},

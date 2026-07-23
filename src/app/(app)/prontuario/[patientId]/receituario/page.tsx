@@ -2,6 +2,7 @@ import { getResumo } from "@/lib/data/prontuario";
 import { getSettings } from "@/lib/data/settings";
 import { listReceituarios, getPacienteEndereco } from "@/lib/data/receituario";
 import { listCidCodes } from "@/lib/data/cid";
+import { getProfissionalAtual } from "@/lib/data/profissional-atual";
 import { SecaoClinica } from "../SecaoClinica";
 import { ReceituarioClient } from "./ReceituarioClient";
 
@@ -11,13 +12,15 @@ export default async function ReceituarioPage({
   params: Promise<{ patientId: string }>;
 }) {
   const { patientId } = await params;
-  const [resumo, settings, endereco, receituarios, cidCodes] = await Promise.all([
-    getResumo(patientId),
-    getSettings(),
-    getPacienteEndereco(patientId),
-    listReceituarios(patientId),
-    listCidCodes(),
-  ]);
+  const [resumo, settings, endereco, receituarios, cidCodes, profissional] =
+    await Promise.all([
+      getResumo(patientId),
+      getSettings(),
+      getPacienteEndereco(patientId),
+      listReceituarios(patientId),
+      listCidCodes(),
+      getProfissionalAtual(),
+    ]);
 
   const identificacao = resumo?.identificacao ?? null;
 
@@ -39,6 +42,7 @@ export default async function ReceituarioPage({
         paciente={{
           nome: identificacao?.nome ?? "—",
           registro: identificacao?.registro ?? "—",
+          cpf: identificacao?.cpf ?? "—",
           idade: identificacao?.idade ?? "—",
           convenio: identificacao?.convenio ?? "—",
         }}
@@ -51,6 +55,10 @@ export default async function ReceituarioPage({
         }}
         receituarios={receituarios}
         cidCodes={cidCodes}
+        profissional={{
+          nome: profissional?.nome ?? "—",
+          conselho: profissional?.conselho ?? "—",
+        }}
       />
     </SecaoClinica>
   );

@@ -21,19 +21,28 @@ export type { ClinicaImpressao };
 export type PacienteImpressao = {
   nome: string;
   registro: string;
+  cpf: string;
   idade: string;
   convenio: string;
+};
+
+/** Identificação do profissional emitente (nome + registro do conselho). */
+export type ProfissionalImpressao = {
+  nome: string;
+  conselho: string;
 };
 
 function montarDocumento(
   clinica: ClinicaImpressao,
   paciente: PacienteImpressao,
   texto: string,
+  profissional: ProfissionalImpressao,
   cid: string,
 ): string {
   const ident = identPacienteHTML(limpo(paciente.nome) || "—", [
     { lbl: "Registro", val: limpo(paciente.registro) || "—" },
-    { lbl: "Data", val: hojeBR() },
+    { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
+    { lbl: "Data", val: hojeBR(), span: 3 },
   ]);
 
   const corpo = `
@@ -47,7 +56,10 @@ function montarDocumento(
     pacienteNome: paciente.nome,
     identHTML: ident,
     corpoHTML: corpo,
-    rodapeHTML: rodapeAssinaturaProfissional("Assinatura do médico", "Assinatura e carimbo (CRM)"),
+    rodapeHTML: rodapeAssinaturaProfissional(
+      limpo(profissional.nome) || "Profissional responsável",
+      limpo(profissional.conselho) ? `Assinatura e carimbo — ${profissional.conselho}` : "Assinatura e carimbo",
+    ),
     cssExtra: ".corpo { min-height: 320px; } .presc { margin-top: 4px; }",
   });
 }
@@ -57,10 +69,11 @@ export function imprimirReceituarioSimples(
   clinica: ClinicaImpressao,
   paciente: PacienteImpressao,
   texto: string,
+  profissional: ProfissionalImpressao,
   cid = "",
 ): void {
   abrirImpressao(
-    montarDocumento(clinica, paciente, texto, cid),
+    montarDocumento(clinica, paciente, texto, profissional, cid),
     "Permita pop-ups para imprimir o receituário.",
   );
 }

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { listStockProducts } from "@/lib/data/stock";
+import { extrairConselho } from "@/lib/clinico/conselho";
 import type {
   Medicamento,
   Prescricao,
@@ -57,6 +58,7 @@ const DEMO_PRESCRICOES: Prescricao[] = [
     id: "demo-presc-1",
     dataHora: "12/06/2026 08:40",
     profissional: "Dra. Ana Beatriz Costa",
+    conselho: "CRM-SP 123456",
     observacoes: "Reavaliar em 48h.",
     medicamentos: [
       {
@@ -91,7 +93,7 @@ export async function listPrescricoes(patientId: string): Promise<Prescricao[]> 
   const { data, error } = await supabase
     .from("prescriptions")
     .select(
-      "id, notes, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name)), prescription_items(id, name, concentration, posology, route, duration, frequency, observations), care_orders(id, name, frequency, duration, observations)",
+      "id, notes, created_at, cancelled_at, cancel_reason, professionals(council_name, council_uf, council_number, council_reg, profiles(full_name)), prescription_items(id, name, concentration, posology, route, duration, frequency, observations), care_orders(id, name, frequency, duration, observations)",
     )
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
@@ -114,6 +116,7 @@ export async function listPrescricoes(patientId: string): Promise<Prescricao[]> 
       id: p.id as string,
       dataHora: fmtDataHora(p.created_at as string | null),
       profissional: profile?.full_name ?? "—",
+      conselho: extrairConselho(p.professionals),
       observacoes: (p.notes as string | null) ?? "",
       medicamentos: itens.map((it) => ({
         id: it.id as string,

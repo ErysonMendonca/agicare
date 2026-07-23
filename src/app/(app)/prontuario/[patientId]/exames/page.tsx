@@ -1,6 +1,7 @@
 import { getResumo } from "@/lib/data/prontuario";
 import { getSettings } from "@/lib/data/settings";
 import { listExamOrders } from "@/lib/data/exames";
+import { getProfissionalAtual } from "@/lib/data/profissional-atual";
 import { SecaoClinica } from "../SecaoClinica";
 import { ExamesClient } from "./ExamesClient";
 
@@ -10,10 +11,11 @@ export default async function ExamesPage({
   params: Promise<{ patientId: string }>;
 }) {
   const { patientId } = await params;
-  const [resumo, settings, exames] = await Promise.all([
+  const [resumo, settings, exames, profissional] = await Promise.all([
     getResumo(patientId),
     getSettings(),
     listExamOrders(patientId),
+    getProfissionalAtual(),
   ]);
 
   const identificacao = resumo?.identificacao ?? null;
@@ -40,6 +42,10 @@ export default async function ExamesPage({
           convenio: identificacao?.convenio ?? "—",
         }}
         exames={exames}
+        profissional={{
+          nome: profissional?.nome ?? "—",
+          conselho: profissional?.conselho ?? "—",
+        }}
       />
     </SecaoClinica>
   );

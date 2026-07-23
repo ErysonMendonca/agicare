@@ -147,7 +147,7 @@ export function EvolucaoClient({
       corpoHTML: corpo,
       rodapeHTML: rodapeAssinaturaProfissional(
         limpo(e.profissional) || "Profissional responsável",
-        "Assinatura e carimbo (CRM)",
+        limpo(e.conselho) ? `Assinatura e carimbo — ${e.conselho}` : "Assinatura e carimbo",
       ),
       cssExtra: `
         .corpo { min-height: 260px; }
