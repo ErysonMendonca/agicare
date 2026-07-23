@@ -11,6 +11,8 @@ export type ProcedureRelations = {
   materialIds: string[];
   /** Qtd. baixada por execução, por product_id (Aba C). */
   materialQty: Record<string, number>;
+  /** IDs de attendance_options.id (category='instrumental') associados. */
+  instrumentIds: string[];
   /** Orientações e flags (Aba E). */
   preInstructions: string;
   postInstructions: string;
@@ -24,6 +26,7 @@ const VAZIO: ProcedureRelations = {
   professionalIds: [],
   materialIds: [],
   materialQty: {},
+  instrumentIds: [],
   preInstructions: "",
   postInstructions: "",
   requireConsent: false,
@@ -42,7 +45,7 @@ export async function loadProcedureRelations(
 
   const supabase = await createClient();
 
-  const [profsRes, matsRes, instrRes] = await Promise.all([
+  const [profsRes, matsRes, instrRes, toolsRes] = await Promise.all([
     supabase
       .from("procedure_professionals")
       .select("procedure_id, professional_id")
@@ -57,6 +60,13 @@ export async function loadProcedureRelations(
         "procedure_id, pre_instructions, post_instructions, require_consent, require_anamnese, notify_channel",
       )
       .in("procedure_id", procedureIds),
+    // Instrumental (junção com attendance_options). Isolado: se a migration
+    // 0117 ainda não foi aplicada, a tabela não existe e a leitura falha sem
+    // derrubar as demais (degradação segura).
+    supabase
+      .from("procedure_instruments")
+      .select("procedure_id, option_id")
+      .in("procedure_id", procedureIds),
   ]);
 
   const map: Record<string, ProcedureRelations> = {};
@@ -66,6 +76,7 @@ export async function loadProcedureRelations(
       professionalIds: [],
       materialIds: [],
       materialQty: {},
+      instrumentIds: [],
     });
 
   for (const r of profsRes.data ?? []) {
@@ -78,6 +89,9 @@ export async function loadProcedureRelations(
     const pid = r.product_id as string;
     rel.materialIds.push(pid);
     rel.materialQty[pid] = Number(r.quantity ?? 1);
+  }
+  for (const r of toolsRes.data ?? []) {
+    get(r.procedure_id as string).instrumentIds.push(r.option_id as string);
   }
   for (const r of instrRes.data ?? []) {
     const rel = get(r.procedure_id as string);

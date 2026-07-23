@@ -25,6 +25,8 @@ export type ProdutoEstoque = {
   validade: string;
   localizacao: string;
   fornecedor: string;
+  /** Código de barras (EAN) — usado na bipagem do atendimento de solicitações. */
+  barcode: string | null;
 };
 
 /**
@@ -41,11 +43,11 @@ function derivarStatus(saldo: number, minimo: number): StatusEstoque {
 
 /** Mock usado no modo demo (espelha o Figma). */
 const MOCK_RAW: Array<Omit<ProdutoEstoque, "status">> = [
-  { id: "1", codigo: "MED-8842", produto: "Dipirona 500mg (ampola)", categoria: "Medicamento", unidade: "ampola", saldo: 12, minimo: 50, lote: "LT-8842", ativo: true, custo: 1.2, preco: 3.5, validade: "10/2026", localizacao: "Prateleira A3", fornecedor: "Cristália" },
-  { id: "2", codigo: "SOL-7720", produto: "Soro Fisiológico 0,9% 500ml", categoria: "Solução", unidade: "unidade", saldo: 28, minimo: 40, lote: "LT-7720", ativo: true, custo: 2.8, preco: 6.9, validade: "03/2027", localizacao: "Prateleira B1", fornecedor: "Fresenius" },
-  { id: "3", codigo: "MAT-3391", produto: "Luva Cirúrgica nº 7,5", categoria: "Material", unidade: "caixa", saldo: 6, minimo: 30, lote: "LT-3391", ativo: true, custo: 18.0, preco: 39.9, validade: "08/2027", localizacao: "Prateleira C2", fornecedor: "Descarpack" },
-  { id: "4", codigo: "MAT-5510", produto: "Seringa 10ml", categoria: "Material", unidade: "unidade", saldo: 9, minimo: 25, lote: "LT-5510", ativo: true, custo: 0.45, preco: 1.2, validade: "12/2026", localizacao: "Prateleira C4", fornecedor: "BD" },
-  { id: "5", codigo: "MED-6604", produto: "Paracetamol 750mg (comprimido)", categoria: "Medicamento", unidade: "comprimido", saldo: 180, minimo: 100, lote: "LT-6604", ativo: true, custo: 0.18, preco: 0.5, validade: "06/2027", localizacao: "Prateleira A1", fornecedor: "EMS" },
+  { id: "1", codigo: "MED-8842", produto: "Dipirona 500mg (ampola)", categoria: "Medicamento", unidade: "ampola", saldo: 12, minimo: 50, lote: "LT-8842", ativo: true, custo: 1.2, preco: 3.5, validade: "10/2026", localizacao: "Prateleira A3", fornecedor: "Cristália", barcode: "7891234560012" },
+  { id: "2", codigo: "SOL-7720", produto: "Soro Fisiológico 0,9% 500ml", categoria: "Solução", unidade: "unidade", saldo: 28, minimo: 40, lote: "LT-7720", ativo: true, custo: 2.8, preco: 6.9, validade: "03/2027", localizacao: "Prateleira B1", fornecedor: "Fresenius", barcode: "7891234560029" },
+  { id: "3", codigo: "MAT-3391", produto: "Luva Cirúrgica nº 7,5", categoria: "Material", unidade: "caixa", saldo: 6, minimo: 30, lote: "LT-3391", ativo: true, custo: 18.0, preco: 39.9, validade: "08/2027", localizacao: "Prateleira C2", fornecedor: "Descarpack", barcode: "7891234560050" },
+  { id: "4", codigo: "MAT-5510", produto: "Seringa 10ml", categoria: "Material", unidade: "unidade", saldo: 9, minimo: 25, lote: "LT-5510", ativo: true, custo: 0.45, preco: 1.2, validade: "12/2026", localizacao: "Prateleira C4", fornecedor: "BD", barcode: "7891234560067" },
+  { id: "5", codigo: "MED-6604", produto: "Paracetamol 750mg (comprimido)", categoria: "Medicamento", unidade: "comprimido", saldo: 180, minimo: 100, lote: "LT-6604", ativo: true, custo: 0.18, preco: 0.5, validade: "06/2027", localizacao: "Prateleira A1", fornecedor: "EMS", barcode: "7891234560043" },
 ];
 
 const MOCK: ProdutoEstoque[] = MOCK_RAW.map((p) => ({
@@ -123,6 +125,7 @@ export async function listStockProducts(): Promise<ProdutoEstoque[]> {
       validade: fmtValidade((p.expiry as string | null) ?? null),
       localizacao: (p.location as string | null) ?? "—",
       fornecedor: (sup?.name as string | null) ?? "—",
+      barcode: (p.barcode as string | null) ?? null,
     };
   });
 }

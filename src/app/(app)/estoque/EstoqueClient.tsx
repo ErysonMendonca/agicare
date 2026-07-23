@@ -30,7 +30,7 @@ import { ComprasTab } from "./ComprasTab";
 import { RelatoriosTab } from "./RelatoriosTab";
 import { SolicitacoesEstoqueTab } from "./SolicitacoesEstoqueTab";
 
-type TabKey =
+export type TabKey =
   | "cadastro"
   | "dispensacao"
   | "entrada"
@@ -61,6 +61,7 @@ export function EstoqueClient({
   solicitacoes,
   gestor,
   podePrescricao,
+  abaInicial,
 }: {
   produtos: ProdutoEstoque[];
   fornecedores: Fornecedor[];
@@ -73,8 +74,20 @@ export function EstoqueClient({
   solicitacoes: SolicitacaoProduto[];
   gestor: boolean;
   podePrescricao: boolean;
+  /** Aba a abrir de cara (ex.: "solicitacoes") — lida do ?aba= pelo Server
+   * Component (page.tsx). Usada pelo "Voltar" da página de atendimento, que
+   * precisa devolver a pessoa para a mesma aba de onde ela saiu. */
+  abaInicial?: TabKey;
 }) {
-  const [aba, setAba] = useState<TabKey>("dispensacao");
+  const [aba, setAba] = useState<TabKey>(abaInicial ?? "dispensacao");
+
+  // Pendentes de atender (todos os setores) — sinaliza no rótulo da aba
+  // "Solicitações" para quem atende (Almoxarifado, Farmácia, etc.) ver de
+  // cara que há pedido novo, sem precisar abrir a aba. "Parcial" continua
+  // precisando de ação, por isso soma no mesmo contador.
+  const solicitacoesPendentes = solicitacoes.filter(
+    (s) => s.statusRaw === "pendente" || s.statusRaw === "atendida_parcial",
+  ).length;
 
   return (
     <>
@@ -82,6 +95,7 @@ export function EstoqueClient({
       <div className="mt-6 flex flex-wrap gap-2">
         {ABAS.map(({ key, label, icon: Icone }) => {
           const ativa = aba === key;
+          const badge = key === "solicitacoes" ? solicitacoesPendentes : 0;
           return (
             <button
               key={key}
@@ -95,6 +109,17 @@ export function EstoqueClient({
             >
               <Icone className="h-4 w-4" />
               {label}
+              {badge > 0 && (
+                <span
+                  className={
+                    ativa
+                      ? "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-xs font-semibold text-brand-600"
+                      : "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-xs font-semibold text-secondary"
+                  }
+                >
+                  {badge}
+                </span>
+              )}
             </button>
           );
         })}

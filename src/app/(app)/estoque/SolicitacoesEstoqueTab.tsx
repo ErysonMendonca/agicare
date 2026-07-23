@@ -2,22 +2,23 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, Zap, PackageOpen } from "lucide-react";
+import Link from "next/link";
+import { PackageCheck, X, Zap, PackageOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/ui/EmptyState";
-import {
-  atenderSolicitacao,
-  cancelarSolicitacao,
-} from "@/lib/actions/product-requests";
+import { cancelarSolicitacao } from "@/lib/actions/product-requests";
 import { type SolicitacaoProduto } from "@/lib/data/product-requests.shared";
 
 /**
- * Aba do Estoque para ATENDER as solicitações dos setores. Atender marca como
- * atendida (a baixa real segue pela Dispensação). Cancelar descarta o pedido.
+ * Aba do Estoque para ATENDER as solicitações dos setores. "Atender" navega
+ * para a página dedicada de atendimento (bipagem por código de barras,
+ * atendimento parcial, histórico e impressão do comprovante assinável).
+ * Cancelar descarta o pedido sem tocar no estoque (só permitido enquanto
+ * nada foi atendido).
  */
 export function SolicitacoesEstoqueTab({
   solicitacoes,
@@ -29,9 +30,17 @@ export function SolicitacoesEstoqueTab({
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
+  // "Pendente" agrupa também "Parcial" — uma solicitação parcialmente atendida
+  // continua precisando de ação até ser complementada ou concluída.
   const lista = useMemo(
     () =>
-      status ? solicitacoes.filter((s) => s.statusRaw === status) : solicitacoes,
+      status === "pendente"
+        ? solicitacoes.filter(
+            (s) => s.statusRaw === "pendente" || s.statusRaw === "atendida_parcial",
+          )
+        : status
+          ? solicitacoes.filter((s) => s.statusRaw === status)
+          : solicitacoes,
     [solicitacoes, status],
   );
 
@@ -66,6 +75,7 @@ export function SolicitacoesEstoqueTab({
           className="w-44"
         >
           <option value="pendente">Pendentes</option>
+          <option value="atendida_parcial">Parciais</option>
           <option value="atendida">Atendidas</option>
           <option value="cancelada">Canceladas</option>
           <option value="">Todas</option>
@@ -108,7 +118,7 @@ export function SolicitacoesEstoqueTab({
                   >
                     <span className="text-ink">{i.nome}</span>
                     <span className="text-muted">
-                      {i.quantidade} {i.unidade}
+                      {i.quantidadeAtendida}/{i.quantidade} {i.unidade}
                     </span>
                   </li>
                 ))}
@@ -118,33 +128,40 @@ export function SolicitacoesEstoqueTab({
                 <p className="mt-2 text-xs text-muted">Obs.: {s.observacoes}</p>
               )}
 
-              {s.statusRaw === "pendente" ? (
-                <div className="mt-3 flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      agir(s.id, atenderSolicitacao, "Solicitação atendida.")
-                    }
-                    disabled={pending && pendingId === s.id}
-                  >
-                    <Check className="h-4 w-4" /> Atender
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      agir(s.id, cancelarSolicitacao, "Solicitação cancelada.")
-                    }
-                    disabled={pending && pendingId === s.id}
-                  >
-                    <X className="h-4 w-4" /> Cancelar
-                  </Button>
+              {s.statusRaw === "pendente" || s.statusRaw === "atendida_parcial" ? (
+                <div className="mt-3 flex items-center gap-2">
+                  <Link href={`/estoque/solicitacoes/${s.id}/atender`}>
+                    <Button size="sm" disabled={pending && pendingId === s.id}>
+                      <PackageCheck className="h-4 w-4" />
+                      {s.statusRaw === "atendida_parcial"
+                        ? "Continuar atendimento"
+                        : "Atender"}
+                    </Button>
+                  </Link>
+                  {s.statusRaw === "pendente" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        agir(s.id, cancelarSolicitacao, "Solicitação cancelada.")
+                      }
+                      disabled={pending && pendingId === s.id}
+                    >
+                      <X className="h-4 w-4" /> Cancelar
+                    </Button>
+                  )}
                 </div>
               ) : s.statusRaw === "atendida" && s.atendidaEm ? (
                 <p className="mt-2 text-xs text-emerald-600">
                   Atendida por {s.atendidaPor ?? "—"} em {s.atendidaEm}
                 </p>
               ) : null}
+
+              {s.statusRaw === "atendida_parcial" && s.atendidaEm && (
+                <p className="mt-2 text-xs text-blue-600">
+                  Último atendimento por {s.atendidaPor ?? "—"} em {s.atendidaEm}
+                </p>
+              )}
             </Card>
           ))}
         </div>

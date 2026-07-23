@@ -54,12 +54,14 @@ import { CidConfig } from "./CidConfig";
 import { AltaCatalogoConfig } from "./AltaCatalogoConfig";
 import { ProdutoCatalogosConfig } from "./ProdutoCatalogosConfig";
 import { ConsentTemplatesConfig } from "./ConsentTemplatesConfig";
+import { SetorFornecedorConfig } from "./SetorFornecedorConfig";
+import { InstrumentalConfig } from "./InstrumentalConfig";
 import type { ProductCategoryNode } from "@/lib/data/product-categories";
 import type { ConsentTemplate } from "@/lib/data/consent-templates";
 import type { CidCode } from "@/lib/data/cid";
 import type { MotivoAltaCfg, DetalheAltaCfg } from "@/lib/data/alta";
 import type { Especialidade } from "@/lib/data/especialidades";
-import type { ProdutoCatalogos } from "@/lib/data/produto-catalogos";
+import type { ProdutoCatalogos, CatalogoItem } from "@/lib/data/produto-catalogos";
 import { CatalogoTabela } from "./CatalogoTabela";
 
 const BASE_TABS = [
@@ -79,6 +81,8 @@ const TIPO_PROFISSIONAL_TAB = "Tipos de Profissional";
 const CID_TAB = "Catálogo CID";
 const ALTA_CATALOGO_TAB = "Motivos e Detalhes de Alta";
 const PRODUTO_TAB = "Produto";
+const SETOR_FORNECEDOR_TAB = "Setor Fornecedor";
+const INSTRUMENTAL_TAB = "Instrumental";
 const CONSENTIMENTOS_TAB = "Consentimentos";
 
 type Tab =
@@ -90,6 +94,8 @@ type Tab =
   | typeof CID_TAB
   | typeof ALTA_CATALOGO_TAB
   | typeof PRODUTO_TAB
+  | typeof SETOR_FORNECEDOR_TAB
+  | typeof INSTRUMENTAL_TAB
   | typeof CONSENTIMENTOS_TAB;
 
 export function ConfiguracoesClient({
@@ -104,6 +110,8 @@ export function ConfiguracoesClient({
   detalhesAlta,
   produtoCatalogos,
   productCategories,
+  setoresFornecedor,
+  instrumentais,
   consentTemplates,
   isGestor,
 }: {
@@ -118,6 +126,8 @@ export function ConfiguracoesClient({
   detalhesAlta: DetalheAltaCfg[];
   produtoCatalogos: ProdutoCatalogos;
   productCategories: ProductCategoryNode[];
+  setoresFornecedor: CatalogoItem[];
+  instrumentais: CatalogoItem[];
   consentTemplates: ConsentTemplate[];
   isGestor: boolean;
 }) {
@@ -133,6 +143,8 @@ export function ConfiguracoesClient({
         CID_TAB,
         ALTA_CATALOGO_TAB,
         PRODUTO_TAB,
+        SETOR_FORNECEDOR_TAB,
+        INSTRUMENTAL_TAB,
         CONSENTIMENTOS_TAB,
       ]
     : [...BASE_TABS];
@@ -648,6 +660,16 @@ export function ConfiguracoesClient({
           catalogos={produtoCatalogos}
           categorias={productCategories}
         />
+      )}
+
+      {/* Catálogo de setores fornecedores (gestor-only), fora do form. */}
+      {isGestor && tabAtiva === SETOR_FORNECEDOR_TAB && (
+        <SetorFornecedorConfig itens={setoresFornecedor} />
+      )}
+
+      {/* Catálogo de instrumentais (gestor-only), fora do form. */}
+      {isGestor && tabAtiva === INSTRUMENTAL_TAB && (
+        <InstrumentalConfig itens={instrumentais} />
       )}
 
       {/* Termos de consentimento (gestor-only), fora do form. */}

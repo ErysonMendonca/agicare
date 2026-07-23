@@ -14,6 +14,7 @@ import {
   Tag,
   Clock,
   Boxes,
+  Wrench,
   Layers,
   FileText,
   DollarSign,
@@ -38,12 +39,15 @@ import {
 
 type ProfOption = { id: string; nome: string; especialidade: string };
 type InsumoOption = { id: string; nome: string; unidade: string };
+type InstrumentalOption = { id: string; nome: string };
 
 /** Vínculos pré-existentes (abas B/C/E) para pré-preencher a edição. */
 export type ProcedureRelations = {
   professionalIds: string[];
   materialIds: string[];
   materialQty: Record<string, number>;
+  /** IDs de instrumentais (attendance_options, category='instrumental'). */
+  instrumentIds: string[];
   preInstructions: string;
   postInstructions: string;
   requireConsent: boolean;
@@ -79,6 +83,7 @@ const ABAS = [
   { id: "identificacao", label: "Identificação", icon: Tag },
   { id: "tempo", label: "Tempo e Agenda", icon: Clock },
   { id: "materiais", label: "Materiais", icon: Boxes },
+  { id: "instrumental", label: "Instrumental", icon: Wrench },
   { id: "sessoes", label: "Sessões", icon: Layers },
   { id: "orientacoes", label: "Orientações", icon: FileText },
   { id: "financeiro", label: "Financeiro", icon: DollarSign },
@@ -110,6 +115,7 @@ function ProcedimentoFormModal({
   onClose,
   profissionais,
   insumos,
+  instrumentais,
   procedure,
   relations,
 }: {
@@ -117,6 +123,7 @@ function ProcedimentoFormModal({
   onClose: () => void;
   profissionais: ProfOption[];
   insumos: InsumoOption[];
+  instrumentais: InstrumentalOption[];
   procedure?: ProcedureRow;
   relations?: ProcedureRelations;
 }) {
@@ -173,7 +180,7 @@ function ProcedimentoFormModal({
       subtitle={
         isEdit
           ? "Atualize os dados do procedimento"
-          : "Cadastro completo em 6 etapas"
+          : "Cadastro completo em 7 etapas"
       }
       className="max-w-2xl"
       footer={
@@ -409,6 +416,38 @@ function ProcedimentoFormModal({
             )}
           </div>
 
+          {/* Aba C2 — Instrumental (catálogo reutilizável, SEM baixa de estoque) */}
+          <div className={aba === "instrumental" ? "space-y-4" : "hidden"}>
+            <p className="text-sm text-muted">
+              Selecione os instrumentais utilizados. Itens reutilizáveis do
+              catálogo — não geram baixa de estoque.
+            </p>
+            {instrumentais.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-line p-3 text-sm text-muted">
+                Nenhum instrumental cadastrado. Cadastre em Configurações →
+                Instrumental.
+              </p>
+            ) : (
+              <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-line p-3">
+                {instrumentais.map((t) => (
+                  <label
+                    key={t.id}
+                    className="flex items-center gap-2.5 text-sm text-ink"
+                  >
+                    <input
+                      type="checkbox"
+                      name="instrument_ids"
+                      value={t.id}
+                      defaultChecked={relations?.instrumentIds.includes(t.id)}
+                      className="h-4 w-4 rounded border-line text-brand-500 focus:ring-brand-100"
+                    />
+                    <span className="flex-1">{t.nome}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Aba D — Sessões */}
           <div className={aba === "sessoes" ? "space-y-4" : "hidden"}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -604,9 +643,11 @@ function ProcedimentoFormModal({
 export function NovoProcedimentoModal({
   profissionais,
   insumos,
+  instrumentais,
 }: {
   profissionais: ProfOption[];
   insumos: InsumoOption[];
+  instrumentais: InstrumentalOption[];
 }) {
   const [open, setOpen] = useState(false);
 
@@ -624,6 +665,7 @@ export function NovoProcedimentoModal({
           onClose={() => setOpen(false)}
           profissionais={profissionais}
           insumos={insumos}
+          instrumentais={instrumentais}
         />
       )}
     </>
@@ -638,11 +680,13 @@ export function ProcedimentoAcoes({
   procedure,
   profissionais,
   insumos,
+  instrumentais,
   relations,
 }: {
   procedure: ProcedureRow;
   profissionais: ProfOption[];
   insumos: InsumoOption[];
+  instrumentais: InstrumentalOption[];
   relations?: ProcedureRelations;
 }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -734,6 +778,7 @@ export function ProcedimentoAcoes({
           onClose={() => setEditOpen(false)}
           profissionais={profissionais}
           insumos={insumos}
+          instrumentais={instrumentais}
           procedure={procedure}
           relations={relations}
         />

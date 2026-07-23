@@ -46,6 +46,9 @@ const CATEGORY_LABELS: Record<AttendanceOptionCategory, string> = {
   classificacao_xyz: "Classificação XYZ",
   tipo_profissional: "Tipo de Profissional",
   departamento: "Departamento",
+  // Catálogos com telas dedicadas (não editar aqui) — excluídos abaixo.
+  setor_fornecedor: "Setor Fornecedor",
+  instrumental: "Instrumental",
 };
 
 /**
@@ -66,7 +69,10 @@ const EDITABLE_CATEGORIES = ATTENDANCE_OPTION_CATEGORIES.filter(
     c !== "localizacao" &&
     c !== "classificacao_xyz" &&
     // Tipo de profissional possui aba própria.
-    c !== "tipo_profissional",
+    c !== "tipo_profissional" &&
+    // Setor Fornecedor e Instrumental possuem abas dedicadas (tela rica).
+    c !== "setor_fornecedor" &&
+    c !== "instrumental",
 );
 
 export function AtendimentoOpcoes({
