@@ -20,11 +20,27 @@ import {
 import { listPatients } from "@/lib/data/patients";
 import { listSolicitacoes } from "@/lib/data/product-requests";
 import { requireView } from "@/lib/permissions";
-import { EstoqueClient } from "./EstoqueClient";
+import { EstoqueClient, type TabKey } from "./EstoqueClient";
 
-export default async function EstoquePage() {
+const ABA_KEYS: TabKey[] = [
+  "cadastro",
+  "dispensacao",
+  "entrada",
+  "inventario",
+  "compras",
+  "solicitacoes",
+  "relatorios",
+];
+
+export default async function EstoquePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ aba?: string }>;
+}) {
   try {
     await requireView("estoque");
+    const { aba } = await searchParams;
+    const abaInicial = ABA_KEYS.includes(aba as TabKey) ? (aba as TabKey) : undefined;
     const [
       produtos,
       fornecedores,
@@ -58,8 +74,13 @@ export default async function EstoquePage() {
     // KPIs reais derivados dos dados.
     const totalProdutos = produtos.length;
     const totalCriticos = produtos.filter((p) => p.saldo < p.minimo).length;
-    const solicitacoesPendentes = dispensacoes.filter(
-      (d) => d.statusRaw === "pendente",
+    // Pendentes de ATENDER (pedidos de setor, tela "Solicitações") — antes
+    // contava por engano as dispensações pendentes, por isso o card ficava
+    // zerado mesmo com pedidos aguardando atendimento na lista abaixo.
+    // "Parcial" continua precisando de ação, por isso soma no mesmo contador
+    // (mesma regra do badge da aba "Solicitações", ver EstoqueClient).
+    const solicitacoesPendentes = solicitacoes.filter(
+      (s) => s.statusRaw === "pendente" || s.statusRaw === "atendida_parcial",
     ).length;
     const comprasPendentes = compras.filter(
       (c) => c.statusRaw === "solicitado" || c.statusRaw === "cotacao",
@@ -119,6 +140,7 @@ export default async function EstoquePage() {
           solicitacoes={solicitacoes}
           gestor={gestor}
           podePrescricao={podePrescricao}
+          abaInicial={abaInicial}
         />
       </>
     );

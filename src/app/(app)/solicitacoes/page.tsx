@@ -5,7 +5,11 @@ import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { requireView } from "@/lib/permissions";
 import { getRole } from "@/lib/auth";
 import { listStockProducts } from "@/lib/data/stock";
-import { listSolicitacoes, type Setor } from "@/lib/data/product-requests";
+import {
+  listSolicitacoes,
+  listSetoresFornecedor,
+  type Setor,
+} from "@/lib/data/product-requests";
 import { SolicitacoesClient } from "./SolicitacoesClient";
 
 /** Setor default a partir do papel logado (não há papel "farmácia"). */
@@ -18,10 +22,15 @@ function setorPadrao(role: string | null): Setor {
 export default async function SolicitacoesPage() {
   await requireView("solicitacoes");
 
-  const [produtos, solicitacoes, role] = await Promise.all([
+  // Setor do usuário logado — a tela do solicitante mostra só os pedidos do
+  // próprio setor e apenas os de hoje (evita ver "tudo de todos" / lista gigante).
+  const role = await getRole();
+  const setorUsuario = setorPadrao(role);
+
+  const [produtos, solicitacoes, setoresFornecedor] = await Promise.all([
     listStockProducts(),
-    listSolicitacoes(),
-    getRole(),
+    listSolicitacoes({ setor: setorUsuario, apenasHoje: true }),
+    listSetoresFornecedor(),
   ]);
 
   // Só o necessário para o pedido — SEM expor saldo/quantidade em estoque.
@@ -36,7 +45,7 @@ export default async function SolicitacoesPage() {
     <>
       <PageHeader
         title="Solicitação de Produtos"
-        subtitle="Peça produtos ao estoque por setor — o estoque atende a cada pedido"
+        subtitle={`Pedidos do setor ${setorUsuario} — hoje. O estoque atende a cada pedido.`}
       />
 
       <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -69,7 +78,8 @@ export default async function SolicitacoesPage() {
       <SolicitacoesClient
         solicitacoes={solicitacoes}
         produtos={produtosOpcoes}
-        setorPadrao={setorPadrao(role)}
+        setorPadrao={setorUsuario}
+        setoresFornecedor={setoresFornecedor}
       />
     </>
   );

@@ -128,6 +128,27 @@ async function persistirRelacionados(
     );
   }
 
+  // Aba C2 — Instrumental (junção com attendance_options, category='instrumental').
+  // Catálogo reutilizável, SEM baixa de estoque e SEM quantidade. Estratégia
+  // replace-all como as demais abas. Isolado: se a migration 0117 ainda não foi
+  // aplicada, a tabela não existe e as operações falham sem derrubar o cadastro.
+  const instrumentIds = formData
+    .getAll("instrument_ids")
+    .map((v) => String(v))
+    .filter(Boolean);
+  await supabase
+    .from("procedure_instruments")
+    .delete()
+    .eq("procedure_id", procedureId);
+  if (instrumentIds.length > 0) {
+    await supabase.from("procedure_instruments").insert(
+      instrumentIds.map((oid) => ({
+        procedure_id: procedureId,
+        option_id: oid,
+      })),
+    );
+  }
+
   // Aba E — Orientações e documentos (upsert 1:1).
   await supabase.from("procedure_instructions").upsert(
     {
@@ -440,6 +461,21 @@ export async function duplicateProcedure(id: string): Promise<ActionState> {
         procedure_id: cloneId,
         product_id: m.product_id,
         quantity: m.quantity,
+      })),
+    );
+  }
+
+  // Clona a Aba C2 (instrumental) — junção sem quantidade. Isolado: se a
+  // migration 0117 não estiver aplicada, falha sem afetar o restante do clone.
+  const { data: tools } = await supabase
+    .from("procedure_instruments")
+    .select("option_id")
+    .eq("procedure_id", id);
+  if (tools && tools.length > 0) {
+    await supabase.from("procedure_instruments").insert(
+      tools.map((t) => ({
+        procedure_id: cloneId,
+        option_id: t.option_id,
       })),
     );
   }

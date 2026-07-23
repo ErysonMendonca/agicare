@@ -16,6 +16,8 @@ type Tipo = "prescricao" | "setor";
 type Linha = {
   key: number;
   productId: string;
+  /** Texto digitado no campo de busca (datalist) — resolve para productId. */
+  produtoTexto: string;
   quantidade: string;
   /** Item prescrito de origem (0043) — propagado p/ registrar o vínculo. */
   prescriptionItemId: string | null;
@@ -26,10 +28,14 @@ type Linha = {
 const novaLinha = (key: number): Linha => ({
   key,
   productId: "",
+  produtoTexto: "",
   quantidade: "",
   prescriptionItemId: null,
   posologia: null,
 });
+
+/** Rótulo exibido/pesquisável de um produto no datalist. */
+const rotuloProduto = (p: ProdutoEstoque) => `${p.produto} (${p.unidade})`;
 
 /**
  * Botão "Nova Dispensação" + modal de criação de pedido. Dois fluxos:
@@ -71,6 +77,20 @@ export function NovaDispensacaoModal({
     () => produtos.filter((p) => p.ativo),
     [produtos],
   );
+
+  // Resolve o texto digitado (datalist) para o id do produto: casa pelo rótulo
+  // "Nome (unidade)" e, como fallback, só pelo nome. "" quando não corresponde.
+  const resolverProduto = useMemo(() => {
+    const norm = (s: string) => s.trim().toLowerCase();
+    const byLabel = new Map<string, string>();
+    const byName = new Map<string, string>();
+    for (const p of disponiveis) {
+      byLabel.set(norm(rotuloProduto(p)), p.id);
+      byName.set(norm(p.produto), p.id);
+    }
+    return (texto: string) =>
+      byLabel.get(norm(texto)) ?? byName.get(norm(texto)) ?? "";
+  }, [disponiveis]);
 
   function reset() {
     setTipo(podePrescricao ? "prescricao" : "setor");
@@ -142,13 +162,17 @@ export function NovaDispensacaoModal({
         // Pré-preenche produto + posologia + vínculo; quantidade fica VAZIA
         // (o operador digita conscientemente — sem chumbar "1").
         setLinhas(
-          vinculados.map((i, idx) => ({
-            key: idx + 1,
-            productId: i.productId as string,
-            quantidade: "",
-            prescriptionItemId: i.prescriptionItemId,
-            posologia: i.posologia,
-          })),
+          vinculados.map((i, idx) => {
+            const prod = disponiveis.find((p) => p.id === i.productId);
+            return {
+              key: idx + 1,
+              productId: i.productId as string,
+              produtoTexto: prod ? rotuloProduto(prod) : "",
+              quantidade: "",
+              prescriptionItemId: i.prescriptionItemId,
+              posologia: i.posologia,
+            };
+          }),
         );
         if (orfaos.length > 0) {
           toast.info(
@@ -357,6 +381,11 @@ export function NovaDispensacaoModal({
                 <Plus className="h-4 w-4" /> Adicionar item
               </Button>
             </div>
+            <datalist id="nd-produtos-lista">
+              {disponiveis.map((p) => (
+                <option key={p.id} value={rotuloProduto(p)} />
+              ))}
+            </datalist>
             <div className="space-y-3">
               {linhas.map((l) => {
                 const prod = disponiveis.find((p) => p.id === l.productId);
@@ -371,19 +400,17 @@ export function NovaDispensacaoModal({
                   <div key={l.key}>
                     <div className="flex items-end gap-2">
                       <div className="flex-1">
-                        <Select
-                          value={l.productId}
+                        <Input
+                          list="nd-produtos-lista"
+                          placeholder="Digite ou selecione o produto"
+                          value={l.produtoTexto}
                           onChange={(e) =>
-                            setLinha(l.key, { productId: e.target.value })
+                            setLinha(l.key, {
+                              produtoTexto: e.target.value,
+                              productId: resolverProduto(e.target.value),
+                            })
                           }
-                        >
-                          <option value="">Selecione o produto</option>
-                          {disponiveis.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.produto} ({p.unidade})
-                            </option>
-                          ))}
-                        </Select>
+                        />
                       </div>
                       <div className="w-28">
                         <Input

@@ -15,6 +15,7 @@ import {
 
 type ProfOption = { id: string; nome: string; especialidade: string };
 type InsumoOption = { id: string; nome: string; unidade: string };
+type InstrumentalOption = { id: string; nome: string };
 
 /** Formata moeda com centavos (coluna Valor da tabela). */
 const moedaBR2 = (v: number) =>
@@ -29,11 +30,13 @@ export function ProcedimentosTabela({
   procedimentos,
   profissionais,
   insumos,
+  instrumentais,
   relations,
 }: {
   procedimentos: ProcedureRow[];
   profissionais: ProfOption[];
   insumos: InsumoOption[];
+  instrumentais: InstrumentalOption[];
   relations: Record<string, ProcedureRelations>;
 }) {
   const [busca, setBusca] = useState("");
@@ -156,6 +159,7 @@ export function ProcedimentosTabela({
                           procedure={p}
                           profissionais={profissionais}
                           insumos={insumos}
+                          instrumentais={instrumentais}
                           relations={relations[p.id]}
                         />
                       </td>

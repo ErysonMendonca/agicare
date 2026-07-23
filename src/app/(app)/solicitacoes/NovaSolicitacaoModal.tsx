@@ -9,23 +9,35 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Modal } from "@/components/ui/Modal";
 import { criarSolicitacao } from "@/lib/actions/product-requests";
-import { SETORES, type Setor } from "@/lib/data/product-requests.shared";
+import {
+  SETORES,
+  type Setor,
+  type SetorFornecedorOption,
+} from "@/lib/data/product-requests.shared";
 
 /** Produto disponível para pedido — SEM saldo (o setor não vê estoque). */
 export type ProdutoOpcao = { id: string; produto: string; unidade: string };
 
-type Linha = { key: number; productId: string; quantidade: string };
-const novaLinha = (key: number): Linha => ({ key, productId: "", quantidade: "" });
+type Linha = { key: number; produto: string; quantidade: string };
+const novaLinha = (key: number): Linha => ({ key, produto: "", quantidade: "" });
+
+/** Rótulo exibido/pesquisável de um produto no datalist. */
+const rotuloProduto = (p: ProdutoOpcao) => `${p.produto} (${p.unidade})`;
 
 export function NovaSolicitacaoModal({
   produtos,
   setorPadrao,
+  setoresFornecedor,
 }: {
   produtos: ProdutoOpcao[];
   setorPadrao: Setor;
+  setoresFornecedor: SetorFornecedorOption[];
 }) {
   const [open, setOpen] = useState(false);
   const [setor, setSetor] = useState<Setor>(setorPadrao);
+  const [fornecedor, setFornecedor] = useState<string>(
+    setoresFornecedor[0]?.value ?? "",
+  );
   const [urgente, setUrgente] = useState(false);
   const [obs, setObs] = useState("");
   const [linhas, setLinhas] = useState<Linha[]>([novaLinha(1)]);
@@ -34,6 +46,7 @@ export function NovaSolicitacaoModal({
 
   function reset() {
     setSetor(setorPadrao);
+    setFornecedor(setoresFornecedor[0]?.value ?? "");
     setUrgente(false);
     setObs("");
     setLinhas([novaLinha(1)]);
@@ -59,9 +72,22 @@ export function NovaSolicitacaoModal({
   }
 
   function submit() {
+    // Resolve o texto digitado (datalist) para o id do produto. Casa pelo rótulo
+    // completo "Nome (unidade)" e, como fallback tolerante, só pelo nome.
+    const norm = (s: string) => s.trim().toLowerCase();
+    const porRotulo = new Map(produtos.map((p) => [norm(rotuloProduto(p)), p.id]));
+    const porNome = new Map(produtos.map((p) => [norm(p.produto), p.id]));
+
+    const digitouSemCasar = linhas.some(
+      (l) =>
+        l.produto.trim() !== "" &&
+        !porRotulo.has(norm(l.produto)) &&
+        !porNome.has(norm(l.produto)),
+    );
+
     const items = linhas
       .map((l) => ({
-        product_id: l.productId,
+        product_id: porRotulo.get(norm(l.produto)) ?? porNome.get(norm(l.produto)) ?? "",
         quantity_num: Number(l.quantidade.replace(",", ".")),
       }))
       .filter(
@@ -72,13 +98,23 @@ export function NovaSolicitacaoModal({
       );
 
     if (items.length === 0) {
-      toast.error("Adicione ao menos um item com produto e quantidade.");
+      toast.error(
+        digitouSemCasar
+          ? "Selecione um produto da lista (o texto digitado não corresponde a nenhum item)."
+          : "Adicione ao menos um item com produto e quantidade.",
+      );
+      return;
+    }
+
+    if (!fornecedor) {
+      toast.error("Selecione o setor fornecedor.");
       return;
     }
 
     startTransition(async () => {
       const res = await criarSolicitacao({
         setor,
+        supplierSector: fornecedor,
         urgent: urgente,
         notes: obs.trim(),
         items,
@@ -118,18 +154,35 @@ export function NovaSolicitacaoModal({
         }
       >
         <div className="space-y-4">
-          <Select
-            id="ns-setor"
-            label="Setor solicitante"
-            value={setor}
-            onChange={(e) => setSetor(e.target.value as Setor)}
-          >
-            {SETORES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Select
+              id="ns-setor"
+              label="Setor solicitante"
+              value={setor}
+              onChange={(e) => setSetor(e.target.value as Setor)}
+            >
+              {SETORES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              id="ns-fornecedor"
+              label="Setor fornecedor"
+              value={fornecedor}
+              onChange={(e) => setFornecedor(e.target.value)}
+              required
+            >
+              <option value="">Selecione o setor fornecedor</option>
+              {setoresFornecedor.map((s) => (
+                <option key={s.id} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </div>
 
           <div>
             <div className="mb-2 flex items-center justify-between">
@@ -138,23 +191,21 @@ export function NovaSolicitacaoModal({
                 <Plus className="h-4 w-4" /> Adicionar item
               </Button>
             </div>
+            <datalist id="ns-produtos-lista">
+              {produtos.map((p) => (
+                <option key={p.id} value={rotuloProduto(p)} />
+              ))}
+            </datalist>
             <div className="space-y-3">
               {linhas.map((l) => (
                 <div key={l.key} className="flex items-end gap-2">
                   <div className="flex-1">
-                    <Select
-                      value={l.productId}
-                      onChange={(e) =>
-                        setLinha(l.key, { productId: e.target.value })
-                      }
-                    >
-                      <option value="">Selecione o produto</option>
-                      {produtos.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.produto} ({p.unidade})
-                        </option>
-                      ))}
-                    </Select>
+                    <Input
+                      list="ns-produtos-lista"
+                      placeholder="Digite ou selecione o produto"
+                      value={l.produto}
+                      onChange={(e) => setLinha(l.key, { produto: e.target.value })}
+                    />
                   </div>
                   <div className="w-28">
                     <Input

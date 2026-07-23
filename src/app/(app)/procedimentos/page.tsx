@@ -9,6 +9,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Stagger, FadeInUp } from "@/components/ui/Motion";
 import { listProfessionals } from "@/lib/data/professionals";
 import { listStockProducts } from "@/lib/data/stock";
+import { listInstrumentais } from "@/lib/data/instrumental";
 import { loadProcedureRelations } from "@/lib/data/procedure-relations";
 import { createClient } from "@/lib/supabase/server";
 import { isGestor } from "@/lib/auth";
@@ -127,11 +128,13 @@ export default async function ProcedimentosPage() {
     );
   }
 
-  const [procedimentos, profissionais, insumos] = await Promise.all([
-    listProcedureRows(),
-    listProfessionals(),
-    listStockProducts(),
-  ]);
+  const [procedimentos, profissionais, insumos, instrumentais] =
+    await Promise.all([
+      listProcedureRows(),
+      listProfessionals(),
+      listStockProducts(),
+      listInstrumentais(),
+    ]);
 
   // Vínculos das abas B/C/E (profissionais/materiais/orientações) por procedimento,
   // para pré-preencher o modal de edição.
@@ -167,6 +170,7 @@ export default async function ProcedimentosPage() {
           <NovoProcedimentoModal
             profissionais={profOptions}
             insumos={insumoOptions}
+            instrumentais={instrumentais}
           />
         }
       />
@@ -212,6 +216,7 @@ export default async function ProcedimentosPage() {
         procedimentos={procedimentos}
         profissionais={profOptions}
         insumos={insumoOptions}
+        instrumentais={instrumentais}
         relations={relacoes}
       />
     </>

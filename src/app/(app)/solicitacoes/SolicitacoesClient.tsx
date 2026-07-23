@@ -11,13 +11,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import {
   type SolicitacaoProduto,
   type Setor,
-  SETORES,
+  type SetorFornecedorOption,
 } from "@/lib/data/product-requests.shared";
 import { NovaSolicitacaoModal, type ProdutoOpcao } from "./NovaSolicitacaoModal";
 
 const STATUS_FILTRO = [
   { value: "", label: "Todos os status" },
   { value: "pendente", label: "Pendentes" },
+  { value: "atendida_parcial", label: "Parciais" },
   { value: "atendida", label: "Atendidas" },
   { value: "cancelada", label: "Canceladas" },
 ];
@@ -26,29 +27,30 @@ export function SolicitacoesClient({
   solicitacoes,
   produtos,
   setorPadrao,
+  setoresFornecedor,
 }: {
   solicitacoes: SolicitacaoProduto[];
   produtos: ProdutoOpcao[];
   setorPadrao: Setor;
+  setoresFornecedor: SetorFornecedorOption[];
 }) {
   const [busca, setBusca] = useState("");
   const [status, setStatus] = useState("");
-  const [setor, setSetor] = useState("");
 
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return solicitacoes.filter((s) => {
       if (status && s.statusRaw !== status) return false;
-      if (setor && s.setor !== setor) return false;
       if (!q) return true;
       return (
         s.codigo.toLowerCase().includes(q) ||
         s.setor.toLowerCase().includes(q) ||
+        (s.setorFornecedor?.toLowerCase().includes(q) ?? false) ||
         s.solicitante.toLowerCase().includes(q) ||
         s.itens.some((i) => i.nome.toLowerCase().includes(q))
       );
     });
-  }, [solicitacoes, busca, status, setor]);
+  }, [solicitacoes, busca, status]);
 
   return (
     <div className="mt-6 space-y-4">
@@ -65,19 +67,6 @@ export function SolicitacoesClient({
           />
         </div>
         <Select
-          aria-label="Filtrar por setor"
-          value={setor}
-          onChange={(e) => setSetor(e.target.value)}
-          className="w-44"
-        >
-          <option value="">Todos os setores</option>
-          {SETORES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </Select>
-        <Select
           aria-label="Filtrar por status"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
@@ -90,7 +79,11 @@ export function SolicitacoesClient({
           ))}
         </Select>
         <div className="ml-auto">
-          <NovaSolicitacaoModal produtos={produtos} setorPadrao={setorPadrao} />
+          <NovaSolicitacaoModal
+            produtos={produtos}
+            setorPadrao={setorPadrao}
+            setoresFornecedor={setoresFornecedor}
+          />
         </div>
       </div>
 
@@ -117,6 +110,10 @@ export function SolicitacoesClient({
                   <p className="mt-0.5 text-sm text-muted">
                     Setor: <span className="text-ink">{s.setor}</span> ·{" "}
                     {s.solicitante} · {s.criadaEm}
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted">
+                    Fornecedor:{" "}
+                    <span className="text-ink">{s.setorFornecedor ?? "—"}</span>
                   </p>
                 </div>
                 <Badge status={s.status.tone}>{s.status.label}</Badge>
