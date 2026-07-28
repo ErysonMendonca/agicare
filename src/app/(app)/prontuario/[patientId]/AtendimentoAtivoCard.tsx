@@ -41,9 +41,6 @@ import {
   type CabecalhoProcedimentos,
 } from "./procedimento/ProcedimentosImpressao";
 
-const brl = (n: number) =>
-  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
 /** Documento do histórico com a data já formatada no servidor (evita hidratação divergente). */
 export type ProcedimentoDocHistorico = ProcedimentoDocResumo & {
   dataLabel: string;
@@ -75,6 +72,7 @@ export function AtendimentoAtivoCard({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [procId, setProcId] = useState("");
+  const [note, setNote] = useState("");
 
   // Documento: salvar / visualizar / cancelar.
   const [salvando, startSalvar] = useTransition();
@@ -92,9 +90,10 @@ export function AtendimentoAtivoCard({
       return;
     }
     startTransition(async () => {
-      const res = await registrarProcedimento({ queueEntryId, procedureId: procId });
+      const res = await registrarProcedimento({ queueEntryId, procedureId: procId, note: note || undefined });
       if (res?.ok) {
         setProcId("");
+        setNote("");
         router.refresh();
       } else {
         toast.error(res?.error ?? "Não foi possível registrar o procedimento.");
@@ -219,6 +218,15 @@ export function AtendimentoAtivoCard({
                 ))}
               </Select>
             </div>
+            <div className="w-48">
+              <input
+                type="text"
+                placeholder="Esterilização (opcional)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="flex h-10 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
             <Button variant="outline" onClick={adicionar} disabled={pending}>
               <Plus className="h-4 w-4" /> Adicionar
             </Button>
@@ -235,7 +243,10 @@ export function AtendimentoAtivoCard({
             <ul className="divide-y divide-line">
               {procedimentos.map((p) => (
                 <li key={p.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                  <span className="text-ink">{p.nome}</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-ink">{p.nome}</span>
+                    {p.note && <span className="text-xs text-muted">Esterilização: {p.note}</span>}
+                  </div>
                   <span className="flex items-center gap-3">
                     {emAtendimento && (
                       <button
@@ -306,8 +317,7 @@ export function AtendimentoAtivoCard({
                       </span>
                       <span className="text-xs text-muted">
                         {item.professionalName} · {item.totalItens}{" "}
-                        {item.totalItens === 1 ? "procedimento" : "procedimentos"} ·{" "}
-                        {item.totalLabel}
+                        {item.totalItens === 1 ? "procedimento" : "procedimentos"}
                       </span>
                     </button>
                     <DocumentActions
@@ -379,16 +389,13 @@ export function AtendimentoAtivoCard({
           <div className="rounded-xl border border-line">
             <ul className="divide-y divide-line">
               {detalhe.itens.map((it, i) => (
-                <li key={i} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                  <span className="text-ink">{it.nome}</span>
-                  <span className="text-muted">{brl(it.valor)}</span>
+                // ponytail: sem nota de esterilização aqui — procedure_document_items
+                // não fotografa o campo; precisaria de migration (note_snapshot).
+                <li key={i} className="flex flex-col gap-0.5 px-4 py-2.5 text-sm">
+                  <span className="font-medium text-ink">{it.nome}</span>
                 </li>
               ))}
             </ul>
-            <div className="flex items-center justify-between border-t border-line px-4 py-2.5 text-sm font-semibold text-ink">
-              <span>Total</span>
-              <span>{detalhe.totalLabel}</span>
-            </div>
           </div>
         )}
       </Modal>

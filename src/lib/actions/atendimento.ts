@@ -31,9 +31,10 @@ async function guardMedico(): Promise<string | null> {
 export async function registrarProcedimento(input: {
   queueEntryId: string;
   procedureId: string;
+  note?: string;
 }): Promise<ActionState> {
   const parsed = z
-    .object({ queueEntryId: uuid, procedureId: uuid })
+    .object({ queueEntryId: uuid, procedureId: uuid, note: z.string().optional() })
     .safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const negado = await guardMedico();
@@ -74,6 +75,7 @@ export async function registrarProcedimento(input: {
     patient_id: (entry.patient_id as string | null) ?? null,
     executed_by: me?.userId ?? null,
     amount: Number(proc.price ?? 0),
+    note: parsed.data.note ?? null,
   });
   if (error) return { error: "Não foi possível registrar o procedimento." };
 

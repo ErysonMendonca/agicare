@@ -4,13 +4,18 @@
 /** Tipos de trabalho protético oferecidos (botões da Etapa 1). */
 export const TIPOS_TRABALHO = [
   "Coroa",
-  "Faceta",
+  "Faceta / Lente",
   "Ponte",
   "Protocolo",
-  "Inlay/Onlay",
+  "Inlay/Onlay/Overlay",
   "Provisório",
+  "Prótese Total",
+  "PPR",
+  "Placa de Bruxismo",
+  "Núcleo",
+  "Outros",
 ] as const;
-export type TipoTrabalho = (typeof TIPOS_TRABALHO)[number];
+export type TipoTrabalho = string;
 
 /** Categorias de anexo aceitas no bucket 'protetico'. */
 export const TIPOS_ARQUIVO = [

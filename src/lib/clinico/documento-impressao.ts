@@ -39,10 +39,16 @@ export function hojeBR(): string {
 }
 
 // ── Cabeçalho (box da clínica + box de carimbo/assinatura) ───────
-export function cabecalhoHTML(clinica: ClinicaImpressao): string {
+export function cabecalhoHTML(clinica: ClinicaImpressao, carimboOpt?: boolean | string): string {
   const sub = [limpo(clinica.endereco), limpo(clinica.telefone)]
     .filter(Boolean)
     .join(" · ");
+  
+  let carimboHTML = "";
+  if (carimboOpt !== true) {
+    carimboHTML = `<div class="carimbo">${typeof carimboOpt === "string" ? carimboOpt : "CARIMBO E ASSINATURA DO PROFISSIONAL"}</div>`;
+  }
+
   return `
   <div class="topo">
     <div class="clinica-box">
@@ -50,7 +56,7 @@ export function cabecalhoHTML(clinica: ClinicaImpressao): string {
       ${sub ? `<div class="clinica-sub">${esc(sub)}</div>` : ""}
       ${limpo(clinica.cnpj) ? `<div class="clinica-sub">CNPJ: ${esc(clinica.cnpj)}</div>` : ""}
     </div>
-    <div class="carimbo">CARIMBO E ASSINATURA DO PROFISSIONAL</div>
+    ${carimboHTML}
   </div>`;
 }
 
@@ -166,6 +172,8 @@ export type DocumentoBaseOpts = {
   rodapeHTML: string;
   /** CSS extra específico do documento (opcional). */
   cssExtra?: string;
+  /** Opção customizada para a caixa de carimbo superior (string custom ou true para ocultar). */
+  carimboBox?: boolean | string;
 };
 
 /** Monta o HTML A4 completo de um documento seguindo o modelo padrão. */
@@ -179,7 +187,7 @@ export function montarDocumentoBase(opts: DocumentoBaseOpts): string {
 </head>
 <body>
   <div class="folha">
-    ${cabecalhoHTML(opts.clinica)}
+    ${cabecalhoHTML(opts.clinica, opts.carimboBox)}
     <div class="titulo">${esc(opts.titulo)}</div>
     ${opts.identHTML}
     <div class="corpo">${opts.corpoHTML}</div>
