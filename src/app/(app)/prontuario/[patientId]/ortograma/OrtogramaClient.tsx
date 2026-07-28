@@ -197,6 +197,7 @@ export function OrtogramaClient({
       if (res.chartId) setChartAtual(res.chartId);
       setCarimbo(res.updatedAt);
       setEditandoDe(null);
+      setFerramenta(null);
       toast.success("Ortograma salvo.");
       router.refresh();
     });
@@ -330,12 +331,12 @@ export function OrtogramaClient({
       <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
         <Legenda ferramenta={ferramenta} onEscolher={setFerramenta} />
         <Resumo resumo={resumo} />
-        <Historico
+        <OrtogramaHistorico
           patientId={patientId}
           itens={historico}
-          chartAtual={chartAtual}
           cabecalho={cabecalho}
           onEditar={editarVersao}
+          chartAtual={chartAtual}
         />
       </div>
     </div>
@@ -350,18 +351,18 @@ export function OrtogramaClient({
  * carregar as marcas de todos os charts junto com a página seria N+1 de dado
  * clínico que quase nunca é aberto.
  */
-function Historico({
+function OrtogramaHistorico({
   patientId,
   itens,
-  chartAtual,
   cabecalho,
   onEditar,
+  chartAtual,
 }: {
   patientId: string;
   itens: OrtogramaHistoricoItem[];
-  chartAtual: string | null;
   cabecalho: OrtogramaClientProps["cabecalho"];
   onEditar: (item: OrtogramaHistoricoItem) => void;
+  chartAtual: string | null;
 }) {
   const router = useRouter();
   const [aberto, setAberto] = useState<OrtogramaHistoricoItem | null>(null);
@@ -369,9 +370,6 @@ function Historico({
   const [carregando, startCarregar] = useTransition();
   const [cancelar, setCancelar] = useState<OrtogramaHistoricoItem | null>(null);
   const [cancelando, startCancelar] = useTransition();
-
-  // O ortograma em edição não é "anterior": ele já está na tela.
-  const anteriores = itens.filter((i) => i.id !== chartAtual);
 
   function abrir(item: OrtogramaHistoricoItem) {
     setAberto(item);
@@ -432,16 +430,16 @@ function Historico({
     <Card className="p-4">
       <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
         <History className="h-4 w-4 text-muted" aria-hidden />
-        Ortogramas anteriores
+        Histórico de Ortogramas
       </h3>
 
-      {anteriores.length === 0 ? (
+      {itens.length === 0 ? (
         <p className="text-sm text-muted">
           Nenhuma versão anterior registrada para este paciente.
         </p>
       ) : (
         <ul className="flex flex-col gap-1">
-          {anteriores.map((item) => {
+          {itens.map((item) => {
             const cancelado = item.cancelledAt !== null;
             return (
               <li
@@ -460,7 +458,7 @@ function Historico({
                     )}
                   >
                     <span className="text-sm font-medium text-ink">
-                      {item.dataLabel}
+                      {item.dataLabel} {item.id === chartAtual && <span className="text-brand-600">(Atual)</span>}
                     </span>
                     <span className="text-xs font-medium text-brand-600">
                       Atendimento nº {item.atendimentoCodigo ?? "—"}
@@ -475,7 +473,7 @@ function Historico({
                     cancelReason={item.cancelReason}
                     pending={carregando || cancelando}
                     onView={() => abrir(item)}
-                    onEdit={() => onEditar(item)}
+                    onEdit={item.id === chartAtual ? undefined : () => onEditar(item)}
                     onPrint={() => imprimirItem(item)}
                     onCancel={() => setCancelar(item)}
                   />

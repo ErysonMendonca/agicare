@@ -9,6 +9,7 @@ export type ProcedimentoExecutado = {
   id: string;
   nome: string;
   valor: number;
+  note: string | null;
 };
 
 /** Atendimento ativo do paciente (em atendimento ou aguardando pagamento). */
@@ -78,7 +79,7 @@ export async function listProcedimentosAtendimento(
   const supabase = await createClient();
   let query = supabase
     .from("procedure_executions")
-    .select("id, amount, procedures(name)")
+    .select("id, amount, note, procedures(name)")
     .eq("queue_entry_id", queueEntryId)
     // Só os pendentes: procedimentos já fotografados num documento saem da lista.
     .is("document_id", null);
@@ -96,6 +97,7 @@ export async function listProcedimentosAtendimento(
       id: r.id as string,
       nome: proc?.name ?? "—",
       valor: Number(r.amount ?? 0),
+      note: (r.note as string | null) ?? null,
     };
   });
   const total = itens.reduce((s, i) => s + i.valor, 0);

@@ -26,6 +26,8 @@ export type FilaItem = {
   /** Data de nascimento do paciente (patients.birth_date) — decide se a seção
    * "Responsável" do atendimento nasce como "O MESMO" (maior de idade). */
   pacienteNascimento?: string | null;
+  /** CPF do paciente. */
+  pacienteDocumento?: string | null;
   /**
    * Tipo de Atendimento vindo do agendamento (appointments.reason:
    * Consulta/Retorno/Exame/Procedimento). null quando avulso/sem agendamento.
@@ -417,7 +419,7 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
   const { data, error } = await supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, opened_by_name, opened_by_role, appointments(starts_at, reason), patients(convenio, birth_date, mother_name, gender, record_number), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, opened_by_name, opened_by_role, appointments(starts_at, reason), patients(convenio, birth_date, mother_name, gender, record_number, cpf), professionals(profiles(full_name))",
     )
     .eq("id", id)
     .single();
@@ -454,6 +456,7 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
     pacienteRegistro: fmtRegistro(
       pacienteRow?.record_number as string | number | null,
     ),
+    pacienteDocumento: (pacienteRow?.cpf as string | null) ?? null,
     pacienteIdade: calcIdade(pacienteNascimento),
     patientId: (r.patient_id as string | null) ?? null,
     codigo: r.ticket_code ?? "—",

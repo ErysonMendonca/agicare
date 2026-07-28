@@ -73,6 +73,7 @@ export function DocumentosAtendimentoModal({
     atendimento: item.atendimentoCodigo ?? "",
     senha: item.codigo && item.codigo !== "—" ? item.codigo : "",
     convenio: dados.convenio,
+    documento: item.pacienteDocumento ?? "",
   };
 
   const termosOrdenados = [...termosAtivos].sort((a, b) => a.sortOrder - b.sortOrder);

@@ -124,7 +124,7 @@ export function EvolucaoClient({
   /** Imprime uma evolução como documento próprio no modelo padrão. */
   function imprimirEvolucao(e: EvolucaoCard) {
     const ident = identPacienteHTML(paciente.nome, [
-      { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+      { lbl: "Nº Prontuário", val: limpo(paciente.registro) || "—" },
       { lbl: "Idade", val: limpo(paciente.idade) || "—" },
       { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
       { lbl: "Data/hora", val: limpo(e.dataHora) || "—" },
@@ -139,16 +139,17 @@ export function EvolucaoClient({
 
     const corpo = `<div class="texto">${corpoTexto(e.conteudo)}</div>${extras}`;
 
+    const nomeProf = limpo(e.profissional) || "Profissional responsável";
+    const conselhoProf = limpo(e.conselho) ? e.conselho : "Assinatura e carimbo";
+
     const html = montarDocumentoBase({
       titulo: "EVOLUÇÃO CLÍNICA",
       clinica,
       pacienteNome: paciente.nome,
       identHTML: ident,
       corpoHTML: corpo,
-      rodapeHTML: rodapeAssinaturaProfissional(
-        limpo(e.profissional) || "Profissional responsável",
-        limpo(e.conselho) ? `Assinatura e carimbo — ${e.conselho}` : "Assinatura e carimbo",
-      ),
+      carimboBox: `<b>${esc(nomeProf)}</b><br><br>${esc(conselhoProf)}`,
+      rodapeHTML: rodapeAssinaturaProfissional(nomeProf, conselhoProf),
       cssExtra: `
         .corpo { min-height: 260px; }
         .corpo .texto { font-size: 13px; }

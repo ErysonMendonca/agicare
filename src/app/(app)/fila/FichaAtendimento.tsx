@@ -87,15 +87,20 @@ export function FichaAtendimento({
           </div>
 
           <Secao titulo="Dados do Atendimento">
-            <Linha rotulo="Especialidade" valor={dados.especialidade} />
-            <Linha rotulo="Profissional" valor={dados.profissional} />
             <Linha rotulo="Tipo de Atendimento" valor={dados.tipo} />
             <Linha rotulo="Caráter" valor={dados.carater} />
             <Linha rotulo="Local Procedência" valor={dados.procedencia} />
             <Linha rotulo="Centro de Custo" valor={dados.centroCusto} />
             <Linha rotulo="Origem" valor={dados.origem} />
             <Linha rotulo="Data de Entrada" valor={dados.dataEntrada} />
-            <Linha rotulo="Gestante" valor={dados.gestante} />
+            {item.pacienteSexo?.toLowerCase() === "feminino" && (
+              <Linha rotulo="Gestante" valor={dados.gestante} />
+            )}
+          </Secao>
+
+          <Secao titulo="Profissional e Especialidade">
+            <Linha rotulo="Profissional" valor={dados.profissional} />
+            <Linha rotulo="Especialidade" valor={dados.especialidade} />
           </Secao>
 
           {(dados.abertoPor || dados.abertoPorFuncao) && (

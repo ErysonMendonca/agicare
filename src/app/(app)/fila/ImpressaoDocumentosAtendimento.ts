@@ -37,9 +37,10 @@ export type PacienteFicha = {
   prontuario: string;
   /** Nº do atendimento (attendance_code). */
   atendimento: string;
-  /** Senha da fila (ticket_code). */
   senha: string;
   convenio: string;
+  /** CPF do paciente. */
+  documento: string;
 };
 
 /** Termo de consentimento reduzido ao necessário para a impressão. */
@@ -83,6 +84,7 @@ function identFicha(paciente: PacienteFicha): string {
     { lbl: "Nascimento", val: paciente.nascimento },
     { lbl: "Idade", val: paciente.idade },
     { lbl: "Sexo", val: paciente.sexo },
+    { lbl: "CPF", val: paciente.documento },
     { lbl: "Nº Prontuário", val: paciente.prontuario },
   ];
   return identPacienteHTML(paciente.nome, campos);
@@ -96,15 +98,18 @@ function corpoFicha(paciente: PacienteFicha, dados: DadosAtendimentoDoc): string
 
   const dadosAtend = secao("Dados do Atendimento", [
     linha("Senha / Nº Atendimento", senhaAtend),
-    linha("Especialidade", dados.especialidade),
-    linha("Profissional", dados.profissional),
     linha("Tipo de Atendimento", dados.tipo),
     linha("Caráter", dados.carater),
     linha("Local Procedência", dados.procedencia),
     linha("Centro de Custo", dados.centroCusto),
     linha("Origem", dados.origem),
     linha("Data de Entrada", dados.dataEntrada),
-    linha("Gestante", dados.gestante),
+    paciente.sexo?.toLowerCase() === "feminino" ? linha("Gestante", dados.gestante) : "",
+  ]);
+
+  const profResp = secao("Profissional e Especialidade", [
+    linha("Profissional", dados.profissional),
+    linha("Especialidade", dados.especialidade),
   ]);
 
   const respDoc = secao("Responsável pelo Documento", [
@@ -131,7 +136,7 @@ function corpoFicha(paciente: PacienteFicha, dados: DadosAtendimentoDoc): string
       ).replace(/\r?\n/g, "<br>")}</div></div>`
     : "";
 
-  return [dadosAtend, respDoc, convenio, responsavel, observacao]
+  return [dadosAtend, profResp, respDoc, convenio, responsavel, observacao]
     .filter(Boolean)
     .join("");
 }
@@ -145,12 +150,15 @@ function folhaTermo(
   const corpo = esc(termo.body).replace(/\r?\n/g, "<br>");
   return `
   <div class="folha">
-    ${cabecalhoHTML(clinica)}
+    ${cabecalhoHTML(clinica, true)}
     <div class="titulo">${esc(termo.title)}</div>
-    ${identPacienteHTML(paciente.nome, [])}
-    <div class="corpo sec-obs">${corpo}</div>
+    ${identFicha(paciente)}
+    <div class="doc-body" style="flex: 1; padding: 24px; font-size: 13px; line-height: 1.5; text-align: justify; white-space: pre-wrap; font-family: 'Times New Roman', serif;">
+      ${corpo}
+    </div>
     ${rodapeAssinaturaPaciente()}
-  </div>`;
+  </div>
+  `;
 }
 
 /**

@@ -39,6 +39,8 @@ const credVazia = (): CredencialEdit => ({
 
 const SEXOS = ["Masculino", "Feminino", "Intersexo", "Não informado"];
 const RACAS = ["Branca", "Preta", "Parda", "Amarela", "Indígena", "Não informado"];
+const CONSELHOS = ["", "CRM", "CRO", "COREN", "CRF", "CRN", "CRP", "CREFITO", "CRV", "COFFITO", "CRAS", "CRBio", "CRBM", "CRFA", "CREF", "Outro"];
+const UFS = ["", "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
 /** Valores padrão dos campos do formulário (vazios = novo cadastro). */
 type FormDefaults = Partial<ProfissionalEdit>;
@@ -300,7 +302,14 @@ function CamposProfissional({
             placeholder="Ex.: CRM, CRO, COREN"
             defaultValue={defaults.council_name ?? ""}
             error={errors?.council_name?.[0]}
+            list={`${prefixo}-conselhos-list`}
           />
+          <datalist id={`${prefixo}-conselhos-list`}>
+            {CONSELHOS.filter(Boolean).map((conselho) => (
+              <option key={conselho} value={conselho} />
+            ))}
+          </datalist>
+
           <Input
             id={`${prefixo}-council-uf`}
             name="council_uf"
@@ -309,7 +318,13 @@ function CamposProfissional({
             maxLength={2}
             defaultValue={defaults.council_uf ?? ""}
             error={errors?.council_uf?.[0]}
+            list={`${prefixo}-ufs-list`}
           />
+          <datalist id={`${prefixo}-ufs-list`}>
+            {UFS.filter(Boolean).map((uf) => (
+              <option key={uf} value={uf} />
+            ))}
+          </datalist>
           <Input
             id={`${prefixo}-council-expiry`}
             name="council_expiry"
