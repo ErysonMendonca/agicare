@@ -389,10 +389,11 @@ export function AtendimentoAtivoCard({
           <div className="rounded-xl border border-line">
             <ul className="divide-y divide-line">
               {detalhe.itens.map((it, i) => (
-                // ponytail: sem nota de esterilização aqui — procedure_document_items
-                // não fotografa o campo; precisaria de migration (note_snapshot).
                 <li key={i} className="flex flex-col gap-0.5 px-4 py-2.5 text-sm">
                   <span className="font-medium text-ink">{it.nome}</span>
+                  {it.note && (
+                    <span className="text-xs text-muted">Esterilização: {it.note}</span>
+                  )}
                 </li>
               ))}
             </ul>

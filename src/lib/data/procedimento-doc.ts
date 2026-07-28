@@ -11,7 +11,12 @@ import { getActiveClinicId } from "@/lib/tenant";
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-export type ProcedimentoDocItem = { nome: string; valor: number };
+export type ProcedimentoDocItem = {
+  nome: string;
+  valor: number;
+  /** Nota livre do registro (esterilização); null em documentos anteriores à 0120. */
+  note: string | null;
+};
 
 export type ProcedimentoDocResumo = {
   id: string;
@@ -129,13 +134,14 @@ export async function getProcedimentoDocPorId(
 
   const { data: itensRows } = await supabase
     .from("procedure_document_items")
-    .select("name_snapshot, price_snapshot, created_at")
+    .select("name_snapshot, price_snapshot, note_snapshot, created_at")
     .eq("document_id", doc.id as string)
     .order("created_at", { ascending: true });
 
   const itens: ProcedimentoDocItem[] = (itensRows ?? []).map((r) => ({
     nome: (r.name_snapshot as string | null) ?? "—",
     valor: Number(r.price_snapshot ?? 0),
+    note: (r.note_snapshot as string | null) ?? null,
   }));
   const total = itens.reduce((acc, it) => acc + it.valor, 0);
   const qe = Array.isArray(doc.queue_entries) ? doc.queue_entries[0] : doc.queue_entries;

@@ -38,12 +38,14 @@ function montarDocumento(
   const linhas =
     itens.length > 0
       ? itens
-          .map(
-            (it, i) =>
-              `<tr><td class="n">${i + 1}</td><td>${esc(it.nome)}</td><td class="v">${esc(
-                brl(it.valor),
-              )}</td></tr>`,
-          )
+          .map((it, i) => {
+            const nota = limpo(it.note ?? "")
+              ? `<div class="nota">Esterilização: ${esc(it.note as string)}</div>`
+              : "";
+            return `<tr><td class="n">${i + 1}</td><td>${esc(it.nome)}${nota}</td><td class="v">${esc(
+              brl(it.valor),
+            )}</td></tr>`;
+          })
           .join("")
       : `<tr><td colspan="3" class="vazio">Nenhum procedimento registrado.</td></tr>`;
 
@@ -74,6 +76,7 @@ function montarDocumento(
     table.procs td.n, table.procs th.n { width: 32px; text-align: center; }
     table.procs td.v, table.procs th.v { text-align: right; white-space: nowrap; }
     table.procs td.vazio { text-align: center; color: #555; font-style: italic; }
+    table.procs .nota { font-size: 10px; color: #555; margin-top: 2px; }
     table.procs td.tot-lbl { text-align: right; font-weight: bold; text-transform: uppercase; font-size: 11px; }
     table.procs td.tot { font-weight: bold; }
     @media print { table.procs tr { break-inside: avoid; } }`;
