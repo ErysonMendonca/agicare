@@ -70,7 +70,7 @@ export async function salvarDocumentoProcedimentos(input: {
   // Fotografa os procedimentos PENDENTES do atendimento (ainda não documentados).
   const { data: execs, error: execErr } = await supabase
     .from("procedure_executions")
-    .select("id, procedure_id, amount, procedures(name)")
+    .select("id, procedure_id, amount, note, procedures(name)")
     .eq("queue_entry_id", ativo.queueEntryId)
     .is("document_id", null);
   if (execErr) return { error: "Não foi possível ler os procedimentos." };
@@ -99,6 +99,7 @@ export async function salvarDocumentoProcedimentos(input: {
       procedure_id: (e.procedure_id as string | null) ?? null,
       name_snapshot: proc?.name ?? "—",
       price_snapshot: Number(e.amount ?? 0),
+      note_snapshot: (e.note as string | null) ?? null,
     };
   });
 
