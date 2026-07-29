@@ -97,15 +97,17 @@ export function identPacienteHTML(nome: string, campos: CampoIdent[]): string {
   return `<table class="ident">${linhas.join("")}</table>`;
 }
 
-// ── Rodapé: data + assinatura (logo abaixo do conteúdo) ───────────
+// ── Rodapé: assinatura (logo abaixo do conteúdo) ──────────────────
 // Observação: o box de carimbo do CABEÇALHO foi removido de todos os
 // documentos. Aqui no rodapé fica só a linha de assinatura do profissional
 // (sem caixa/carimbo), posicionada com 2 espaçamentos logo abaixo do
-// conteúdo — não mais empurrada para o fim da folha A4.
+// conteúdo — não mais empurrada para o fim da folha A4. A linha "Local e
+// data" foi removida (a pedido): a data já consta na identificação do
+// paciente em todos os documentos.
 export function rodapeAssinaturaProfissional(
   nome: string,
   conselho: string,
-  dataLinha = `Local e data: ${hojeBR()}`,
+  dataLinha = "",
 ): string {
   return `
   <div class="rodape">

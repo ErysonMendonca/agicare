@@ -29,6 +29,8 @@ export function Sidebar({
     aguardandoPagamento: number;
     estoqueCriticos: number;
     checkinPendentes?: number;
+    /** Procedimentos individuais com check-out pendente (badge do Faturamento). */
+    procedimentosPendentesCheckout?: number;
   };
   /** Logo da clínica (white-label). Quando ausente, usa o wordmark AGIcare. */
   logoUrl?: string | null;
@@ -45,9 +47,9 @@ export function Sidebar({
       return counters.filaAguardando + counters.aguardandoPagamento + (counters.checkinPendentes || 0);
     }
     if (module === "estoque") return counters?.estoqueCriticos ?? fallback;
-    // Faturamento = contagem própria de check-out pendente (mesmo dado que
-    // compõe o badge da Fila, mas exibido aqui de forma isolada e específica).
-    if (module === "faturamento") return counters?.aguardandoPagamento ?? fallback;
+    // Faturamento = quantidade de PROCEDIMENTOS (não atendimentos) com
+    // check-out pendente — um atendimento pode ter vários procedimentos.
+    if (module === "faturamento") return counters?.procedimentosPendentesCheckout ?? fallback;
     return fallback;
   };
 
