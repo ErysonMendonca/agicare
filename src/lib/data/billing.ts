@@ -6,6 +6,9 @@ export type Convenio = "Convênio" | "Particular";
 
 export type Evento = {
   codigo: string;
+  /** Nº do atendimento (queue_entries.attendance_code) — identificador exibido
+   * no card no lugar do código interno do evento; null = sem vínculo (legado). */
+  atendimentoCodigo: string | null;
   paciente: string;
   profissional: string;
   data: string;
@@ -83,6 +86,7 @@ function formatData(createdAt: string | null): string {
 const MOCK: Evento[] = [
   {
     codigo: "EVT-2024-001",
+    atendimentoCodigo: "AT-2024-001",
     paciente: "Maria Silva Santos",
     profissional: "Dr. Carlos Mendes",
     data: "14/01/2024",
@@ -96,6 +100,7 @@ const MOCK: Evento[] = [
   },
   {
     codigo: "EVT-2024-002",
+    atendimentoCodigo: "AT-2024-002",
     paciente: "João Pedro Costa",
     profissional: "Dra. Ana Paula Oliveira",
     data: "14/01/2024",
@@ -109,6 +114,7 @@ const MOCK: Evento[] = [
   },
   {
     codigo: "EVT-2024-003",
+    atendimentoCodigo: "AT-2024-003",
     paciente: "Carla Souza Lima",
     profissional: "Dr. Roberto Alves",
     data: "13/01/2024",
@@ -122,6 +128,7 @@ const MOCK: Evento[] = [
   },
   {
     codigo: "EVT-2024-004",
+    atendimentoCodigo: "AT-2024-004",
     paciente: "Fernanda Almeida Rocha",
     profissional: "Dra. Juliana Martins",
     data: "12/01/2024",
@@ -636,11 +643,32 @@ export async function listBillableEvents(): Promise<Evento[]> {
   const { data, error } = await supabase
     .from("billable_events")
     .select(
-      "code, kind, service, amount, status, created_at, patients(full_name), professionals(profiles(full_name))",
+      "id, code, kind, service, amount, status, created_at, patients(full_name), professionals(profiles(full_name))",
     )
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];
+
+  // Nº do atendimento de cada evento (queue_entries.attendance_code), buscado
+  // em lote via procedure_executions.billable_event_id — mesmo caminho usado
+  // no check-out (getCheckoutData), aqui para toda a lista de uma vez.
+  const eventIds = data.map((r) => r.id as string);
+  const atendimentoPorEvento = new Map<string, string>();
+  if (eventIds.length > 0) {
+    const { data: execs } = await supabase
+      .from("procedure_executions")
+      .select("billable_event_id, queue_entries(attendance_code)")
+      .in("billable_event_id", eventIds)
+      .order("created_at", { ascending: true });
+    for (const ex of execs ?? []) {
+      const eventId = ex.billable_event_id as string | null;
+      if (!eventId || atendimentoPorEvento.has(eventId)) continue;
+      const qe = one(ex.queue_entries) as
+        | { attendance_code: string | null }
+        | undefined;
+      if (qe?.attendance_code) atendimentoPorEvento.set(eventId, qe.attendance_code);
+    }
+  }
 
   return data.map((r) => {
     // O join aninhado pode vir como objeto ou array dependendo da relação.
@@ -657,6 +685,7 @@ export async function listBillableEvents(): Promise<Evento[]> {
 
     return {
       codigo: r.code ?? "—",
+      atendimentoCodigo: atendimentoPorEvento.get(r.id as string) ?? null,
       paciente: patient?.full_name ?? "—",
       profissional: profile?.full_name ?? "—",
       data: formatData(r.created_at),

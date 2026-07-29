@@ -100,7 +100,7 @@ export function FaturamentoClient({
       }
       // Profissional só entra na busca textual para quem também o vê na tela
       // (gestor) — senão a busca vazaria o nome por tentativa e erro.
-      const textoBusca = `${evt.paciente} ${evt.codigo}${
+      const textoBusca = `${evt.paciente} ${evt.codigo} ${evt.atendimentoCodigo ?? ""}${
         gestor ? ` ${evt.profissional}` : ""
       }`;
       if (termo && !textoBusca.toLowerCase().includes(termo)) {
@@ -280,7 +280,7 @@ export function FaturamentoClient({
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-sm font-semibold text-ink">
-                            {evt.codigo}
+                            {evt.atendimentoCodigo ?? "—"}
                           </span>
                           <Badge status={evt.status.tone}>
                             {evt.status.label}
@@ -315,16 +315,6 @@ export function FaturamentoClient({
                               {evt.data}
                             </div>
                           </div>
-                          {gestor && (
-                            <div>
-                              <div className="flex items-center gap-1.5 text-xs text-muted">
-                                <DollarSign className="h-3.5 w-3.5" /> Valor Estimado
-                              </div>
-                              <div className="mt-0.5 font-semibold text-brand-600">
-                                {evt.valor}
-                              </div>
-                            </div>
-                          )}
                         </div>
 
                         <div className="mt-3 text-sm text-muted">
