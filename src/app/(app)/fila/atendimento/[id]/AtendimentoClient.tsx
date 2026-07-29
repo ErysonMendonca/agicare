@@ -185,6 +185,11 @@ export function AtendimentoClient({
   // documento. Sem agendamento com profissional específico, o campo fica em
   // branco ("A definir") mesmo que já haja alguém atendendo.
   const prof = comAgendamento(oMedico, item.medicoAgendado);
+  // Sem agendamento, mas a recepção já escolheu um profissional manualmente
+  // numa gravação anterior desta MESMA ficha (attendance_records.medico):
+  // usa esse valor como PADRÃO editável, para a escolha não se perder ao
+  // reabrir a tela (edição/reimpressão) — sem travar o campo.
+  const profRegistrado = comAgendamento(oMedico, item.medicoRegistrado);
   const [especSel, setEspecSel] = useState(espec.value);
 
   const profOptionsFor = useCallback(
@@ -192,7 +197,9 @@ export function AtendimentoClient({
       const filtrados = profissionais
         .filter((p) => norm(p.especialidade) === norm(espValue))
         .map((p) => ({ id: p.id, label: p.nome, value: p.nome }));
-      const ag = (item.medicoAgendado ?? "").trim();
+      // Injeta o profissional agendado OU (na falta dele) o já registrado pela
+      // recepção, para o valor pré-selecionado sempre aparecer na lista.
+      const ag = (item.medicoAgendado ?? item.medicoRegistrado ?? "").trim();
       if (
         preenchido(ag) &&
         !filtrados.some((o) => norm(o.value) === norm(ag))
@@ -201,7 +208,7 @@ export function AtendimentoClient({
       }
       return filtrados;
     },
-    [profissionais, item.medicoAgendado],
+    [profissionais, item.medicoAgendado, item.medicoRegistrado],
   );
 
   const profOptions = profOptionsFor(especSel);
@@ -209,7 +216,13 @@ export function AtendimentoClient({
   // específico (item.medicoAgendado). Sem isso, a recepção escolhe ou deixa
   // "A definir" — mesmo que o paciente já tenha sido reivindicado/atendido.
   const medicoTravado = preenchido(item.medicoAgendado);
-  const [profSel, setProfSel] = useState(medicoTravado ? prof.value : "");
+  const [profSel, setProfSel] = useState(
+    medicoTravado
+      ? prof.value
+      : preenchido(item.medicoRegistrado)
+        ? profRegistrado.value
+        : "",
+  );
 
   function trocarEspecialidade(nova: string) {
     setEspecSel(nova);

@@ -26,6 +26,14 @@ export type FilaItem = {
    * Autopreenche/trava o campo "Profissional" da Ficha; null = deixa em branco.
    */
   medicoAgendado?: string | null;
+  /**
+   * Profissional que a RECEPÇÃO escolheu manualmente na Ficha (última
+   * gravação em attendance_records.medico), quando não havia agendamento.
+   * Usado só como VALOR PADRÃO editável do campo "Profissional" ao reabrir a
+   * Ficha (reimpressão/edição) — sem isso, a escolha da recepção se perdia a
+   * cada reabertura, voltando sempre para "A definir".
+   */
+  medicoRegistrado?: string | null;
   convenio: string;
   /** Convênio do CADASTRO do paciente (patients.convenio) — preenche o modal de
    * Dados de Atendimento. null quando o paciente não tem convênio no cadastro. */
@@ -451,6 +459,18 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
     ? professional?.profiles[0]
     : professional?.profiles;
 
+  // Última Ficha salva desta entrada (attendance_records) — só para recuperar
+  // o profissional que a RECEPÇÃO escolheu manualmente (sem agendamento), que
+  // senão se perderia ao reabrir a tela (ver medicoRegistrado acima).
+  const { data: ultimoRegistro } = await supabase
+    .from("attendance_records")
+    .select("medico")
+    .eq("queue_entry_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const medicoRegistrado = (ultimoRegistro?.medico as string | null) ?? null;
+
   const statusRaw = r.status ?? "aguardando";
   const priorityRaw = r.priority ?? "normal";
 
@@ -498,6 +518,7 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
     especialidade: r.specialty ?? "—",
     medico: profile?.full_name ?? "—",
     medicoAgendado,
+    medicoRegistrado,
     convenio: r.insurance ?? "—",
     convenioCadastro,
     pacienteNascimento,
