@@ -25,7 +25,7 @@ import {
   METODOS_ESTERILIZACAO,
   esterilizacaoVencida,
   type InstrumentalConfigItem,
-} from "@/lib/data/instrumental";
+} from "@/lib/clinico/instrumental-shared";
 import {
   addAttendanceOption,
   updateAttendanceOption,

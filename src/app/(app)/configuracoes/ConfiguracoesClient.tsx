@@ -62,7 +62,7 @@ import type { CidCode } from "@/lib/data/cid";
 import type { MotivoAltaCfg, DetalheAltaCfg } from "@/lib/data/alta";
 import type { Especialidade } from "@/lib/data/especialidades";
 import type { ProdutoCatalogos, CatalogoItem } from "@/lib/data/produto-catalogos";
-import type { InstrumentalConfigItem } from "@/lib/data/instrumental";
+import type { InstrumentalConfigItem } from "@/lib/clinico/instrumental-shared";
 import { CatalogoTabela } from "./CatalogoTabela";
 
 const BASE_TABS = [
