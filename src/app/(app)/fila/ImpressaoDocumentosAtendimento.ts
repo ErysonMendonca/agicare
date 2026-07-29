@@ -150,7 +150,7 @@ function folhaTermo(
   const corpo = esc(termo.body).replace(/\r?\n/g, "<br>");
   return `
   <div class="folha">
-    ${cabecalhoHTML(clinica, true)}
+    ${cabecalhoHTML(clinica)}
     <div class="titulo">${esc(termo.title)}</div>
     ${identFicha(paciente)}
     <div class="doc-body" style="flex: 1; padding: 24px; font-size: 13px; line-height: 1.5; text-align: justify; white-space: pre-wrap; font-family: 'Times New Roman', serif;">

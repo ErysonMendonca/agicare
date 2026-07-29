@@ -148,7 +148,6 @@ export function EvolucaoClient({
       pacienteNome: paciente.nome,
       identHTML: ident,
       corpoHTML: corpo,
-      carimboBox: `<b>${esc(nomeProf)}</b><br><br>${esc(conselhoProf)}`,
       rodapeHTML: rodapeAssinaturaProfissional(nomeProf, conselhoProf),
       cssExtra: `
         .corpo { min-height: 260px; }
@@ -259,8 +258,13 @@ export function EvolucaoClient({
                           "text-status-danger [&_*]:text-status-danger",
                       )}
                     >
-                      <p className="font-medium text-ink">{e.profissional}</p>
-                      <p className="text-xs text-muted">{e.dataHora}</p>
+                      <p className="font-medium text-ink">Evolução Clínica</p>
+                      <p className="text-xs text-muted">
+                        {e.profissional} · {e.dataHora}
+                      </p>
+                      <p className="mt-0.5 text-xs font-medium text-brand-600">
+                        Atendimento nº {e.atendimentoCodigo ?? "—"}
+                      </p>
                       <p className="mt-1 line-clamp-2 text-sm text-muted">{e.resumo}</p>
                     </div>
                   </div>

@@ -111,13 +111,16 @@ export function ChecagemTab({
                       )}
                     >
                       <h3 className="font-semibold text-ink">{c.descricao}</h3>
+                      <p className="text-xs text-muted">
+                        {c.profissional} · {c.horario}
+                      </p>
+                      <p className="mt-0.5 text-xs font-medium text-brand-600">
+                        Atendimento nº {c.atendimentoCodigo ?? "—"}
+                      </p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
                         <span className="flex items-center gap-1.5">
                           <User className="h-4 w-4" /> {c.paciente}
                         </span>
-                        {c.profissional !== "—" && (
-                          <span>Checado por {c.profissional}</span>
-                        )}
                       </div>
                       {c.justificativa !== "—" && (
                         <p className="mt-1 text-sm text-orange-600">

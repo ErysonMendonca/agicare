@@ -11,11 +11,30 @@ import { getActiveClinicId } from "@/lib/tenant";
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+/** Instrumental vinculado ao procedimento (catálogo, 0121: com esterilização). */
+export type ProcedimentoDocInstrumental = {
+  nome: string;
+  sterilizationMethod: string | null;
+  validityDate: string | null;
+  lotCode: string | null;
+};
+
+/** Material (produto de estoque) vinculado ao procedimento. */
+export type ProcedimentoDocMaterial = {
+  nome: string;
+  unidade: string;
+  quantidade: number;
+};
+
 export type ProcedimentoDocItem = {
   nome: string;
   valor: number;
   /** Nota livre do registro (esterilização); null em documentos anteriores à 0120. */
   note: string | null;
+  /** Materiais vinculados ao procedimento (catálogo) — [] se nenhum. */
+  materiais: ProcedimentoDocMaterial[];
+  /** Instrumentais vinculados ao procedimento (catálogo, 0121) — [] se nenhum. */
+  instrumentos: ProcedimentoDocInstrumental[];
 };
 
 export type ProcedimentoDocResumo = {
@@ -134,15 +153,97 @@ export async function getProcedimentoDocPorId(
 
   const { data: itensRows } = await supabase
     .from("procedure_document_items")
-    .select("name_snapshot, price_snapshot, note_snapshot, created_at")
+    .select("procedure_id, name_snapshot, price_snapshot, note_snapshot, created_at")
     .eq("document_id", doc.id as string)
     .order("created_at", { ascending: true });
 
-  const itens: ProcedimentoDocItem[] = (itensRows ?? []).map((r) => ({
-    nome: (r.name_snapshot as string | null) ?? "—",
-    valor: Number(r.price_snapshot ?? 0),
-    note: (r.note_snapshot as string | null) ?? null,
-  }));
+  const procedureIds = Array.from(
+    new Set(
+      (itensRows ?? [])
+        .map((r) => r.procedure_id as string | null)
+        .filter((id): id is string => !!id),
+    ),
+  );
+
+  // Materiais/instrumental vinculados aos procedimentos deste documento
+  // (catálogo) — isolado: se a migration 0117/0121 não foi aplicada, a
+  // leitura falha sem derrubar o documento.
+  const one = <T,>(v: T | T[] | null | undefined): T | undefined =>
+    Array.isArray(v) ? v[0] : (v ?? undefined);
+
+  const instrumentosPorProc = new Map<string, ProcedimentoDocInstrumental[]>();
+  const materiaisPorProc = new Map<string, ProcedimentoDocMaterial[]>();
+
+  if (procedureIds.length > 0) {
+    const [instrRes, matsRes] = await Promise.all([
+      supabase
+        .from("procedure_instruments")
+        .select(
+          "procedure_id, attendance_options(label, sterilization_method, validity_date, lot_code)",
+        )
+        .in("procedure_id", procedureIds),
+      supabase
+        .from("procedure_materials")
+        .select("procedure_id, quantity, stock_products(name, unit)")
+        .in("procedure_id", procedureIds),
+    ]);
+
+    for (const r of (instrRes.data ?? []) as {
+      procedure_id: string;
+      attendance_options:
+        | {
+            label: string;
+            sterilization_method: string | null;
+            validity_date: string | null;
+            lot_code: string | null;
+          }
+        | {
+            label: string;
+            sterilization_method: string | null;
+            validity_date: string | null;
+            lot_code: string | null;
+          }[]
+        | null;
+    }[]) {
+      const opt = one(r.attendance_options);
+      if (!opt) continue;
+      const lista = instrumentosPorProc.get(r.procedure_id) ?? [];
+      lista.push({
+        nome: opt.label,
+        sterilizationMethod: opt.sterilization_method ?? null,
+        validityDate: opt.validity_date ?? null,
+        lotCode: opt.lot_code ?? null,
+      });
+      instrumentosPorProc.set(r.procedure_id, lista);
+    }
+
+    for (const r of (matsRes.data ?? []) as {
+      procedure_id: string;
+      quantity: number | null;
+      stock_products: { name: string; unit: string | null } | { name: string; unit: string | null }[] | null;
+    }[]) {
+      const prod = one(r.stock_products);
+      if (!prod) continue;
+      const lista = materiaisPorProc.get(r.procedure_id) ?? [];
+      lista.push({
+        nome: prod.name,
+        unidade: prod.unit ?? "un",
+        quantidade: Number(r.quantity ?? 1),
+      });
+      materiaisPorProc.set(r.procedure_id, lista);
+    }
+  }
+
+  const itens: ProcedimentoDocItem[] = (itensRows ?? []).map((r) => {
+    const procId = r.procedure_id as string | null;
+    return {
+      nome: (r.name_snapshot as string | null) ?? "—",
+      valor: Number(r.price_snapshot ?? 0),
+      note: (r.note_snapshot as string | null) ?? null,
+      materiais: procId ? (materiaisPorProc.get(procId) ?? []) : [],
+      instrumentos: procId ? (instrumentosPorProc.get(procId) ?? []) : [],
+    };
+  });
   const total = itens.reduce((acc, it) => acc + it.valor, 0);
   const qe = Array.isArray(doc.queue_entries) ? doc.queue_entries[0] : doc.queue_entries;
 

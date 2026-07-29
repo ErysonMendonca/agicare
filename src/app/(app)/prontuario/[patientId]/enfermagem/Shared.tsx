@@ -43,7 +43,7 @@ export function imprimirDocumento(
     .join("");
 
   const ident = identPacienteHTML(paciente.nome, [
-    { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
     { lbl: "Idade", val: limpo(paciente.idade) || "—" },
     { lbl: "Convênio", val: limpo(paciente.convenio) || "—", span: 3 },
   ]);

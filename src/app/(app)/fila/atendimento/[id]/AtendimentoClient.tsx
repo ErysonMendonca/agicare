@@ -123,11 +123,15 @@ export function AtendimentoClient({
   const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
 
-  // Convênio SEMPRE editável, mas já vem preenchido: prioriza o convênio do
-  // CADASTRO do paciente (patients.convenio); senão o do agendamento; senão a 1ª opção.
+  // Convênio SEMPRE editável, mas já vem preenchido: prioriza o convênio já
+  // EDITADO/SALVO para ESTE atendimento (queue_entries.insurance — é onde
+  // salvarAtendimento grava o valor escolhido aqui); senão o do CADASTRO do
+  // paciente (patients.convenio), como default de um atendimento novo; senão
+  // a 1ª opção. Isso garante que o Relatório de Atendimento sempre reflita o
+  // convênio efetivamente editado nesta tela, e não o cadastro geral.
   const convenioInicial =
-    (preenchido(item.convenioCadastro) && item.convenioCadastro!.trim()) ||
     (preenchido(item.convenio) && item.convenio!.trim()) ||
+    (preenchido(item.convenioCadastro) && item.convenioCadastro!.trim()) ||
     resolveOptions(attendanceOptions, "convenio")[0]?.value ||
     "";
   const [convenio, setConvenio] = useState<string>(convenioInicial);

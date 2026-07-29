@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Brain, Clock, BadgeCheck, Repeat } from "lucide-react";
+import { Brain, BadgeCheck, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -250,24 +250,19 @@ export function SaeTab({
             {registros.map((r) => (
               <FadeInUp key={r.id}>
                 <Card className="p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
                     <h3 className="font-semibold text-ink">{r.diagnostico}</h3>
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1.5 text-sm text-muted">
-                        <Clock className="h-4 w-4" /> {r.data}
-                      </span>
-                      <DocumentActions
-                        cancelled={r.cancelledAt != null}
-                        cancelReason={r.cancelReason}
-                        pending={pending}
-                        onView={() => setViewing(r)}
-                        onEdit={() => abrirEdicao(r)}
-                        onPrint={() =>
-                          imprimirDocumento(cabecalho, "Registro SAE (NANDA)", camposSae(r))
-                        }
-                        onCancel={() => setCancelando(r)}
-                      />
-                    </div>
+                    <DocumentActions
+                      cancelled={r.cancelledAt != null}
+                      cancelReason={r.cancelReason}
+                      pending={pending}
+                      onView={() => setViewing(r)}
+                      onEdit={() => abrirEdicao(r)}
+                      onPrint={() =>
+                        imprimirDocumento(cabecalho, "Registro SAE (NANDA)", camposSae(r))
+                      }
+                      onCancel={() => setCancelando(r)}
+                    />
                   </div>
                   <div
                     className={cn(
@@ -275,6 +270,12 @@ export function SaeTab({
                         "text-status-danger [&_*]:text-status-danger",
                     )}
                   >
+                  <p className="text-xs text-muted">
+                    {r.profissional} · {r.data}
+                  </p>
+                  <p className="mt-0.5 text-xs font-medium text-brand-600">
+                    Atendimento nº {r.atendimentoCodigo ?? "—"}
+                  </p>
                   <p className="mt-1 text-sm text-muted">
                     <span className="font-medium text-ink">Paciente: </span>
                     {r.paciente}

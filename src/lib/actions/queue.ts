@@ -449,6 +449,17 @@ export async function salvarAtendimento(
   // Guard por status garante que só avança quem estava em atendimento da recepção.
   const queueEntryId = emptyToNull(d.queueEntryId);
   if (queueEntryId) {
+    // Convênio editado nesta ficha é o valor OFICIAL deste atendimento a partir de
+    // agora — grava em queue_entries.insurance (fonte lida por getFilaItem/listFila
+    // como `convenio`) para que reimpressões e o Relatório de Atendimento reflitam
+    // o valor editado aqui, e não apenas o cadastro geral do paciente.
+    if (emptyToNull(d.convenio)) {
+      await supabase
+        .from("queue_entries")
+        .update({ insurance: d.convenio })
+        .eq("id", queueEntryId);
+    }
+
     // NÚMERO DE ATENDIMENTO: gerado agora (ao concluir os Dados), só se ainda não
     // existir. Retry na colisão do índice único (clinic_id, attendance_code).
     // `.is("attendance_code", null)` torna idempotente (re-salvar não re-gera).

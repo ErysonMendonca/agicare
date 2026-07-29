@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, User, Clock, BadgeCheck } from "lucide-react";
+import { Activity, User, BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -225,29 +225,30 @@ export function EvolucaoTab({
             {evolucoes.map((e) => (
               <FadeInUp key={e.id}>
                 <Card className="p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-semibold text-ink">{e.paciente}</h3>
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1.5 text-sm text-muted">
-                        <Clock className="h-4 w-4" /> {e.data}
-                      </span>
-                      <DocumentActions
-                        cancelled={e.cancelledAt != null}
-                        cancelReason={e.cancelReason}
-                        pending={pending}
-                        onView={() => setViewing(e)}
-                        onEdit={() => abrirEdicao(e)}
-                        onPrint={() =>
-                          imprimirDocumento(
-                            cabecalho,
-                            "Evolução de enfermagem",
-                            camposEvolucao(e),
-                          )
-                        }
-                        onCancel={() => setCancelando(e)}
-                      />
-                    </div>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h3 className="font-semibold text-ink">Evolução de Enfermagem</h3>
+                    <DocumentActions
+                      cancelled={e.cancelledAt != null}
+                      cancelReason={e.cancelReason}
+                      pending={pending}
+                      onView={() => setViewing(e)}
+                      onEdit={() => abrirEdicao(e)}
+                      onPrint={() =>
+                        imprimirDocumento(
+                          cabecalho,
+                          "Evolução de enfermagem",
+                          camposEvolucao(e),
+                        )
+                      }
+                      onCancel={() => setCancelando(e)}
+                    />
                   </div>
+                  <p className="text-xs text-muted">
+                    {e.profissional} · {e.data}
+                  </p>
+                  <p className="mt-0.5 text-xs font-medium text-brand-600">
+                    Atendimento nº {e.atendimentoCodigo ?? "—"}
+                  </p>
                   <div
                     className={cn(
                       "mt-3 flex flex-col gap-2 text-sm",
@@ -270,7 +271,7 @@ export function EvolucaoTab({
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
                     <span className="flex items-center gap-1.5">
-                      <User className="h-4 w-4" /> {e.profissional}
+                      <User className="h-4 w-4" /> {e.paciente}
                     </span>
                     <span className="flex items-center gap-1.5">
                       <BadgeCheck className="h-4 w-4" /> {e.coren}

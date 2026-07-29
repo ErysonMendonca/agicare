@@ -10,6 +10,9 @@ import {
   FileText,
   History,
   Printer,
+  Wrench,
+  Beaker,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
@@ -32,6 +35,7 @@ import {
   type ProcedimentoCatalogo,
   type ProcedimentoExecutado,
 } from "@/lib/data/atendimento";
+import { esterilizacaoVencida } from "@/lib/clinico/instrumental-shared";
 import {
   type ProcedimentoDocResumo,
   type ProcedimentoDocDetalhe,
@@ -83,6 +87,10 @@ export function AtendimentoAtivoCard({
   const [cancelando, startCancelar] = useTransition();
 
   const emAtendimento = statusRaw === "em_atendimento";
+
+  // Painel informativo (somente leitura): instrumental + material vinculados
+  // ao procedimento escolhido no Select acima, antes de "Adicionar".
+  const procedimentoSelecionado = catalogo.find((p) => p.id === procId);
 
   function adicionar() {
     if (!procId) {
@@ -154,7 +162,6 @@ export function AtendimentoAtivoCard({
           atendimento: item.atendimentoCodigo ?? "—",
         },
         res.detalhe.itens,
-        res.detalhe.total,
       );
     });
   }
@@ -230,6 +237,75 @@ export function AtendimentoAtivoCard({
             <Button variant="outline" onClick={adicionar} disabled={pending}>
               <Plus className="h-4 w-4" /> Adicionar
             </Button>
+          </div>
+        )}
+
+        {/* Instrumental/material do procedimento selecionado (somente leitura). */}
+        {emAtendimento && procedimentoSelecionado && (
+          <div className="mt-3 rounded-xl border border-line bg-white p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              Instrumental e material — {procedimentoSelecionado.nome}
+            </p>
+            {procedimentoSelecionado.instrumentos.length === 0 &&
+            procedimentoSelecionado.materiais.length === 0 ? (
+              <p className="text-sm text-muted">
+                Nenhum instrumental ou material vinculado a este procedimento.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {procedimentoSelecionado.instrumentos.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted">
+                      <Wrench className="h-3.5 w-3.5" /> Instrumental
+                    </p>
+                    <ul className="space-y-1.5">
+                      {procedimentoSelecionado.instrumentos.map((i) => {
+                        const vencida = esterilizacaoVencida(i.validityDate);
+                        return (
+                          <li key={i.id} className="text-sm">
+                            <span className="font-medium text-ink">{i.nome}</span>
+                            <span className="block text-xs text-muted">
+                              {i.sterilizationMethod ?? "Esterilização não informada"}
+                              {i.lotCode ? ` · Lote ${i.lotCode}` : ""}
+                            </span>
+                            <span
+                              className={cn(
+                                "flex items-center gap-1 text-xs",
+                                vencida ? "font-medium text-red-600" : "text-muted",
+                              )}
+                            >
+                              {vencida && <AlertTriangle className="h-3.5 w-3.5" />}
+                              {i.validityDate
+                                ? `Validade: ${new Date(
+                                    `${i.validityDate}T00:00:00`,
+                                  ).toLocaleDateString("pt-BR")}${vencida ? " (vencida)" : ""}`
+                                : "Sem validade informada"}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {procedimentoSelecionado.materiais.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted">
+                      <Beaker className="h-3.5 w-3.5" /> Material
+                    </p>
+                    <ul className="space-y-1.5">
+                      {procedimentoSelecionado.materiais.map((m) => (
+                        <li key={m.id} className="text-sm">
+                          <span className="font-medium text-ink">{m.nome}</span>
+                          <span className="block text-xs text-muted">
+                            {m.quantidade} {m.unidade}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -310,13 +386,16 @@ export function AtendimentoAtivoCard({
                       )}
                     >
                       <span className="text-sm font-medium text-ink">
-                        {item.dataLabel}
+                        Procedimentos
+                      </span>
+                      <span className="text-xs text-muted">
+                        {item.professionalName} · {item.dataLabel}
                       </span>
                       <span className="text-xs font-medium text-brand-600">
                         Atendimento nº {item.atendimentoCodigo ?? "—"}
                       </span>
-                      <span className="text-xs text-muted">
-                        {item.professionalName} · {item.totalItens}{" "}
+                      <span className="mt-0.5 text-xs text-muted">
+                        {item.totalItens}{" "}
                         {item.totalItens === 1 ? "procedimento" : "procedimentos"}
                       </span>
                     </button>
@@ -372,7 +451,6 @@ export function AtendimentoAtivoCard({
                     atendimento: aberto.atendimentoCodigo ?? "—",
                   },
                   detalhe.itens,
-                  detalhe.total,
                 )
               }
               disabled={!detalhe}

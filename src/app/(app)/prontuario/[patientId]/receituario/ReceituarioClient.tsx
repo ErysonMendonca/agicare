@@ -84,6 +84,7 @@ export function ReceituarioClient({
   const pacienteEspecial: PacienteImpressaoEspecial = {
     nome: paciente.nome,
     registro: paciente.registro,
+    cpf: paciente.cpf,
     endereco: [endereco.endereco, endereco.bairro].filter(Boolean).join(", "),
     cidade: endereco.cidade,
     uf: endereco.uf,
@@ -314,10 +315,16 @@ export function ReceituarioClient({
                       <Badge status={r.tipo === "especial" ? "active" : "ok"}>
                         {r.tipo === "especial" ? "Controle Especial" : "Simples"}
                       </Badge>
-                      <span className="text-xs text-muted">{r.dataHora}</span>
                     </div>
+                    <p className="text-xs text-muted">
+                      {r.profissional} · {r.dataHora}
+                    </p>
+                    <p className="mt-0.5 text-xs font-medium text-brand-600">
+                      Atendimento nº {r.atendimentoCodigo ?? "—"}
+                    </p>
                     <div
                       className={cn(
+                        "mt-1.5",
                         !!r.cancelledAt &&
                           "text-status-danger [&_*]:text-status-danger",
                       )}
@@ -328,7 +335,6 @@ export function ReceituarioClient({
                     {r.cid10 && (
                       <p className="mt-1 text-xs text-muted">CID-10: {r.cid10}</p>
                     )}
-                    <p className="mt-1 text-xs text-muted">{r.profissional}</p>
                     </div>
                   </div>
                   <div className="shrink-0">

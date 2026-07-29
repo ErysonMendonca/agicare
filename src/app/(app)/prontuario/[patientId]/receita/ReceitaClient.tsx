@@ -67,7 +67,7 @@ function montarDocumento(
   const obsGerais = limpo(prescricao.observacoes);
 
   const ident = identPacienteHTML(paciente.nome, [
-    { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
     { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
     { lbl: "Atendimento", val: paciente.atendimentoCodigo ? "#" + paciente.atendimentoCodigo : "—" },
     { lbl: "Idade", val: limpo(paciente.idade) || "—" },

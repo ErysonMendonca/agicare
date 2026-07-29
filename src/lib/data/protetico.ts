@@ -49,6 +49,7 @@ const DEMO_PEDIDOS: PedidoProtetico[] = [
     status: "aberto",
     profissional: "Dra. Ana Beatriz Costa",
     criadoEm: "15/06/2026 09:10",
+    atendimentoCodigo: "0001",
     arquivos: [
       {
         id: "demo-file-1",
@@ -82,6 +83,7 @@ const DEMO_PEDIDOS: PedidoProtetico[] = [
     status: "aberto",
     profissional: "Dr. João Silva",
     criadoEm: "14/06/2026 16:42",
+    atendimentoCodigo: "0002",
     arquivos: [
       {
         id: "demo-file-3",
@@ -110,6 +112,7 @@ export async function listPedidosProteticos(
     .select(
       "id, teeth, work_type, urgent, due_date, material, color, finish_line, occlusion, clinical_notes, status, created_at, cancelled_at, cancel_reason, " +
         "professionals(profiles(full_name)), " +
+        "queue_entries(attendance_code), " +
         "prosthetic_files(id, file_name, storage_path, kind, size_bytes, created_at)",
     )
     .eq("patient_id", patientId)
@@ -142,6 +145,7 @@ export async function listPedidosProteticos(
     cancelled_at: string | null;
     cancel_reason: string | null;
     professionals: ProfJoin | ProfJoin[] | null;
+    queue_entries: { attendance_code: string | null } | { attendance_code: string | null }[] | null;
     prosthetic_files: FileRow[] | null;
   };
 
@@ -152,6 +156,7 @@ export async function listPedidosProteticos(
     const profile = Array.isArray(prof?.profiles)
       ? prof?.profiles[0]
       : prof?.profiles;
+    const qe = Array.isArray(r.queue_entries) ? r.queue_entries[0] : r.queue_entries;
 
     const files = Array.isArray(r.prosthetic_files) ? r.prosthetic_files : [];
 
@@ -169,6 +174,7 @@ export async function listPedidosProteticos(
       status: (r.status as string | null) ?? "aberto",
       profissional: profile?.full_name ?? "—",
       criadoEm: fmtDataHora(r.created_at as string | null),
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
       arquivos: files.map((f) => ({
         id: f.id as string,
         fileName: f.file_name as string,

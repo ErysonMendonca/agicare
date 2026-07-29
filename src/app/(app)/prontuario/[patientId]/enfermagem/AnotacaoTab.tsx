@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { NotebookPen, User, Clock, Hash } from "lucide-react";
+import { NotebookPen, User, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -165,33 +165,34 @@ export function AnotacaoTab({
             {anotacoes.map((a) => (
               <FadeInUp key={a.id}>
                 <Card className="p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Badge status="active">{a.codigo}</Badge>
-                      <h3 className="font-semibold text-ink">{a.paciente}</h3>
+                      <h3 className="font-semibold text-ink">Anotação de Enfermagem</h3>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1.5 text-sm text-muted">
-                        <Clock className="h-4 w-4" /> {a.data}
-                      </span>
-                      <DocumentActions
-                        cancelled={a.cancelledAt != null}
-                        cancelReason={a.cancelReason}
-                        pending={pending}
-                        onView={() => setViewing(a)}
-                        onEdit={() => abrirEdicao(a)}
-                        onPrint={() =>
-                          imprimirDocumento(cabecalho, `Anotação de enfermagem ${a.codigo}`, [
-                            { label: "Paciente", value: a.paciente },
-                            { label: "Profissional", value: a.profissional },
-                            { label: "Data", value: a.data },
-                            { label: "Anotação", value: a.conteudo },
-                          ])
-                        }
-                        onCancel={() => setCancelando(a)}
-                      />
-                    </div>
+                    <DocumentActions
+                      cancelled={a.cancelledAt != null}
+                      cancelReason={a.cancelReason}
+                      pending={pending}
+                      onView={() => setViewing(a)}
+                      onEdit={() => abrirEdicao(a)}
+                      onPrint={() =>
+                        imprimirDocumento(cabecalho, `Anotação de enfermagem ${a.codigo}`, [
+                          { label: "Paciente", value: a.paciente },
+                          { label: "Profissional", value: a.profissional },
+                          { label: "Data", value: a.data },
+                          { label: "Anotação", value: a.conteudo },
+                        ])
+                      }
+                      onCancel={() => setCancelando(a)}
+                    />
                   </div>
+                  <p className="text-xs text-muted">
+                    {a.profissional} · {a.data}
+                  </p>
+                  <p className="mt-0.5 text-xs font-medium text-brand-600">
+                    Atendimento nº {a.atendimentoCodigo ?? "—"}
+                  </p>
                   <div
                     className={cn(
                       a.cancelledAt != null &&
@@ -200,7 +201,7 @@ export function AnotacaoTab({
                   >
                     <p className="mt-2 text-sm text-ink">{a.conteudo}</p>
                     <p className="mt-2 flex items-center gap-1.5 text-sm text-muted">
-                      <User className="h-4 w-4" /> {a.profissional}
+                      <User className="h-4 w-4" /> {a.paciente}
                     </p>
                   </div>
                 </Card>
