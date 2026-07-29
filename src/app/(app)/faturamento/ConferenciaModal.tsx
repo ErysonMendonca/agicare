@@ -243,7 +243,7 @@ export function ConferenciaModal({
         open={open}
         onClose={onClose}
         title="Recibo de Pagamento"
-        subtitle={`${evento.paciente} · ${evento.codigo}`}
+        subtitle={`${evento.paciente} · ${atendimentoCodigo ?? "—"}`}
         className="max-w-xl"
         footer={
           <>
