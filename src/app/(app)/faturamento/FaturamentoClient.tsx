@@ -98,17 +98,13 @@ export function FaturamentoClient({
       if (statusFiltro && evt.status.label !== statusFiltroParaLabel[statusFiltro]) {
         return false;
       }
-      // Profissional só entra na busca textual para quem também o vê na tela
-      // (gestor) — senão a busca vazaria o nome por tentativa e erro.
-      const textoBusca = `${evt.paciente} ${evt.codigo} ${evt.atendimentoCodigo ?? ""}${
-        gestor ? ` ${evt.profissional}` : ""
-      }`;
+      const textoBusca = `${evt.paciente} ${evt.codigo} ${evt.atendimentoCodigo ?? ""} ${evt.profissional}`;
       if (termo && !textoBusca.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
     });
-  }, [eventos, busca, tipoFiltro, statusFiltro, gestor]);
+  }, [eventos, busca, tipoFiltro, statusFiltro]);
 
   /** Toggle do filtro de status via KPI (clicar no ativo limpa). */
   const toggleStatus = (f: StatusFiltro) =>
@@ -304,7 +300,7 @@ export function FaturamentoClient({
                               <Stethoscope className="h-3.5 w-3.5" /> Profissional
                             </div>
                             <div className="mt-0.5 font-medium text-ink">
-                              {gestor ? evt.profissional : "—"}
+                              {evt.profissional}
                             </div>
                           </div>
                           <div>

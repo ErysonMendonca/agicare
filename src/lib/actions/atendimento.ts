@@ -137,13 +137,16 @@ export async function finalizarAtendimento(
     .eq("id", queueEntryId)
     .eq("clinic_id", clinicId)
     .eq("status", "em_atendimento")
-    .select("patient_id, appointment_id");
+    .select("patient_id, appointment_id, professional_id");
   if (error) return { error: "Não foi possível finalizar o atendimento." };
   if (!data || data.length === 0) {
     return { error: "O atendimento não está em andamento." };
   }
   const patientId = (data[0]?.patient_id as string | null) ?? null;
   const appointmentId = (data[0]?.appointment_id as string | null) ?? null;
+  // Profissional que atendeu (queue_entries.professional_id) — quem deve
+  // aparecer no card de Faturamento como responsável pelo evento.
+  const professionalId = (data[0]?.professional_id as string | null) ?? null;
 
   // Verifica convênio do paciente para classificar o faturamento
   let kind = "particular";
@@ -172,6 +175,7 @@ export async function finalizarAtendimento(
         clinic_id: clinicId,
         patient_id: patientId,
         appointment_id: appointmentId,
+        professional_id: professionalId,
         service: "Atendimento",
         amount: total,
         status: "pendente",
