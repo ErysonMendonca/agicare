@@ -37,6 +37,9 @@ const itemSchema = z.object({
   descricao: z.string().min(1).max(240),
   qtd: z.number().finite().nonnegative().default(1),
   valor: z.number().finite().default(0),
+  // UUID do procedimento no catálogo (0122) — religa material/instrumental no
+  // recibo sem depender do código TUSS (frágil quando não há um real).
+  procedureId: z.string().uuid().nullable().optional(),
 });
 
 /** Aceita "" (campo vazio) e normaliza para undefined. */
@@ -74,13 +77,14 @@ export async function carregarItensCheckout(
   eventCode: string,
   fallbackServico: string,
   fallbackValor: number,
-): Promise<{ itens: ItemCheckout[] }> {
+): Promise<{ itens: ItemCheckout[]; atendimentoCodigo: string | null }> {
   // Leitura de dado financeiro: exige ver o módulo (a RLS é a 2ª camada).
-  if (await requireAction("faturamento", "view")) return { itens: [] };
+  if (await requireAction("faturamento", "view"))
+    return { itens: [], atendimentoCodigo: null };
   const parsed = idSchema.safeParse(eventCode);
-  if (!parsed.success) return { itens: [] };
+  if (!parsed.success) return { itens: [], atendimentoCodigo: null };
   const data = await getCheckoutData(parsed.data, fallbackServico, fallbackValor);
-  return { itens: data.itens };
+  return { itens: data.itens, atendimentoCodigo: data.atendimentoCodigo };
 }
 
 /**
@@ -191,6 +195,9 @@ export async function registrarCheckout(
     quantity: i.qtd,
     unit_price: i.valor,
     amount: Math.round(i.valor * i.qtd * 100) / 100,
+    // Religa ao procedimento do catálogo (0122) — para o recibo anexar
+    // material/instrumental sem depender do código TUSS.
+    procedure_id: i.procedureId ?? null,
   }));
 
   // Desconto/acréscimo viram itens de ajuste (auditável) + colunas no evento.
@@ -204,6 +211,7 @@ export async function registrarCheckout(
       quantity: 1,
       unit_price: -descontoFinal,
       amount: -descontoFinal,
+      procedure_id: null,
     });
   }
   if (acrescimoFinal > 0) {
@@ -216,6 +224,7 @@ export async function registrarCheckout(
       quantity: 1,
       unit_price: acrescimoFinal,
       amount: acrescimoFinal,
+      procedure_id: null,
     });
   }
 

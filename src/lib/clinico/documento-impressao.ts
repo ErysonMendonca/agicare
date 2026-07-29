@@ -97,15 +97,51 @@ export function identPacienteHTML(nome: string, campos: CampoIdent[]): string {
   return `<table class="ident">${linhas.join("")}</table>`;
 }
 
-// ── Rodapé: data + assinatura (logo abaixo do conteúdo) ───────────
+// ── Campos de identificação PADRÃO (todos os relatórios do prontuário) ──
+// Conjunto mínimo exigido em Anamnese, Evolução, Exames, Protético,
+// Receituário, Alta, Atestado, Ortograma, Procedimento, Enfermagem, etc.:
+// Prontuário, Atendimento, Convênio, Plano, Data de Admissão, Data de
+// Nascimento, Idade, Sexo e Nome da Mãe (o Nome do paciente já sai à parte,
+// na 1ª linha da tabela — ver `identPacienteHTML`). Cada documento pode
+// completar o array com campos próprios (ex.: Data do registro).
+export type IdentPadrao = {
+  registro: string;
+  atendimento: string | null;
+  convenio: string;
+  plano: string;
+  dataAdmissao: string;
+  nascimento: string;
+  idade: string;
+  sexo: string;
+  nomeMae: string;
+};
+
+export function camposIdentPadrao(d: IdentPadrao): CampoIdent[] {
+  return [
+    { lbl: "Prontuário", val: d.registro },
+    { lbl: "Atendimento", val: d.atendimento ?? "—" },
+    { lbl: "Convênio", val: d.convenio },
+    { lbl: "Plano", val: d.plano },
+    { lbl: "Data de Admissão", val: d.dataAdmissao },
+    { lbl: "Data de Nascimento", val: d.nascimento },
+    { lbl: "Idade", val: d.idade },
+    { lbl: "Sexo", val: d.sexo },
+    { lbl: "Nome da Mãe", val: d.nomeMae, span: 3 },
+  ];
+}
+
+// ── Rodapé: assinatura (perto do fim da folha, sem virar rodapé fixo) ─────
 // Observação: o box de carimbo do CABEÇALHO foi removido de todos os
 // documentos. Aqui no rodapé fica só a linha de assinatura do profissional
-// (sem caixa/carimbo), posicionada com 2 espaçamentos logo abaixo do
-// conteúdo — não mais empurrada para o fim da folha A4.
+// (sem caixa/carimbo). Fica empurrada para perto do FIM da folha A4 (.rodape
+// com margin-top:auto dentro do .folha flex), com uma folga antes da margem
+// inferior da página — não fica colada nela, e não é um rodapé repetido em
+// toda página (documento de 1 folha). A linha "Local e data" foi removida (a
+// pedido): a data já consta na identificação do paciente em todos os documentos.
 export function rodapeAssinaturaProfissional(
   nome: string,
   conselho: string,
-  dataLinha = `Local e data: ${hojeBR()}`,
+  dataLinha = "",
 ): string {
   return `
   <div class="rodape">
@@ -153,8 +189,10 @@ const CSS = `
   .corpo .just { text-align: justify; }
   .corpo-lbl { font-size: 12px; color: #555; margin-bottom: 4px; }
 
-  /* Data + assinatura: 2 espaçamentos logo abaixo do conteúdo */
-  .rodape { margin-top: 2.6em; }
+  /* Data + assinatura: empurrada para perto do fim da folha (margin-top:
+     auto, dentro do .folha flex), mas com uma folga antes da margem inferior
+     da página — não fica colada nela nem vira um rodapé fixo/repetido. */
+  .rodape { margin-top: auto; padding-top: 2em; margin-bottom: 10mm; }
   .data { font-size: 12px; margin: 0 0 26px; }
   .assinatura { text-align: center; }
   .assin-linha { border-top: 1px solid #111; width: 60%; margin: 0 auto 4px; }

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { type OpcaoPaciente } from "@/lib/data/enfermagem";
 import {
   abrirImpressao,
+  camposIdentPadrao,
   esc,
   identPacienteHTML,
   limpo,
@@ -22,14 +23,30 @@ export type CampoDetalhe = { label: string; value: string };
 /** Cabeçalho dos documentos de enfermagem (clínica + identificação do paciente). */
 export type DocCabecalho = {
   clinica: ClinicaImpressao;
-  paciente: { nome: string; registro: string; idade: string; convenio: string };
+  paciente: {
+    nome: string;
+    registro: string;
+    idade: string;
+    convenio: string;
+    atendimentoCodigo: string | null;
+    plano: string;
+    dataAdmissao: string;
+    nascimento: string;
+    sexo: string;
+    nomeMae: string;
+  };
 };
 
-/** Impressão de um documento de enfermagem no modelo padrão compartilhado. */
+/**
+ * Impressão de um documento de enfermagem no modelo padrão compartilhado.
+ * `atendimento` sobrepõe o nº de atendimento do cabeçalho (fixo por paciente)
+ * pelo do REGISTRO impresso, quando o chamador o tiver (ex.: anotação antiga).
+ */
 export function imprimirDocumento(
   cabecalho: DocCabecalho,
   titulo: string,
   campos: CampoDetalhe[],
+  atendimento?: string | null,
 ) {
   if (typeof window === "undefined") return;
   const { clinica, paciente } = cabecalho;
@@ -43,9 +60,17 @@ export function imprimirDocumento(
     .join("");
 
   const ident = identPacienteHTML(paciente.nome, [
-    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
-    { lbl: "Idade", val: limpo(paciente.idade) || "—" },
-    { lbl: "Convênio", val: limpo(paciente.convenio) || "—", span: 3 },
+    ...camposIdentPadrao({
+      registro: limpo(paciente.registro) || "—",
+      atendimento: atendimento !== undefined ? atendimento : paciente.atendimentoCodigo,
+      convenio: limpo(paciente.convenio) || "—",
+      plano: limpo(paciente.plano) || "—",
+      dataAdmissao: limpo(paciente.dataAdmissao) || "—",
+      nascimento: limpo(paciente.nascimento) || "—",
+      idade: limpo(paciente.idade) || "—",
+      sexo: limpo(paciente.sexo) || "—",
+      nomeMae: limpo(paciente.nomeMae) || "—",
+    }),
   ]);
 
   const html = montarDocumentoBase({

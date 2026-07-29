@@ -1,5 +1,6 @@
 import {
   abrirImpressao,
+  camposIdentPadrao,
   corpoTexto,
   esc,
   hojeBR,
@@ -24,6 +25,12 @@ export type PacienteImpressao = {
   cpf: string;
   idade: string;
   convenio: string;
+  atendimentoCodigo: string | null;
+  plano: string;
+  dataAdmissao: string;
+  nascimento: string;
+  sexo: string;
+  nomeMae: string;
 };
 
 /** Identificação do profissional emitente (nome + registro do conselho). */
@@ -40,8 +47,18 @@ function montarDocumento(
   cid: string,
 ): string {
   const ident = identPacienteHTML(limpo(paciente.nome) || "—", [
-    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
     { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
+    ...camposIdentPadrao({
+      registro: limpo(paciente.registro) || "—",
+      atendimento: paciente.atendimentoCodigo,
+      convenio: limpo(paciente.convenio) || "—",
+      plano: limpo(paciente.plano) || "—",
+      dataAdmissao: limpo(paciente.dataAdmissao) || "—",
+      nascimento: limpo(paciente.nascimento) || "—",
+      idade: limpo(paciente.idade) || "—",
+      sexo: limpo(paciente.sexo) || "—",
+      nomeMae: limpo(paciente.nomeMae) || "—",
+    }),
     { lbl: "Data", val: hojeBR(), span: 3 },
   ]);
 

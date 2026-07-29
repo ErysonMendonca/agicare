@@ -1,5 +1,6 @@
 import {
   abrirImpressao,
+  camposIdentPadrao,
   esc,
   identPacienteHTML,
   limpo,
@@ -29,6 +30,12 @@ export type CabecalhoProcedimentos = {
   conselho: string;
   /** Nº do atendimento (queue_entries.attendance_code). */
   atendimento?: string;
+  idade: string;
+  convenio: string;
+  plano: string;
+  dataAdmissao: string;
+  sexo: string;
+  nomeMae: string;
 };
 
 function fmtData(iso: string | null): string {
@@ -91,9 +98,17 @@ function montarDocumento(cab: CabecalhoProcedimentos, itens: ProcedimentoDocItem
       : `<p class="vazio">Nenhum procedimento registrado.</p>`;
 
   const ident = identPacienteHTML(cab.paciente, [
-    { lbl: "Data de nascimento", val: limpo(cab.nascimento) || "—" },
-    { lbl: "Prontuário", val: limpo(cab.prontuario) || "—" },
-    { lbl: "Atendimento nº", val: limpo(cab.atendimento ?? "") || "—" },
+    ...camposIdentPadrao({
+      registro: limpo(cab.prontuario) || "—",
+      atendimento: cab.atendimento ?? null,
+      convenio: limpo(cab.convenio) || "—",
+      plano: limpo(cab.plano) || "—",
+      dataAdmissao: limpo(cab.dataAdmissao) || "—",
+      nascimento: limpo(cab.nascimento) || "—",
+      idade: limpo(cab.idade) || "—",
+      sexo: limpo(cab.sexo) || "—",
+      nomeMae: limpo(cab.nomeMae) || "—",
+    }),
     { lbl: "Data", val: limpo(cab.data) || "—" },
   ]);
 

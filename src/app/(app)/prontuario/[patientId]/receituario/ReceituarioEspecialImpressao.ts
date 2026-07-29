@@ -1,6 +1,7 @@
 import {
   abrirImpressao,
   cabecalhoHTML,
+  camposIdentPadrao,
   corpoTexto,
   esc,
   hojeBR,
@@ -32,6 +33,14 @@ export type PacienteImpressaoEspecial = {
   cidade: string;
   uf: string;
   cep: string;
+  atendimentoCodigo: string | null;
+  convenio: string;
+  plano: string;
+  dataAdmissao: string;
+  nascimento: string;
+  idade: string;
+  sexo: string;
+  nomeMae: string;
 };
 
 /** Monta uma via (idêntica nas duas); `via` só rotula o título. */
@@ -46,6 +55,17 @@ function montarVia(
   const cidade = [limpo(paciente.cidade), limpo(paciente.uf)].filter(Boolean).join(" / ");
   const ident = identPacienteHTML(limpo(paciente.nome) || "", [
     { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
+    ...camposIdentPadrao({
+      registro: limpo(paciente.registro) || "—",
+      atendimento: paciente.atendimentoCodigo,
+      convenio: limpo(paciente.convenio) || "—",
+      plano: limpo(paciente.plano) || "—",
+      dataAdmissao: limpo(paciente.dataAdmissao) || "—",
+      nascimento: limpo(paciente.nascimento) || "—",
+      idade: limpo(paciente.idade) || "—",
+      sexo: limpo(paciente.sexo) || "—",
+      nomeMae: limpo(paciente.nomeMae) || "—",
+    }),
     { lbl: "Endereço", val: limpo(paciente.endereco), span: 3 },
     { lbl: "Cidade", val: cidade },
     { lbl: "CEP", val: limpo(paciente.cep) },

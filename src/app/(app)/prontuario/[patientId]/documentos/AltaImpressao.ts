@@ -2,6 +2,7 @@ import type { Documento } from "@/lib/data/documentos";
 import type { PacienteImpressao } from "./AtestadoImpressao";
 import {
   abrirImpressao,
+  camposIdentPadrao,
   esc,
   identPacienteHTML,
   limpo,
@@ -45,10 +46,18 @@ function montarDocumento(
   doc: Documento,
 ): string {
   const ident = identPacienteHTML(limpo(paciente.nome) || "—", [
-    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
     { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
-    { lbl: "Idade", val: limpo(paciente.idade) || "—" },
-    { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
+    ...camposIdentPadrao({
+      registro: limpo(paciente.registro) || "—",
+      atendimento: doc.atendimentoCodigo,
+      convenio: limpo(paciente.convenio) || "—",
+      plano: limpo(paciente.plano) || "—",
+      dataAdmissao: limpo(paciente.dataAdmissao) || "—",
+      nascimento: limpo(paciente.nascimento) || "—",
+      idade: limpo(paciente.idade) || "—",
+      sexo: limpo(paciente.sexo) || "—",
+      nomeMae: limpo(paciente.nomeMae) || "—",
+    }),
   ]);
 
   return montarDocumentoBase({

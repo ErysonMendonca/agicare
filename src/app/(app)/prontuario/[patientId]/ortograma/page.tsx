@@ -104,6 +104,12 @@ export default async function OrtogramaPage({
           // O data layer devolve "—" quando não há profissional no chart.
           profissional: assinante ?? profissional?.nome ?? "—",
           cro: profissional?.conselho ?? "—",
+          idade: resumo?.identificacao?.idade ?? "—",
+          convenio: resumo?.identificacao?.convenio ?? "—",
+          plano: resumo?.identificacao?.plano ?? "—",
+          dataAdmissao: resumo?.identificacao?.dataAdmissao ?? "—",
+          sexo: resumo?.identificacao?.genero ?? "—",
+          nomeMae: resumo?.identificacao?.nomeMae ?? "—",
         }}
       />
     </SecaoClinica>

@@ -6,6 +6,7 @@ import {
 } from "@/lib/data/billing";
 import { isGestor } from "@/lib/auth";
 import { requireView, can } from "@/lib/permissions";
+import { getSettings } from "@/lib/data/settings";
 import { FaturamentoClient } from "./FaturamentoClient";
 
 import { listProcedures } from "@/lib/data/procedures";
@@ -20,7 +21,7 @@ function formatBRL(value: number): string {
 
 export default async function FaturamentoPage() {
   await requireView("faturamento");
-  const [eventos, guias, lotes, gestor, podeAjustar, procedimentos] =
+  const [eventos, guias, lotes, gestor, podeAjustar, procedimentos, settings] =
     await Promise.all([
       listBillableEvents(),
       listTissGuides(),
@@ -28,6 +29,7 @@ export default async function FaturamentoPage() {
       isGestor(),
       can("faturamento_ajustes", "view"),
       listProcedures(),
+      getSettings(),
     ]);
 
   const total = eventos.length;
@@ -52,6 +54,12 @@ export default async function FaturamentoPage() {
         procedimentos={procedimentos}
         kpis={{ total, pendentes, faturados, glosados }}
         valorTotalLabel={formatBRL(valorTotal)}
+        clinica={{
+          nome: settings.clinicName,
+          cnpj: settings.cnpj,
+          endereco: settings.address,
+          telefone: settings.phone,
+        }}
       />
     </>
   );

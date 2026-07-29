@@ -52,6 +52,13 @@ const draftVazio = (): Draft => ({
   lotCode: "",
 });
 
+/** Data de hoje em yyyy-mm-dd (local), para travar o seletor de validade no passado. */
+function hojeISO(): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
 function fmtData(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(`${iso}T00:00:00`);
@@ -130,6 +137,13 @@ export function InstrumentalConfig({ itens }: { itens: InstrumentalConfigItem[] 
     const label = draft.label.trim();
     if (!label) {
       toast.error("O nome é obrigatório.");
+      return;
+    }
+    // A validade é do controle de esterilização ATUAL: uma data já vencida
+    // não representa um instrumental pronto para uso — precisa reesterilizar
+    // e informar uma validade futura, não salvar a data vencida.
+    if (draft.validityDate && esterilizacaoVencida(draft.validityDate)) {
+      toast.error("A validade não pode ser anterior à data atual.");
       return;
     }
 
@@ -507,6 +521,7 @@ export function InstrumentalConfig({ itens }: { itens: InstrumentalConfigItem[] 
                 type="date"
                 label="Validade"
                 value={draft.validityDate}
+                min={hojeISO()}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, validityDate: e.target.value }))
                 }

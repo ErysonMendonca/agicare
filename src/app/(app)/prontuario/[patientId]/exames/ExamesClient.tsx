@@ -36,6 +36,7 @@ import {
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
 import {
   abrirImpressao,
+  camposIdentPadrao,
   esc,
   identPacienteHTML,
   limpo,
@@ -49,6 +50,11 @@ type PacienteIdent = {
   registro: string;
   idade: string;
   convenio: string;
+  plano: string;
+  dataAdmissao: string;
+  nascimento: string;
+  sexo: string;
+  nomeMae: string;
 };
 
 const CATEGORIA_LABEL: Record<ExamCategoria, string> = {
@@ -73,9 +79,17 @@ function imprimirExame(
   profissional: { nome: string; conselho: string },
 ) {
   const ident = identPacienteHTML(paciente.nome, [
-    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
-    { lbl: "Idade", val: limpo(paciente.idade) || "—" },
-    { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
+    ...camposIdentPadrao({
+      registro: limpo(paciente.registro) || "—",
+      atendimento: e.atendimentoCodigo,
+      convenio: limpo(paciente.convenio) || "—",
+      plano: limpo(paciente.plano) || "—",
+      dataAdmissao: limpo(paciente.dataAdmissao) || "—",
+      nascimento: limpo(paciente.nascimento) || "—",
+      idade: limpo(paciente.idade) || "—",
+      sexo: limpo(paciente.sexo) || "—",
+      nomeMae: limpo(paciente.nomeMae) || "—",
+    }),
     { lbl: "Solicitado em", val: limpo(e.quando) || "—" },
   ]);
 

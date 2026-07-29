@@ -37,7 +37,6 @@ export type PacienteFicha = {
   prontuario: string;
   /** Nº do atendimento (attendance_code). */
   atendimento: string;
-  senha: string;
   convenio: string;
   /** CPF do paciente. */
   documento: string;
@@ -92,12 +91,8 @@ function identFicha(paciente: PacienteFicha): string {
 
 /** Corpo da ficha (dentro da moldura do modelo). */
 function corpoFicha(paciente: PacienteFicha, dados: DadosAtendimentoDoc): string {
-  const senhaAtend = [limpo(paciente.senha), limpo(paciente.atendimento)]
-    .filter(Boolean)
-    .join(" / ");
-
   const dadosAtend = secao("Dados do Atendimento", [
-    linha("Senha / Nº Atendimento", senhaAtend),
+    linha("Nº Atendimento", limpo(paciente.atendimento)),
     linha("Tipo de Atendimento", dados.tipo),
     linha("Caráter", dados.carater),
     linha("Local Procedência", dados.procedencia),

@@ -48,6 +48,11 @@ export default async function DocumentosPage({
           cpf: identificacao?.cpf ?? "—",
           idade: identificacao?.idade ?? "—",
           convenio: identificacao?.convenio ?? "—",
+          plano: identificacao?.plano ?? "—",
+          dataAdmissao: identificacao?.dataAdmissao ?? "—",
+          nascimento: identificacao?.nascimento ?? "—",
+          sexo: identificacao?.genero ?? "—",
+          nomeMae: identificacao?.nomeMae ?? "—",
         }}
       />
     </SecaoClinica>

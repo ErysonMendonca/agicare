@@ -71,7 +71,6 @@ export function DocumentosAtendimentoModal({
     nomeMae: item.pacienteNomeMae ?? "",
     prontuario: item.pacienteRegistro ?? "",
     atendimento: item.atendimentoCodigo ?? "",
-    senha: item.codigo && item.codigo !== "—" ? item.codigo : "",
     convenio: dados.convenio,
     documento: item.pacienteDocumento ?? "",
   };

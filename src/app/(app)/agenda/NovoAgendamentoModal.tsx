@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/Input";
 import { TelefoneInput } from "@/components/ui/TelefoneInput";
 import { CpfInput } from "@/components/ui/MaskedInput";
 import { Select } from "@/components/ui/Select";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { type Paciente } from "@/lib/data/patients";
 import { type Profissional } from "@/lib/data/professionals";
 import { type AttendanceOption } from "@/lib/data/attendance-options.shared";
@@ -517,21 +518,16 @@ export function NovoAgendamentoModal({
 
             {(tipo === "Consulta" || tipo === "Retorno") ? (
               <>
-                <Select
+                <SearchableSelect
                   label="Especialidade"
                   value={especialidade}
-                  onChange={(e) => {
-                    setEspecialidade(e.target.value);
+                  onChange={(v) => {
+                    setEspecialidade(v);
                     setProfissionalId("");
                   }}
-                >
-                  <option value="">Selecione a especialidade</option>
-                  {especialidades.map((e) => (
-                    <option key={e.value} value={e.value}>
-                      {e.label}
-                    </option>
-                  ))}
-                </Select>
+                  options={especialidades}
+                  placeholder="Buscar especialidade..."
+                />
                 <Select
                   label="Profissional (opcional)"
                   value={profissionalId}

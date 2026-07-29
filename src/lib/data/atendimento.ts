@@ -217,3 +217,25 @@ export async function listProcedimentosAtendimento(
   const total = itens.reduce((s, i) => s + i.valor, 0);
   return { itens, total, totalLabel: fmt(total) };
 }
+
+/**
+ * Total a cobrar no faturamento: soma TODOS os procedure_executions do
+ * atendimento (documentados ou não). Diferente de `listProcedimentosAtendimento`
+ * (que só traz os PENDENTES de documentação, para a tela de registro do
+ * médico) — aqui um procedimento já "fotografado" num documento continua
+ * contando no valor, pois ele deve ser cobrado no check-out normalmente.
+ */
+export async function totalProcedimentosAtendimento(
+  queueEntryId: string,
+): Promise<number> {
+  const clinicId = await getActiveClinicId();
+  const supabase = await createClient();
+  let query = supabase
+    .from("procedure_executions")
+    .select("amount")
+    .eq("queue_entry_id", queueEntryId);
+  if (clinicId) query = query.eq("clinic_id", clinicId);
+  const { data, error } = await query;
+  if (error || !data) return 0;
+  return data.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+}

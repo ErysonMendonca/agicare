@@ -10,7 +10,6 @@ import {
   ClipboardCheck,
   Receipt,
   ShieldCheck,
-  Lock,
   Layers,
   Clock,
   CheckCircle2,
@@ -32,6 +31,7 @@ import {
   type GuiaTISS,
   type LoteTISS,
 } from "@/lib/data/billing";
+import { type ClinicaImpressao } from "@/lib/clinico/documento-impressao";
 import { ConferenciaModal } from "./ConferenciaModal";
 import { TissPanel } from "./TissPanel";
 
@@ -58,6 +58,7 @@ export function FaturamentoClient({
   procedimentos,
   kpis,
   valorTotalLabel,
+  clinica,
 }: {
   eventos: Evento[];
   guias: GuiaTISS[];
@@ -67,6 +68,8 @@ export function FaturamentoClient({
   procedimentos: any[];
   kpis: { total: number; pendentes: number; faturados: number; glosados: number };
   valorTotalLabel: string;
+  /** Dados da clínica para o cabeçalho do recibo impresso. */
+  clinica: ClinicaImpressao;
 }) {
   const [aba, setAba] = useState<Aba>("eventos");
   const [selected, setSelected] = useState<Evento | null>(null);
@@ -95,12 +98,8 @@ export function FaturamentoClient({
       if (statusFiltro && evt.status.label !== statusFiltroParaLabel[statusFiltro]) {
         return false;
       }
-      if (
-        termo &&
-        !`${evt.paciente} ${evt.codigo} ${evt.profissional}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
+      const textoBusca = `${evt.paciente} ${evt.codigo} ${evt.atendimentoCodigo ?? ""} ${evt.profissional}`;
+      if (termo && !textoBusca.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
@@ -113,8 +112,15 @@ export function FaturamentoClient({
 
   return (
     <>
-      {/* KPIs clicáveis → filtram a lista de eventos pelo status. */}
-      <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      {/* KPIs clicáveis → filtram a lista de eventos pelo status. Valor Total
+          é dado financeiro sensível: nem aparece fora do papel gestor (nem
+          como placeholder "restrito") — some do grid por completo. */}
+      <Stagger
+        className={cn(
+          "grid grid-cols-1 gap-4 sm:grid-cols-2",
+          gestor ? "xl:grid-cols-5" : "xl:grid-cols-4",
+        )}
+      >
         <FadeInUp>
           <StatCard
             icon={<Layers className="h-5 w-5" />}
@@ -155,25 +161,16 @@ export function FaturamentoClient({
             active={statusFiltro === "Glosados"}
           />
         </FadeInUp>
-        <FadeInUp>
-          {gestor ? (
+        {gestor && (
+          <FadeInUp>
             <StatCard
               icon={<DollarSign className="h-5 w-5" />}
               value={valorTotalLabel}
               label="Valor Total"
               tone="success"
             />
-          ) : (
-            <Card className="flex flex-col justify-center p-5">
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <Lock className="h-4 w-4" /> Valor Total
-              </div>
-              <div className="mt-3 text-base font-medium text-muted">
-                Restrito ao gestor
-              </div>
-            </Card>
-          )}
-        </FadeInUp>
+          </FadeInUp>
+        )}
       </Stagger>
 
       {/* Abas */}
@@ -279,7 +276,7 @@ export function FaturamentoClient({
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-sm font-semibold text-ink">
-                            {evt.codigo}
+                            {evt.atendimentoCodigo ?? "—"}
                           </span>
                           <Badge status={evt.status.tone}>
                             {evt.status.label}
@@ -312,14 +309,6 @@ export function FaturamentoClient({
                             </div>
                             <div className="mt-0.5 font-medium text-ink">
                               {evt.data}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 text-xs text-muted">
-                              <DollarSign className="h-3.5 w-3.5" /> Valor Estimado
-                            </div>
-                            <div className="mt-0.5 font-semibold text-brand-600">
-                              {gestor ? evt.valor : "—"}
                             </div>
                           </div>
                         </div>
@@ -387,6 +376,7 @@ export function FaturamentoClient({
           podeAjustar={podeAjustar}
           procedimentos={procedimentos}
           modo={modo}
+          clinica={clinica}
           open={!!selected}
           onClose={() => setSelected(null)}
         />

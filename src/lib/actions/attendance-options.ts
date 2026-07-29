@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isGestor } from "@/lib/auth";
 import { requireClinic } from "@/lib/tenant";
 import { ATTENDANCE_OPTION_CATEGORIES } from "@/lib/data/attendance-options.shared";
+import { esterilizacaoVencida } from "@/lib/clinico/instrumental-shared";
 import { logAction } from "@/lib/system-log";
 
 // ════════════════════════════════════════════════════════════════
@@ -37,6 +38,10 @@ const validityDate = z
   .string()
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.")
+  .refine(
+    (v) => !esterilizacaoVencida(v),
+    "A validade não pode ser anterior à data atual.",
+  )
   .optional()
   .or(z.literal(""));
 const lotCode = z.string().trim().max(80).optional();

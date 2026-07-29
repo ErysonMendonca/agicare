@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireClinic } from "@/lib/tenant";
 import { getCurrentUser, getRole } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
-import { listProcedimentosAtendimento } from "@/lib/data/atendimento";
+import { totalProcedimentosAtendimento } from "@/lib/data/atendimento";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -137,13 +137,27 @@ export async function finalizarAtendimento(
     .eq("id", queueEntryId)
     .eq("clinic_id", clinicId)
     .eq("status", "em_atendimento")
-    .select("patient_id, appointment_id");
+    .select("patient_id, appointment_id, professional_id");
   if (error) return { error: "Não foi possível finalizar o atendimento." };
   if (!data || data.length === 0) {
     return { error: "O atendimento não está em andamento." };
   }
   const patientId = (data[0]?.patient_id as string | null) ?? null;
   const appointmentId = (data[0]?.appointment_id as string | null) ?? null;
+  // Profissional que atendeu (queue_entries.professional_id) — quem deve
+  // aparecer no card de Faturamento como responsável pelo evento. Se o
+  // atendimento nunca foi "reivindicado" (ex.: quem finalizou não tem
+  // registro em professionals), cai no profissional AGENDADO do
+  // appointment, para não deixar o evento sem responsável nenhum.
+  let professionalId = (data[0]?.professional_id as string | null) ?? null;
+  if (!professionalId && appointmentId) {
+    const { data: appt } = await supabase
+      .from("appointments")
+      .select("professional_id")
+      .eq("id", appointmentId)
+      .maybeSingle();
+    professionalId = (appt?.professional_id as string | null) ?? null;
+  }
 
   // Verifica convênio do paciente para classificar o faturamento
   let kind = "particular";
@@ -158,8 +172,10 @@ export async function finalizarAtendimento(
     }
   }
 
-  // Computa o total dos procedimentos registrados no atendimento
-  const { total } = await listProcedimentosAtendimento(queueEntryId);
+  // Computa o total dos procedimentos registrados no atendimento (TODOS,
+  // documentados ou não — um procedimento já fotografado num documento
+  // continua devendo ser cobrado no faturamento).
+  const total = await totalProcedimentosAtendimento(queueEntryId);
 
   // Apenas gera o evento faturável se for particular.
   // Para convênio, o fluxo será abordado depois, conforme solicitado.
@@ -170,6 +186,7 @@ export async function finalizarAtendimento(
         clinic_id: clinicId,
         patient_id: patientId,
         appointment_id: appointmentId,
+        professional_id: professionalId,
         service: "Atendimento",
         amount: total,
         status: "pendente",
