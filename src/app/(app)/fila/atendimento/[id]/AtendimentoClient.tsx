@@ -179,7 +179,12 @@ export function AtendimentoClient({
   const oParent = resolveOptions(attendanceOptions, "parentesco");
 
   const espec = comAgendamento(oEspec, item.especialidade);
-  const prof = comAgendamento(oMedico, item.medico);
+  // O Relatório de Atendimento usa o profissional AGENDADO (appointments),
+  // não `item.medico` — este último muda quando alguém "atende"/reivindica o
+  // paciente na fila, e essa reivindicação não deve virar "agendado" no
+  // documento. Sem agendamento com profissional específico, o campo fica em
+  // branco ("A definir") mesmo que já haja alguém atendendo.
+  const prof = comAgendamento(oMedico, item.medicoAgendado);
   const [especSel, setEspecSel] = useState(espec.value);
 
   const profOptionsFor = useCallback(
@@ -187,7 +192,7 @@ export function AtendimentoClient({
       const filtrados = profissionais
         .filter((p) => norm(p.especialidade) === norm(espValue))
         .map((p) => ({ id: p.id, label: p.nome, value: p.nome }));
-      const ag = (item.medico ?? "").trim();
+      const ag = (item.medicoAgendado ?? "").trim();
       if (
         preenchido(ag) &&
         !filtrados.some((o) => norm(o.value) === norm(ag))
@@ -196,13 +201,14 @@ export function AtendimentoClient({
       }
       return filtrados;
     },
-    [profissionais, item.medico],
+    [profissionais, item.medicoAgendado],
   );
 
   const profOptions = profOptionsFor(especSel);
-  // Profissional travado só quando o agendamento já trouxe um (item.medico real).
-  // Sem profissional definido, a recepção escolhe ou deixa "A definir" (opcional).
-  const medicoTravado = preenchido(item.medico);
+  // Profissional travado só quando o agendamento tinha um profissional
+  // específico (item.medicoAgendado). Sem isso, a recepção escolhe ou deixa
+  // "A definir" — mesmo que o paciente já tenha sido reivindicado/atendido.
+  const medicoTravado = preenchido(item.medicoAgendado);
   const [profSel, setProfSel] = useState(medicoTravado ? prof.value : "");
 
   function trocarEspecialidade(nova: string) {

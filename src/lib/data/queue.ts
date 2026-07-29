@@ -19,6 +19,13 @@ export type FilaItem = {
   entradaEm?: string;
   especialidade: string;
   medico: string;
+  /**
+   * Profissional efetivamente AGENDADO (appointments.professional_id), fixo
+   * mesmo depois que alguém "atende"/reivindica o paciente — diferente de
+   * `medico` (queue_entries.professional_id), que muda com a reivindicação.
+   * Autopreenche/trava o campo "Profissional" da Ficha; null = deixa em branco.
+   */
+  medicoAgendado?: string | null;
   convenio: string;
   /** Convênio do CADASTRO do paciente (patients.convenio) — preenche o modal de
    * Dados de Atendimento. null quando o paciente não tem convênio no cadastro. */
@@ -308,7 +315,7 @@ export async function listQueue(opts?: {
   let query = supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, reason), patients(convenio), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, appointments(starts_at, reason, professionals(profiles(full_name))), patients(convenio), professionals(profiles(full_name))",
     )
     .order("created_at", { ascending: false });
 
@@ -372,6 +379,15 @@ export async function listQueue(opts?: {
     // Retorno/Exame/Procedimento) — autopreenche o modal de Dados de Atendimento.
     const tipoAtendimento =
       (agendamento?.reason as string | null) ?? null;
+    // Profissional efetivamente AGENDADO (appointments → professionals), fixo
+    // independente de reivindicação posterior (queue_entries.professional_id).
+    const profAgendado = Array.isArray(agendamento?.professionals)
+      ? agendamento?.professionals[0]
+      : agendamento?.professionals;
+    const perfilAgendado = Array.isArray(profAgendado?.profiles)
+      ? profAgendado?.profiles[0]
+      : profAgendado?.profiles;
+    const medicoAgendado = (perfilAgendado?.full_name as string | null) ?? null;
     // Convênio do cadastro do paciente (join patients).
     const pacienteRow = Array.isArray(r.patients) ? r.patients[0] : r.patients;
     const convenioCadastro =
@@ -397,6 +413,7 @@ export async function listQueue(opts?: {
       ),
       especialidade: r.specialty ?? "—",
       medico: profile?.full_name ?? "—",
+      medicoAgendado,
       convenio: r.insurance ?? "—",
       convenioCadastro,
       tipoAtendimento,
@@ -419,7 +436,7 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
   const { data, error } = await supabase
     .from("queue_entries")
     .select(
-      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, opened_by_name, opened_by_role, appointments(starts_at, reason), patients(convenio, birth_date, mother_name, gender, record_number, cpf), professionals(profiles(full_name))",
+      "id, patient_id, ticket_code, attendance_code, patient_name, priority, specialty, insurance, status, created_at, arrived_at, appointment_id, opened_by_name, opened_by_role, appointments(starts_at, reason, professionals(profiles(full_name))), patients(convenio, birth_date, mother_name, gender, record_number, cpf), professionals(profiles(full_name))",
     )
     .eq("id", id)
     .single();
@@ -442,6 +459,15 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
     : r.appointments;
   const startsAt = (agendamento?.starts_at as string | null) ?? null;
   const tipoAtendimento = (agendamento?.reason as string | null) ?? null;
+  // Profissional efetivamente AGENDADO (appointments → professionals), fixo
+  // independente de reivindicação posterior (queue_entries.professional_id).
+  const profAgendado = Array.isArray(agendamento?.professionals)
+    ? agendamento?.professionals[0]
+    : agendamento?.professionals;
+  const perfilAgendado = Array.isArray(profAgendado?.profiles)
+    ? profAgendado?.profiles[0]
+    : profAgendado?.profiles;
+  const medicoAgendado = (perfilAgendado?.full_name as string | null) ?? null;
   const pacienteRow = Array.isArray(r.patients) ? r.patients[0] : r.patients;
   const convenioCadastro = (pacienteRow?.convenio as string | null) ?? null;
   const pacienteNascimento =
@@ -471,6 +497,7 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
     ),
     especialidade: r.specialty ?? "—",
     medico: profile?.full_name ?? "—",
+    medicoAgendado,
     convenio: r.insurance ?? "—",
     convenioCadastro,
     pacienteNascimento,
