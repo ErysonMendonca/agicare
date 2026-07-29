@@ -10,7 +10,6 @@ import {
   ClipboardCheck,
   Receipt,
   ShieldCheck,
-  Lock,
   Layers,
   Clock,
   CheckCircle2,
@@ -99,17 +98,17 @@ export function FaturamentoClient({
       if (statusFiltro && evt.status.label !== statusFiltroParaLabel[statusFiltro]) {
         return false;
       }
-      if (
-        termo &&
-        !`${evt.paciente} ${evt.codigo} ${evt.profissional}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
+      // Profissional só entra na busca textual para quem também o vê na tela
+      // (gestor) — senão a busca vazaria o nome por tentativa e erro.
+      const textoBusca = `${evt.paciente} ${evt.codigo}${
+        gestor ? ` ${evt.profissional}` : ""
+      }`;
+      if (termo && !textoBusca.toLowerCase().includes(termo)) {
         return false;
       }
       return true;
     });
-  }, [eventos, busca, tipoFiltro, statusFiltro]);
+  }, [eventos, busca, tipoFiltro, statusFiltro, gestor]);
 
   /** Toggle do filtro de status via KPI (clicar no ativo limpa). */
   const toggleStatus = (f: StatusFiltro) =>
@@ -117,8 +116,15 @@ export function FaturamentoClient({
 
   return (
     <>
-      {/* KPIs clicáveis → filtram a lista de eventos pelo status. */}
-      <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      {/* KPIs clicáveis → filtram a lista de eventos pelo status. Valor Total
+          é dado financeiro sensível: nem aparece fora do papel gestor (nem
+          como placeholder "restrito") — some do grid por completo. */}
+      <Stagger
+        className={cn(
+          "grid grid-cols-1 gap-4 sm:grid-cols-2",
+          gestor ? "xl:grid-cols-5" : "xl:grid-cols-4",
+        )}
+      >
         <FadeInUp>
           <StatCard
             icon={<Layers className="h-5 w-5" />}
@@ -159,25 +165,16 @@ export function FaturamentoClient({
             active={statusFiltro === "Glosados"}
           />
         </FadeInUp>
-        <FadeInUp>
-          {gestor ? (
+        {gestor && (
+          <FadeInUp>
             <StatCard
               icon={<DollarSign className="h-5 w-5" />}
               value={valorTotalLabel}
               label="Valor Total"
               tone="success"
             />
-          ) : (
-            <Card className="flex flex-col justify-center p-5">
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <Lock className="h-4 w-4" /> Valor Total
-              </div>
-              <div className="mt-3 text-base font-medium text-muted">
-                Restrito ao gestor
-              </div>
-            </Card>
-          )}
-        </FadeInUp>
+          </FadeInUp>
+        )}
       </Stagger>
 
       {/* Abas */}
@@ -307,7 +304,7 @@ export function FaturamentoClient({
                               <Stethoscope className="h-3.5 w-3.5" /> Profissional
                             </div>
                             <div className="mt-0.5 font-medium text-ink">
-                              {evt.profissional}
+                              {gestor ? evt.profissional : "—"}
                             </div>
                           </div>
                           <div>
@@ -318,14 +315,16 @@ export function FaturamentoClient({
                               {evt.data}
                             </div>
                           </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 text-xs text-muted">
-                              <DollarSign className="h-3.5 w-3.5" /> Valor Estimado
+                          {gestor && (
+                            <div>
+                              <div className="flex items-center gap-1.5 text-xs text-muted">
+                                <DollarSign className="h-3.5 w-3.5" /> Valor Estimado
+                              </div>
+                              <div className="mt-0.5 font-semibold text-brand-600">
+                                {evt.valor}
+                              </div>
                             </div>
-                            <div className="mt-0.5 font-semibold text-brand-600">
-                              {gestor ? evt.valor : "—"}
-                            </div>
-                          </div>
+                          )}
                         </div>
 
                         <div className="mt-3 text-sm text-muted">
