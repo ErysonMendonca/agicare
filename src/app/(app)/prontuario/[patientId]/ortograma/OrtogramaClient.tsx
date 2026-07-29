@@ -332,12 +332,8 @@ export function OrtogramaClient({
             </Button>
           </div>
         </Card>
-      </div>
 
-      {/* Coluna direita: legenda + resumo + histórico */}
-      <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
-        <Legenda ferramenta={ferramenta} onEscolher={setFerramenta} />
-        <Resumo resumo={resumo} />
+        {/* Histórico logo abaixo das observações do profissional. */}
         <OrtogramaHistorico
           patientId={patientId}
           itens={historico}
@@ -345,6 +341,12 @@ export function OrtogramaClient({
           onEditar={editarVersao}
           chartAtual={chartAtual}
         />
+      </div>
+
+      {/* Coluna direita: legenda + resumo */}
+      <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
+        <Legenda ferramenta={ferramenta} onEscolher={setFerramenta} />
+        <Resumo resumo={resumo} />
       </div>
     </div>
   );
