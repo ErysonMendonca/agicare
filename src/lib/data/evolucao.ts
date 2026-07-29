@@ -19,6 +19,8 @@ export type EvolucaoCard = {
   profissional: string;
   /** Registro do conselho do autor já formatado ("CRM-SP 12345") ou "—". */
   conselho: string;
+  /** Nº do atendimento (queue_entries.attendance_code) em que foi gerada; null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   /** Primeira linha (queixa principal) para o resumo do card. */
   resumo: string;
   /** Conteúdo completo formatado (para Ver / Imprimir). */
@@ -54,6 +56,7 @@ const DEMO_EVOLUCOES: EvolucaoCard[] = [
     dataHora: "12/06/2026 08:30",
     profissional: "Dra. Ana Beatriz Costa",
     conselho: "CRM-SP 123456",
+    atendimentoCodigo: "0001",
     resumo: "Dor torácica leve há 2 dias.",
     conteudo:
       "Queixa Principal: Dor torácica leve há 2 dias.\n\n" +
@@ -76,7 +79,7 @@ export async function listEvolucoes(patientId: string): Promise<EvolucaoCard[]> 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("medical_records")
-    .select("id, content, created_at, cancelled_at, cancel_reason, professionals(council_name, council_uf, council_number, council_reg, profiles(full_name))")
+    .select("id, content, created_at, cancelled_at, cancel_reason, professionals(council_name, council_uf, council_number, council_reg, profiles(full_name)), queue_entries(attendance_code)")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
 
@@ -113,12 +116,14 @@ export async function listEvolucoes(patientId: string): Promise<EvolucaoCard[]> 
     const extras = Number.isFinite(t)
       ? (extrasPorInstante.get(t) ?? [])
       : [];
+    const qe = Array.isArray(r.queue_entries) ? r.queue_entries[0] : r.queue_entries;
 
     return {
       id: r.id as string,
       dataHora: fmtDataHora(r.created_at as string | null),
       profissional: profile?.full_name ?? "—",
       conselho: extrairConselho(r.professionals),
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
       resumo: primeira || "Evolução clínica registrada.",
       conteudo,
       extras,

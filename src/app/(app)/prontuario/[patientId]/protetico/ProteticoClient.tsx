@@ -101,8 +101,7 @@ export function ProteticoClient({
   // Etapa 1
   const [teeth, setTeeth] = useState("");
   const [workType, setWorkType] = useState("");
-  const [customWorkType, setCustomWorkType] = useState("");
-  const finalWorkType = workType === "Outros" ? customWorkType : workType;
+  const finalWorkType = workType;
   const [urgent, setUrgent] = useState(false);
   // Etapa 2
   const [material, setMaterial] = useState("");
@@ -148,7 +147,6 @@ export function ProteticoClient({
     setStep(0);
     setTeeth("");
     setWorkType("");
-    setCustomWorkType("");
     setUrgent(false);
     setMaterial("");
     setColor("");
@@ -393,15 +391,6 @@ export function ProteticoClient({
                   );
                 })}
               </div>
-              {workType === "Outros" && (
-                <div className="mt-4">
-                  <Input
-                    placeholder="Especifique o tipo de trabalho..."
-                    value={customWorkType}
-                    onChange={(e) => setCustomWorkType(e.target.value)}
-                  />
-                </div>
-              )}
             </div>
 
             <div className="rounded-xl border border-line p-4">
@@ -684,6 +673,9 @@ export function ProteticoClient({
                       <p className="mt-0.5 text-xs text-muted">
                         {p.profissional} · {p.criadoEm}
                       </p>
+                      <p className="mt-0.5 text-xs font-medium text-brand-600">
+                        Atendimento nº {p.atendimentoCodigo ?? "—"}
+                      </p>
                       <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
                         {p.material !== "—" && <span>Material: {p.material}</span>}
                         {p.color !== "—" && <span>Cor: {p.color}</span>}
@@ -905,8 +897,7 @@ function EditarPedidoModal({
 }) {
   const [teeth, setTeeth] = useState("");
   const [workType, setWorkType] = useState("");
-  const [customWorkType, setCustomWorkType] = useState("");
-  const finalWorkType = workType === "Outros" ? customWorkType : workType;
+  const finalWorkType = workType;
   const [urgent, setUrgent] = useState(false);
   const [material, setMaterial] = useState("");
   const [color, setColor] = useState("");
@@ -920,14 +911,7 @@ function EditarPedidoModal({
   if (pedido && carregadoRef.current !== pedidoId) {
     carregadoRef.current = pedidoId;
     setTeeth(pedido.teeth === "—" ? "" : pedido.teeth);
-    const wt = pedido.workType === "—" ? "" : pedido.workType;
-    if (wt && !(TIPOS_TRABALHO as readonly string[]).includes(wt)) {
-      setWorkType("Outros");
-      setCustomWorkType(wt);
-    } else {
-      setWorkType(wt);
-      setCustomWorkType("");
-    }
+    setWorkType(pedido.workType === "—" ? "" : pedido.workType);
     setUrgent(pedido.urgent);
     setMaterial(pedido.material === "—" ? "" : pedido.material);
     setColor(pedido.color === "—" ? "" : pedido.color);
@@ -1005,17 +989,7 @@ function EditarPedidoModal({
                   {t}
                 </option>
               ))}
-              <option value="Outros">Outros</option>
             </select>
-            {workType === "Outros" && (
-              <div className="mt-2">
-                <Input
-                  placeholder="Especifique..."
-                  value={customWorkType}
-                  onChange={(e) => setCustomWorkType(e.target.value)}
-                />
-              </div>
-            )}
           </div>
           <Input
             label="Material"
@@ -1082,7 +1056,7 @@ function imprimirPedidoProtetico(
       : "";
 
   const ident = identPacienteHTML(paciente.nome, [
-    { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
     { lbl: "Idade", val: limpo(paciente.idade) || "—" },
     { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
     { lbl: "Criado em", val: limpo(p.criadoEm) || "—" },

@@ -45,6 +45,9 @@ export function Sidebar({
       return counters.filaAguardando + counters.aguardandoPagamento + (counters.checkinPendentes || 0);
     }
     if (module === "estoque") return counters?.estoqueCriticos ?? fallback;
+    // Faturamento = contagem própria de check-out pendente (mesmo dado que
+    // compõe o badge da Fila, mas exibido aqui de forma isolada e específica).
+    if (module === "faturamento") return counters?.aguardandoPagamento ?? fallback;
     return fallback;
   };
 

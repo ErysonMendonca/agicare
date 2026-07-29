@@ -45,7 +45,7 @@ function montarDocumento(
   doc: Documento,
 ): string {
   const ident = identPacienteHTML(limpo(paciente.nome) || "—", [
-    { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
     { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
     { lbl: "Idade", val: limpo(paciente.idade) || "—" },
     { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },

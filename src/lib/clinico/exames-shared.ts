@@ -16,6 +16,10 @@ export type ExamOrder = {
   lateralidade: string | null;
   /** Data/hora da solicitação já formatada (pt-BR). */
   quando: string;
+  /** Profissional que solicitou o exame (created_by → profiles.full_name); "—" se não identificado. */
+  profissional: string;
+  /** Nº do atendimento (queue_entries.attendance_code) em que foi solicitado; null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   /** Cancelamento (não destrutivo): null = pedido ativo. */
   cancelledAt: string | null;
   cancelReason: string | null;

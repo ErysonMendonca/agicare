@@ -137,6 +137,8 @@ export type AnotacaoEnfermagem = {
   profissional: string;
   data: string;
   conteudo: string;
+  /** Nº do atendimento (queue_entries.attendance_code); null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
 };
@@ -150,6 +152,7 @@ const MOCK_ANOTACOES: AnotacaoEnfermagem[] = [
     data: "12/06/2026 09:15",
     conteudo:
       "Paciente deambulando sem auxílio, aceitou dieta via oral integralmente. Acesso venoso periférico em MSE pérvio, sem sinais flogísticos.",
+    atendimentoCodigo: "0001",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -161,6 +164,7 @@ const MOCK_ANOTACOES: AnotacaoEnfermagem[] = [
     data: "12/06/2026 07:50",
     conteudo:
       "Paciente febril (38,2°C), administrado antitérmico conforme prescrição. Mantida hidratação venosa. Reavaliar em 1h.",
+    atendimentoCodigo: "0002",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -173,7 +177,7 @@ export async function listAnotacoes(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("nursing_notes")
-    .select("*, patients(full_name)")
+    .select("*, patients(full_name), queue_entries(attendance_code)")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -182,6 +186,7 @@ export async function listAnotacoes(
 
   return data.map((n) => {
     const pac = one(n.patients as { full_name: string | null } | null);
+    const qe = one(n.queue_entries as { attendance_code: string | null } | null);
     return {
       id: n.id as string,
       codigo: (n.code as string | null) ?? "—",
@@ -189,6 +194,7 @@ export async function listAnotacoes(
       profissional: (n.professional_name as string | null) ?? "—",
       data: fmtDataHora(n.created_at as string | null),
       conteudo: (n.content as string | null) ?? "",
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
       cancelledAt: (n.cancelled_at as string | null) ?? null,
       cancelReason: (n.cancel_reason as string | null) ?? null,
     };
@@ -220,6 +226,8 @@ export type Cuidado = {
   statusRaw: CuidadoStatus;
   justificativa: string;
   profissional: string;
+  /** Nº do atendimento (queue_entries.attendance_code); null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
 };
@@ -241,6 +249,7 @@ const MOCK_CUIDADOS: Cuidado[] = [
     statusRaw: "administrado",
     justificativa: "—",
     profissional: "Enf. Mariana Souza Lima",
+    atendimentoCodigo: "0001",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -254,6 +263,7 @@ const MOCK_CUIDADOS: Cuidado[] = [
     statusRaw: "pendente",
     justificativa: "—",
     profissional: "—",
+    atendimentoCodigo: "0001",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -267,6 +277,7 @@ const MOCK_CUIDADOS: Cuidado[] = [
     statusRaw: "aprazado",
     justificativa: "Paciente em exame de imagem no horário.",
     profissional: "Enf. Mariana Souza Lima",
+    atendimentoCodigo: "0002",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -277,7 +288,7 @@ export async function listCuidados(patientId: string): Promise<Cuidado[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("care_checks")
-    .select("*, patients(full_name)")
+    .select("*, patients(full_name), queue_entries(attendance_code)")
     .eq("patient_id", patientId)
     .order("scheduled_at", { ascending: true })
     .limit(100);
@@ -286,6 +297,7 @@ export async function listCuidados(patientId: string): Promise<Cuidado[]> {
 
   return data.map((c) => {
     const pac = one(c.patients as { full_name: string | null } | null);
+    const qe = one(c.queue_entries as { attendance_code: string | null } | null);
     const statusRaw = (c.status as CuidadoStatus) ?? "pendente";
     return {
       id: c.id as string,
@@ -297,6 +309,7 @@ export async function listCuidados(patientId: string): Promise<Cuidado[]> {
       statusRaw,
       justificativa: (c.justification as string | null) ?? "—",
       profissional: (c.professional_name as string | null) ?? "—",
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
       cancelledAt: (c.cancelled_at as string | null) ?? null,
       cancelReason: (c.cancel_reason as string | null) ?? null,
     };
@@ -406,6 +419,8 @@ export type EvolucaoEnfermagem = {
   avaliacao: string;
   reavaliacao: string;
   conduta: string;
+  /** Nº do atendimento (queue_entries.attendance_code); null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
 };
@@ -423,6 +438,7 @@ const MOCK_EVOLUCOES: EvolucaoEnfermagem[] = [
       "Mantém-se estável após período de observação. Sinais vitais dentro da normalidade.",
     conduta:
       "Mantidos cuidados de enfermagem. Estimulada deambulação precoce e hidratação oral.",
+    atendimentoCodigo: "0001",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -435,7 +451,7 @@ export async function listEvolucoes(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("nursing_evolutions")
-    .select("*, patients(full_name)")
+    .select("*, patients(full_name), queue_entries(attendance_code)")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -444,6 +460,7 @@ export async function listEvolucoes(
 
   return data.map((e) => {
     const pac = one(e.patients as { full_name: string | null } | null);
+    const qe = one(e.queue_entries as { attendance_code: string | null } | null);
     return {
       id: e.id as string,
       paciente: pac?.full_name ?? "—",
@@ -453,6 +470,7 @@ export async function listEvolucoes(
       avaliacao: (e.assessment as string | null) ?? "—",
       reavaliacao: (e.reassessment as string | null) ?? "—",
       conduta: (e.conduct as string | null) ?? "—",
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
       cancelledAt: (e.cancelled_at as string | null) ?? null,
       cancelReason: (e.cancel_reason as string | null) ?? null,
     };
@@ -540,6 +558,8 @@ export type ProcedimentoEnfermagem = {
   local: string;
   profissional: string;
   data: string;
+  /** Nº do atendimento (queue_entries.attendance_code); null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
 };
@@ -554,6 +574,7 @@ const MOCK_PROCEDIMENTOS: ProcedimentoEnfermagem[] = [
     local: "Membro inferior direito",
     profissional: "Enf. Mariana Souza Lima",
     data: "12/06/2026 08:45",
+    atendimentoCodigo: "0002",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -566,6 +587,7 @@ const MOCK_PROCEDIMENTOS: ProcedimentoEnfermagem[] = [
     local: "Membro superior esquerdo",
     profissional: "Enf. Mariana Souza Lima",
     data: "12/06/2026 07:20",
+    atendimentoCodigo: "0001",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -578,7 +600,7 @@ export async function listProcedimentosEnfermagem(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("nursing_procedures")
-    .select("*, patients(full_name)")
+    .select("*, patients(full_name), queue_entries(attendance_code)")
     .eq("patient_id", patientId)
     .order("performed_at", { ascending: false })
     .limit(50);
@@ -587,6 +609,7 @@ export async function listProcedimentosEnfermagem(
 
   return data.map((p) => {
     const pac = one(p.patients as { full_name: string | null } | null);
+    const qe = one(p.queue_entries as { attendance_code: string | null } | null);
     return {
       id: p.id as string,
       tuss: (p.tuss_code as string | null) ?? "—",
@@ -596,6 +619,7 @@ export async function listProcedimentosEnfermagem(
       local: (p.body_site as string | null) ?? "—",
       profissional: (p.professional_name as string | null) ?? "—",
       data: fmtDataHora(p.performed_at as string | null),
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
       cancelledAt: (p.cancelled_at as string | null) ?? null,
       cancelReason: (p.cancel_reason as string | null) ?? null,
     };
@@ -615,6 +639,8 @@ export type RegistroSae = {
   prescricao: string;
   frequencia: number;
   data: string;
+  /** Nº do atendimento (queue_entries.attendance_code); null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
 };
@@ -630,6 +656,7 @@ const MOCK_SAE: RegistroSae[] = [
     prescricao: "Realizar mudança de decúbito a cada 2 horas e hidratar a pele.",
     frequencia: 2,
     data: "12/06/2026 07:10",
+    atendimentoCodigo: "0001",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -640,7 +667,9 @@ export async function listSae(patientId: string): Promise<RegistroSae[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("sae_records")
-    .select("*, patients(full_name)")
+    .select(
+      "*, patients(full_name), professionals(profiles(full_name)), queue_entries(attendance_code)",
+    )
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -649,16 +678,24 @@ export async function listSae(patientId: string): Promise<RegistroSae[]> {
 
   return data.map((s) => {
     const pac = one(s.patients as { full_name: string | null } | null);
+    const prof = one(
+      s.professionals as
+        | { profiles: { full_name: string | null } | { full_name: string | null }[] | null }
+        | null,
+    );
+    const profile = one(prof?.profiles);
+    const qe = one(s.queue_entries as { attendance_code: string | null } | null);
     return {
       id: s.id as string,
       paciente: pac?.full_name ?? "—",
-      profissional: "—",
+      profissional: profile?.full_name ?? "—",
       coren: (s.coren as string | null) ?? "—",
       diagnostico: (s.nanda_diagnosis as string | null) ?? "—",
       fatorRelacionado: (s.related_factor as string | null) ?? "—",
       prescricao: (s.prescription as string | null) ?? "—",
       frequencia: Number(s.frequency_hours ?? 6),
       data: fmtDataHora(s.created_at as string | null),
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
       cancelledAt: (s.cancelled_at as string | null) ?? null,
       cancelReason: (s.cancel_reason as string | null) ?? null,
     };

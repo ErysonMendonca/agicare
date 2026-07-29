@@ -5,15 +5,15 @@
 export const TIPOS_TRABALHO = [
   "Coroa",
   "Faceta / Lente",
-  "Ponte",
+  "PPF",
   "Protocolo",
   "Inlay/Onlay/Overlay",
   "Provisório",
   "Prótese Total",
   "PPR",
+  "Flex",
   "Placa de Bruxismo",
   "Núcleo",
-  "Outros",
 ] as const;
 export type TipoTrabalho = string;
 
@@ -54,6 +54,8 @@ export type PedidoProtetico = {
   status: string;
   profissional: string;
   criadoEm: string;
+  /** Nº do atendimento (queue_entries.attendance_code) em que foi gerado; null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   arquivos: ArquivoProtetico[];
   /** Cancelamento (não destrutivo): null = pedido ativo. */
   cancelledAt: string | null;

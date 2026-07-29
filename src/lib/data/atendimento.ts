@@ -1,8 +1,33 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveClinicId } from "@/lib/tenant";
 
+/** Instrumental vinculado a um procedimento do catálogo (0121: com esterilização). */
+export type InstrumentalDoProcedimento = {
+  id: string;
+  nome: string;
+  sterilizationMethod: string | null;
+  validityDate: string | null;
+  lotCode: string | null;
+};
+
+/** Material (produto de estoque) vinculado a um procedimento do catálogo. */
+export type MaterialDoProcedimento = {
+  id: string;
+  nome: string;
+  unidade: string;
+  quantidade: number;
+};
+
 /** Procedimento do catálogo (para o médico escolher). */
-export type ProcedimentoCatalogo = { id: string; nome: string; preco: number };
+export type ProcedimentoCatalogo = {
+  id: string;
+  nome: string;
+  preco: number;
+  /** Instrumentais vinculados (0121) — [] se nenhum ou se a migration não foi aplicada. */
+  instrumentos: InstrumentalDoProcedimento[];
+  /** Materiais (produtos de estoque) vinculados, com a quantidade consumida por execução. */
+  materiais: MaterialDoProcedimento[];
+};
 
 /** Procedimento já registrado no atendimento. */
 export type ProcedimentoExecutado = {
@@ -23,12 +48,17 @@ const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const MOCK_CATALOGO: ProcedimentoCatalogo[] = [
-  { id: "p1", nome: "Consulta Cardiológica", preco: 350 },
-  { id: "p2", nome: "Eletrocardiograma", preco: 120 },
-  { id: "p3", nome: "Teste Ergométrico", preco: 280 },
+  { id: "p1", nome: "Consulta Cardiológica", preco: 350, instrumentos: [], materiais: [] },
+  { id: "p2", nome: "Eletrocardiograma", preco: 120, instrumentos: [], materiais: [] },
+  { id: "p3", nome: "Teste Ergométrico", preco: 280, instrumentos: [], materiais: [] },
 ];
 
-/** Catálogo de procedimentos ativos (id + nome + preço). */
+/**
+ * Catálogo de procedimentos ativos (id + nome + preço), já com os
+ * instrumentais (0121: esterilização/validade/lote) e materiais vinculados a
+ * cada um — usado para exibir o painel informativo na tela de Procedimento
+ * do prontuário ao selecionar o procedimento.
+ */
 export async function listCatalogoProcedimentos(): Promise<ProcedimentoCatalogo[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -36,12 +66,96 @@ export async function listCatalogoProcedimentos(): Promise<ProcedimentoCatalogo[
     .select("id, name, price, active")
     .order("name", { ascending: true });
   if (error || !data) return [];
+
+  const procedureIds = data.map((p) => p.id as string);
+
+  // Instrumentais (junção com attendance_options, category='instrumental') e
+  // materiais (junção com stock_products) — isolados: se a migration 0117/
+  // 0121 ainda não foi aplicada, a leitura falha sem derrubar o catálogo.
+  const instrPromise =
+    procedureIds.length === 0
+      ? Promise.resolve({ data: null as unknown[] | null })
+      : supabase
+          .from("procedure_instruments")
+          .select(
+            "procedure_id, attendance_options(id, label, sterilization_method, validity_date, lot_code)",
+          )
+          .in("procedure_id", procedureIds);
+  const matsPromise =
+    procedureIds.length === 0
+      ? Promise.resolve({ data: null as unknown[] | null })
+      : supabase
+          .from("procedure_materials")
+          .select("procedure_id, quantity, stock_products(id, name, unit)")
+          .in("procedure_id", procedureIds);
+
+  const [instrRes, matsRes] = await Promise.all([instrPromise, matsPromise]);
+
+  const one = <T,>(v: T | T[] | null | undefined): T | undefined =>
+    Array.isArray(v) ? v[0] : (v ?? undefined);
+
+  const instrumentosPorProc = new Map<string, InstrumentalDoProcedimento[]>();
+  for (const r of (instrRes.data ?? []) as {
+    procedure_id: string;
+    attendance_options:
+      | {
+          id: string;
+          label: string;
+          sterilization_method: string | null;
+          validity_date: string | null;
+          lot_code: string | null;
+        }
+      | {
+          id: string;
+          label: string;
+          sterilization_method: string | null;
+          validity_date: string | null;
+          lot_code: string | null;
+        }[]
+      | null;
+  }[]) {
+    const opt = one(r.attendance_options);
+    if (!opt) continue;
+    const lista = instrumentosPorProc.get(r.procedure_id) ?? [];
+    lista.push({
+      id: opt.id,
+      nome: opt.label,
+      sterilizationMethod: opt.sterilization_method ?? null,
+      validityDate: opt.validity_date ?? null,
+      lotCode: opt.lot_code ?? null,
+    });
+    instrumentosPorProc.set(r.procedure_id, lista);
+  }
+
+  const materiaisPorProc = new Map<string, MaterialDoProcedimento[]>();
+  for (const r of (matsRes.data ?? []) as {
+    procedure_id: string;
+    quantity: number | null;
+    stock_products:
+      | { id: string; name: string; unit: string | null }
+      | { id: string; name: string; unit: string | null }[]
+      | null;
+  }[]) {
+    const prod = one(r.stock_products);
+    if (!prod) continue;
+    const lista = materiaisPorProc.get(r.procedure_id) ?? [];
+    lista.push({
+      id: prod.id,
+      nome: prod.name,
+      unidade: prod.unit ?? "un",
+      quantidade: Number(r.quantity ?? 1),
+    });
+    materiaisPorProc.set(r.procedure_id, lista);
+  }
+
   return data
     .filter((p) => p.active !== false)
     .map((p) => ({
       id: p.id as string,
       nome: (p.name as string | null) ?? "—",
       preco: Number(p.price ?? 0),
+      instrumentos: instrumentosPorProc.get(p.id as string) ?? [],
+      materiais: materiaisPorProc.get(p.id as string) ?? [],
     }));
 }
 

@@ -27,6 +27,7 @@ export type { ClinicaImpressao };
 export type PacienteImpressaoEspecial = {
   nome: string;
   registro: string;
+  cpf: string;
   endereco: string;
   cidade: string;
   uf: string;
@@ -44,6 +45,7 @@ function montarVia(
 ): string {
   const cidade = [limpo(paciente.cidade), limpo(paciente.uf)].filter(Boolean).join(" / ");
   const ident = identPacienteHTML(limpo(paciente.nome) || "", [
+    { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
     { lbl: "Endereço", val: limpo(paciente.endereco), span: 3 },
     { lbl: "Cidade", val: cidade },
     { lbl: "CEP", val: limpo(paciente.cep) },

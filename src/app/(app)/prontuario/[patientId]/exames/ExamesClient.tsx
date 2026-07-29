@@ -73,7 +73,7 @@ function imprimirExame(
   profissional: { nome: string; conselho: string },
 ) {
   const ident = identPacienteHTML(paciente.nome, [
-    { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
     { lbl: "Idade", val: limpo(paciente.idade) || "—" },
     { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
     { lbl: "Solicitado em", val: limpo(e.quando) || "—" },
@@ -317,6 +317,12 @@ export function ExamesClient({
                         )}
                       >
                         <p className="font-medium text-ink">{e.exame}</p>
+                        <p className="text-xs text-muted">
+                          {e.profissional} · {e.quando}
+                        </p>
+                        <p className="mt-0.5 text-xs font-medium text-brand-600">
+                          Atendimento nº {e.atendimentoCodigo ?? "—"}
+                        </p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <CategoriaTag categoria={e.categoria} />
                           <Badge
@@ -334,9 +340,6 @@ export function ExamesClient({
                           {e.lateralidade && (
                             <Badge status="active">{e.lateralidade}</Badge>
                           )}
-                          <span className="text-xs text-muted">
-                            · {e.quando}
-                          </span>
                         </div>
                         {e.observacoes && (
                           <p className="mt-1.5 text-sm text-muted">

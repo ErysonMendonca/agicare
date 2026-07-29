@@ -46,6 +46,8 @@ const DEMO_EXAMES: ExamOrder[] = [
     observacoes: "Coleta em jejum de 8h.",
     lateralidade: null,
     quando: "12/06/2026 09:15",
+    profissional: "Dra. Ana Beatriz Costa",
+    atendimentoCodigo: "0001",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -58,6 +60,8 @@ const DEMO_EXAMES: ExamOrder[] = [
     observacoes: null,
     lateralidade: "Bilateral",
     quando: "10/06/2026 14:40",
+    profissional: "Dr. Carlos Eduardo",
+    atendimentoCodigo: "0002",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -70,6 +74,8 @@ const DEMO_EXAMES: ExamOrder[] = [
     observacoes: "Avaliar função tireoidiana.",
     lateralidade: null,
     quando: "10/06/2026 14:38",
+    profissional: "Dr. Carlos Eduardo",
+    atendimentoCodigo: "0002",
     cancelledAt: null,
     cancelReason: null,
   },
@@ -84,22 +90,30 @@ export async function listExamOrders(patientId: string): Promise<ExamOrder[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("exam_orders")
-    .select("id, exam_name, tuss_code, category, status, notes, laterality, created_at, cancelled_at, cancel_reason")
+    .select(
+      "id, exam_name, tuss_code, category, status, notes, laterality, created_at, cancelled_at, cancel_reason, profiles:created_by(full_name), queue_entries(attendance_code)",
+    )
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];
 
-  return data.map((r) => ({
-    id: r.id as string,
-    exame: (r.exam_name as string | null) ?? "—",
-    tuss: (r.tuss_code as string | null) ?? null,
-    categoria: normCategoria(r.category),
-    status: normStatus(r.status),
-    observacoes: (r.notes as string | null) ?? null,
-    lateralidade: (r.laterality as string | null) ?? null,
-    quando: fmtDataHora(r.created_at as string | null),
-    cancelledAt: (r.cancelled_at as string | null) ?? null,
-    cancelReason: (r.cancel_reason as string | null) ?? null,
-  }));
+  return data.map((r) => {
+    const profile = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+    const qe = Array.isArray(r.queue_entries) ? r.queue_entries[0] : r.queue_entries;
+    return {
+      id: r.id as string,
+      exame: (r.exam_name as string | null) ?? "—",
+      tuss: (r.tuss_code as string | null) ?? null,
+      categoria: normCategoria(r.category),
+      status: normStatus(r.status),
+      observacoes: (r.notes as string | null) ?? null,
+      lateralidade: (r.laterality as string | null) ?? null,
+      quando: fmtDataHora(r.created_at as string | null),
+      profissional: (profile as { full_name: string | null } | null)?.full_name ?? "—",
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
+      cancelledAt: (r.cancelled_at as string | null) ?? null,
+      cancelReason: (r.cancel_reason as string | null) ?? null,
+    };
+  });
 }

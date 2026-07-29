@@ -348,10 +348,16 @@ export function DocumentosClient({
                         <Badge status={d.tipo === "alta" ? "ok" : "active"}>
                           {d.tipo === "alta" ? "Alta" : "Atestado"}
                         </Badge>
-                        <span className="text-xs text-muted">{d.dataHora}</span>
                       </div>
+                      <p className="text-xs text-muted">
+                        {d.profissional} · {d.dataHora}
+                      </p>
+                      <p className="mt-0.5 text-xs font-medium text-brand-600">
+                        Atendimento nº {d.atendimentoCodigo ?? "—"}
+                      </p>
                       <div
                         className={cn(
+                          "mt-1.5",
                           cancelado &&
                             "text-status-danger [&_*]:text-status-danger",
                         )}
@@ -394,7 +400,6 @@ export function DocumentosClient({
                           ) : null}
                         </div>
                       )}
-                      <p className="mt-1 text-xs text-muted">{d.profissional}</p>
                       </div>
                     </div>
                     <DocumentActions

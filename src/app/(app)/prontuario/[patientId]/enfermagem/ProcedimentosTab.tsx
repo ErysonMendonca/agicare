@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Syringe, Search, Plus, User, Clock, MapPin } from "lucide-react";
+import { Syringe, Search, Plus, User, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -120,31 +120,26 @@ export function ProcedimentosTab({
           {filtrados.map((p) => (
             <FadeInUp key={p.id}>
               <Card className="p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Badge status="active">TUSS {p.tuss}</Badge>
                     <h3 className="font-semibold text-ink">{p.nome}</h3>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1.5 text-sm text-muted">
-                      <Clock className="h-4 w-4" /> {p.data}
-                    </span>
-                    <DocumentActions
-                      cancelled={p.cancelledAt != null}
-                      cancelReason={p.cancelReason}
-                      pending={pending}
-                      onView={() => setViewing(p)}
-                      onEdit={() => setEditing(p)}
-                      onPrint={() =>
-                        imprimirDocumento(
-                          cabecalho,
-                          "Procedimento de enfermagem",
-                          camposProc(p),
-                        )
-                      }
-                      onCancel={() => setCancelando(p)}
-                    />
-                  </div>
+                  <DocumentActions
+                    cancelled={p.cancelledAt != null}
+                    cancelReason={p.cancelReason}
+                    pending={pending}
+                    onView={() => setViewing(p)}
+                    onEdit={() => setEditing(p)}
+                    onPrint={() =>
+                      imprimirDocumento(
+                        cabecalho,
+                        "Procedimento de enfermagem",
+                        camposProc(p),
+                      )
+                    }
+                    onCancel={() => setCancelando(p)}
+                  />
                 </div>
                 <div
                   className={cn(
@@ -152,6 +147,12 @@ export function ProcedimentosTab({
                       "text-status-danger [&_*]:text-status-danger",
                   )}
                 >
+                <p className="text-xs text-muted">
+                  {p.profissional} · {p.data}
+                </p>
+                <p className="mt-0.5 text-xs font-medium text-brand-600">
+                  Atendimento nº {p.atendimentoCodigo ?? "—"}
+                </p>
                 <p className="mt-2 text-sm text-muted">
                   <span className="font-medium text-ink">Materiais: </span>
                   {p.materiais}
@@ -162,9 +163,6 @@ export function ProcedimentosTab({
                   </span>
                   <span className="flex items-center gap-1.5">
                     <MapPin className="h-4 w-4" /> {p.local}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Syringe className="h-4 w-4" /> {p.profissional}
                   </span>
                 </div>
                 </div>

@@ -143,7 +143,7 @@ export function AnamneseClient({
       .join("");
 
     const ident = identPacienteHTML(paciente.nome, [
-      { lbl: "Registro", val: limpo(paciente.registro) || "—" },
+      { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
       { lbl: "Atendimento", val: a.atendimentoCodigo ? "#" + a.atendimentoCodigo : "—" },
       { lbl: "Idade", val: limpo(paciente.idade) || "—" },
       { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },

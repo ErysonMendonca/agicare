@@ -7,6 +7,8 @@ export type Receituario = {
   texto: string;
   dataHora: string;
   profissional: string;
+  /** Nº do atendimento (queue_entries.attendance_code) em que foi emitido; null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   /** CID-10 do catálogo (opcional por LGPD); null quando não informado. */
   cid10: string | null;
   /** Exibir o CID na impressão (LGPD — sigilo do diagnóstico). */
@@ -38,6 +40,7 @@ const DEMO_RECEITUARIOS: Receituario[] = [
     texto: "Dipirona 500mg — 1 comprimido de 6/6h por 3 dias.",
     dataHora: "12/06/2026 09:10",
     profissional: "Dra. Ana Beatriz Costa",
+    atendimentoCodigo: "0001",
     cid10: null,
     exibirCid: true,
     cancelledAt: null,
@@ -54,7 +57,7 @@ export async function listReceituarios(
   const { data, error } = await supabase
     .from("certificates")
     .select(
-      "id, kind, prescription_text, cid10, show_cid, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name))",
+      "id, kind, prescription_text, cid10, show_cid, created_at, cancelled_at, cancel_reason, professionals(profiles(full_name)), queue_entries(attendance_code)",
     )
     .eq("patient_id", patientId)
     .in("kind", ["receituario_simples", "receituario_especial"])
@@ -69,6 +72,7 @@ export async function listReceituarios(
     const profile = Array.isArray(prof?.profiles)
       ? prof?.profiles[0]
       : prof?.profiles;
+    const qe = Array.isArray(c.queue_entries) ? c.queue_entries[0] : c.queue_entries;
 
     return {
       id: c.id as string,
@@ -76,6 +80,7 @@ export async function listReceituarios(
       texto: (c.prescription_text as string | null) ?? "",
       dataHora: fmtDataHora((c.created_at as string | null) ?? null),
       profissional: profile?.full_name ?? "—",
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
       cid10: (c.cid10 as string | null) ?? null,
       exibirCid: (c.show_cid as boolean | null) ?? true,
       cancelledAt: (c.cancelled_at as string | null) ?? null,

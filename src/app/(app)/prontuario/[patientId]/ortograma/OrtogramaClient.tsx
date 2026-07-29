@@ -194,11 +194,18 @@ export function OrtogramaClient({
         toast.error(res?.error ?? "Não foi possível salvar o ortograma.");
         return;
       }
-      if (res.chartId) setChartAtual(res.chartId);
-      setCarimbo(res.updatedAt);
+      // Cada "Salvar" vira uma versão nova e distinta no histórico (como
+      // Evolução/Anamnese): a tela limpa a arcada e as observações para uma
+      // nova marcação do zero, em vez de continuar sobrescrevendo o mesmo
+      // registro. Por isso NÃO guardamos res.chartId/updatedAt aqui — o
+      // próximo "Salvar" deve criar um chart novo, não regravar este.
+      setMarcas([]);
+      setNotes("");
+      setChartAtual(null);
+      setCarimbo(undefined);
       setEditandoDe(null);
       setFerramenta(null);
-      toast.success("Ortograma salvo.");
+      toast.success("Ortograma salvo. Tela limpa para uma nova marcação.");
       router.refresh();
     });
   }
@@ -458,13 +465,16 @@ function OrtogramaHistorico({
                     )}
                   >
                     <span className="text-sm font-medium text-ink">
-                      {item.dataLabel} {item.id === chartAtual && <span className="text-brand-600">(Atual)</span>}
+                      Odontograma {item.id === chartAtual && <span className="text-brand-600">(Atual)</span>}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {item.professionalName} · {item.dataLabel}
                     </span>
                     <span className="text-xs font-medium text-brand-600">
                       Atendimento nº {item.atendimentoCodigo ?? "—"}
                     </span>
-                    <span className="text-xs text-muted">
-                      {item.professionalName} · {item.totalMarcas}{" "}
+                    <span className="mt-0.5 text-xs text-muted">
+                      {item.totalMarcas}{" "}
                       {item.totalMarcas === 1 ? "marcação" : "marcações"}
                     </span>
                   </button>

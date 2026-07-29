@@ -8,6 +8,8 @@ export type Documento = {
   profissional: string;
   /** Registro do conselho do autor já formatado ("CRM-SP 12345") ou "—". */
   conselho: string;
+  /** Nº do atendimento (queue_entries.attendance_code) em que foi emitido; null = legado/sem vínculo. */
+  atendimentoCodigo: string | null;
   /** Atestado */
   dias: number | null;
   dataAtestado: string | null;
@@ -50,6 +52,7 @@ const DEMO_DOCUMENTOS: Documento[] = [
     dataHora: "12/06/2026 09:00",
     profissional: "Dra. Ana Beatriz Costa",
     conselho: "CRM-SP 123456",
+    atendimentoCodigo: "0001",
     dias: 3,
     dataAtestado: "12/06/2026",
     inicio: "12/06/2026",
@@ -71,6 +74,7 @@ const DEMO_DOCUMENTOS: Documento[] = [
     dataHora: "11/06/2026 16:30",
     profissional: "Dr. Carlos Eduardo",
     conselho: "CRM-SP 654321",
+    atendimentoCodigo: "0002",
     dias: null,
     dataAtestado: null,
     inicio: null,
@@ -95,7 +99,7 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
   const { data, error } = await supabase
     .from("certificates")
     .select(
-      "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, discharge_at, discharge_detail, created_at, cancelled_at, cancel_reason, professionals(council_name, council_uf, council_number, council_reg, profiles(full_name))",
+      "id, kind, days, issue_date, start_date, end_date, diagnosis, cid10, observation, show_cid, reason, post_discharge, discharge_at, discharge_detail, created_at, cancelled_at, cancel_reason, professionals(council_name, council_uf, council_number, council_reg, profiles(full_name)), queue_entries(attendance_code)",
     )
     .eq("patient_id", patientId)
     // Aba Documentos = só atestado/alta. Receituários têm aba própria.
@@ -111,6 +115,7 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
     const profile = Array.isArray(prof?.profiles)
       ? prof?.profiles[0]
       : prof?.profiles;
+    const qe = Array.isArray(c.queue_entries) ? c.queue_entries[0] : c.queue_entries;
 
     return {
       id: c.id as string,
@@ -118,6 +123,7 @@ export async function listDocumentos(patientId: string): Promise<Documento[]> {
       dataHora: fmtDataHora(c.created_at as string | null),
       profissional: profile?.full_name ?? "—",
       conselho: extrairConselho(c.professionals),
+      atendimentoCodigo: (qe?.attendance_code as string | null) ?? null,
       dias: c.days != null ? Number(c.days) : null,
       dataAtestado: fmtData(c.issue_date as string | null),
       inicio: fmtData(c.start_date as string | null),

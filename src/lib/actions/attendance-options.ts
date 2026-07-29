@@ -30,12 +30,26 @@ const parentId = z
   .regex(UUID, "Vínculo (motivo) inválido.")
   .optional();
 
+// Campos específicos do catálogo "Instrumental" (0121) — ignorados por todas
+// as outras categorias, que nunca os enviam.
+const sterilizationMethod = z.string().trim().max(80).optional();
+const validityDate = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.")
+  .optional()
+  .or(z.literal(""));
+const lotCode = z.string().trim().max(80).optional();
+
 const addSchema = z.object({
   category: categoria,
   label,
   value,
   description,
   parentId,
+  sterilizationMethod,
+  validityDate,
+  lotCode,
 });
 const updateSchema = z
   .object({
@@ -45,6 +59,9 @@ const updateSchema = z
     active: z.boolean().optional(),
     sort_order: z.number().int().min(0).optional(),
     parentId,
+    sterilizationMethod,
+    validityDate,
+    lotCode,
   })
   .refine((o) => Object.keys(o).length > 0, "Nada a atualizar.");
 
@@ -89,6 +106,10 @@ export async function addAttendanceOption(input: {
   value: string;
   description?: string;
   parentId?: string;
+  /** Só usados por category='instrumental' (0121). */
+  sterilizationMethod?: string;
+  validityDate?: string;
+  lotCode?: string;
 }): Promise<ActionResult> {
   const g = await gate();
   if ("error" in g) return g;
@@ -128,6 +149,17 @@ export async function addAttendanceOption(input: {
   if (parsed.data.description !== undefined) {
     insertPayload.description = parsed.data.description;
   }
+  // Campos de esterilização do Instrumental (0121) — só enviados pelo form
+  // de Instrumental, mas aceitos aqui de forma genérica.
+  if (parsed.data.sterilizationMethod !== undefined) {
+    insertPayload.sterilization_method = parsed.data.sterilizationMethod || null;
+  }
+  if (parsed.data.validityDate !== undefined) {
+    insertPayload.validity_date = parsed.data.validityDate || null;
+  }
+  if (parsed.data.lotCode !== undefined) {
+    insertPayload.lot_code = parsed.data.lotCode || null;
+  }
 
   const { data: inserted, error } = await supabase
     .from("attendance_options")
@@ -164,6 +196,10 @@ export async function updateAttendanceOption(
     active?: boolean;
     sort_order?: number;
     parentId?: string;
+    /** Só usados por category='instrumental' (0121). */
+    sterilizationMethod?: string;
+    validityDate?: string;
+    lotCode?: string;
   },
 ): Promise<ActionResult> {
   const g = await gate();
@@ -176,10 +212,21 @@ export async function updateAttendanceOption(
   }
 
   // Mapeia parentId (contrato da action) → parent_id (coluna). Só inclui a
-  // chave quando enviada — evita zerar o vínculo em updates parciais.
-  const { parentId: pid, ...rest } = parsed.data;
+  // chave quando enviada — evita zerar o vínculo em updates parciais. Mesmo
+  // tratamento para os campos de esterilização do Instrumental (0121):
+  // string vazia grava null (permite limpar validade/lote).
+  const {
+    parentId: pid,
+    sterilizationMethod: stMethod,
+    validityDate: vDate,
+    lotCode: lCode,
+    ...rest
+  } = parsed.data;
   const updatePayload: Record<string, unknown> = { ...rest };
   if (pid !== undefined) updatePayload.parent_id = pid;
+  if (stMethod !== undefined) updatePayload.sterilization_method = stMethod || null;
+  if (vDate !== undefined) updatePayload.validity_date = vDate || null;
+  if (lCode !== undefined) updatePayload.lot_code = lCode || null;
 
   const supabase = await createClient();
 
