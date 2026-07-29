@@ -238,6 +238,7 @@ export function EvolucaoTab({
                           cabecalho,
                           "Evolução de enfermagem",
                           camposEvolucao(e),
+                          e.atendimentoCodigo,
                         )
                       }
                       onCancel={() => setCancelando(e)}

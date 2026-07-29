@@ -85,6 +85,12 @@ export default async function ProcedimentoPage({
     data: formatarData(new Date().toISOString()),
     profissional: profissional?.nome ?? "—",
     conselho: profissional?.conselho ?? "—",
+    idade: resumo?.identificacao?.idade ?? "—",
+    convenio: resumo?.identificacao?.convenio ?? "—",
+    plano: resumo?.identificacao?.plano ?? "—",
+    dataAdmissao: resumo?.identificacao?.dataAdmissao ?? "—",
+    sexo: resumo?.identificacao?.genero ?? "—",
+    nomeMae: resumo?.identificacao?.nomeMae ?? "—",
   };
 
   return (

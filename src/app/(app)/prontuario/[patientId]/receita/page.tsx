@@ -89,6 +89,11 @@ export default async function ReceitaPage({
           atendimentoCodigo: identificacao.atendimentoCodigo,
           idade: identificacao.idade,
           convenio: identificacao.convenio,
+          plano: identificacao.plano,
+          dataAdmissao: identificacao.dataAdmissao,
+          nascimento: identificacao.nascimento,
+          sexo: identificacao.genero,
+          nomeMae: identificacao.nomeMae,
         }}
         prescricao={prescricao}
       />

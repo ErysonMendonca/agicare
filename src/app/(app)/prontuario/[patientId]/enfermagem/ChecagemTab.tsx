@@ -143,7 +143,7 @@ export function ChecagemTab({
                         pending={pending}
                         onView={() => setViewing(c)}
                         onPrint={() =>
-                          imprimirDocumento(cabecalho, "Checagem de cuidado", camposCuidado(c))
+                          imprimirDocumento(cabecalho, "Checagem de cuidado", camposCuidado(c), c.atendimentoCodigo)
                         }
                         onCancel={() => setCancelando(c)}
                       />

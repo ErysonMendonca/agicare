@@ -259,7 +259,7 @@ export function SaeTab({
                       onView={() => setViewing(r)}
                       onEdit={() => abrirEdicao(r)}
                       onPrint={() =>
-                        imprimirDocumento(cabecalho, "Registro SAE (NANDA)", camposSae(r))
+                        imprimirDocumento(cabecalho, "Registro SAE (NANDA)", camposSae(r), r.atendimentoCodigo)
                       }
                       onCancel={() => setCancelando(r)}
                     />

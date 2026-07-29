@@ -67,6 +67,12 @@ export default async function EnfermagemProntuarioPage({
       registro: identificacao?.registro ?? "—",
       idade: identificacao?.idade ?? "—",
       convenio: identificacao?.convenio ?? "—",
+      atendimentoCodigo: identificacao?.atendimentoCodigo ?? null,
+      plano: identificacao?.plano ?? "—",
+      dataAdmissao: identificacao?.dataAdmissao ?? "—",
+      nascimento: identificacao?.nascimento ?? "—",
+      sexo: identificacao?.genero ?? "—",
+      nomeMae: identificacao?.nomeMae ?? "—",
     },
   };
 

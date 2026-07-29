@@ -40,6 +40,11 @@ export default async function ExamesPage({
           registro: identificacao?.registro ?? "—",
           idade: identificacao?.idade ?? "—",
           convenio: identificacao?.convenio ?? "—",
+          plano: identificacao?.plano ?? "—",
+          dataAdmissao: identificacao?.dataAdmissao ?? "—",
+          nascimento: identificacao?.nascimento ?? "—",
+          sexo: identificacao?.genero ?? "—",
+          nomeMae: identificacao?.nomeMae ?? "—",
         }}
         exames={exames}
         profissional={{

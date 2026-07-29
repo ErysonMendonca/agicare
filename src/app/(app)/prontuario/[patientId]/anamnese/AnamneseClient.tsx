@@ -31,6 +31,7 @@ import { gerarAnamnese } from "@/lib/actions/anamnese";
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
 import {
   abrirImpressao,
+  camposIdentPadrao,
   esc,
   identPacienteHTML,
   limpo,
@@ -44,6 +45,11 @@ type PacienteIdent = {
   registro: string;
   idade: string;
   convenio: string;
+  plano: string;
+  dataAdmissao: string;
+  nascimento: string;
+  sexo: string;
+  nomeMae: string;
 };
 
 type BlocoCampos = { titulo: string; campos: AnamneseField[] };
@@ -143,10 +149,17 @@ export function AnamneseClient({
       .join("");
 
     const ident = identPacienteHTML(paciente.nome, [
-      { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
-      { lbl: "Atendimento", val: a.atendimentoCodigo ? "#" + a.atendimentoCodigo : "—" },
-      { lbl: "Idade", val: limpo(paciente.idade) || "—" },
-      { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
+      ...camposIdentPadrao({
+        registro: limpo(paciente.registro) || "—",
+        atendimento: a.atendimentoCodigo,
+        convenio: limpo(paciente.convenio) || "—",
+        plano: limpo(paciente.plano) || "—",
+        dataAdmissao: limpo(paciente.dataAdmissao) || "—",
+        nascimento: limpo(paciente.nascimento) || "—",
+        idade: limpo(paciente.idade) || "—",
+        sexo: limpo(paciente.sexo) || "—",
+        nomeMae: limpo(paciente.nomeMae) || "—",
+      }),
       { lbl: "Especialidade", val: limpo(a.specialty) || "—" },
       { lbl: "Data", val: limpo(a.dataHora) || "—" },
     ]);

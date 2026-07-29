@@ -79,6 +79,12 @@ export interface OrtogramaClientProps {
     data: string;
     profissional: string;
     cro: string;
+    idade: string;
+    convenio: string;
+    plano: string;
+    dataAdmissao: string;
+    sexo: string;
+    nomeMae: string;
   };
 }
 

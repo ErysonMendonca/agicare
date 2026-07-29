@@ -14,6 +14,10 @@ export type Identificacao = {
   genero: string;
   nomeMae: string;
   convenio: string;
+  /** Plano do convênio (patients.plan); "—" quando não cadastrado. */
+  plano: string;
+  /** Data de entrada na fila do atendimento atual (queue_entries.created_at); "—" fora de atendimento. */
+  dataAdmissao: string;
   manualRecord: string | null;
   /** Caminho no Storage (bucket `prontuarios`) do arquivo anexado no cadastro. */
   manualRecordPath: string | null;
@@ -422,7 +426,7 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
   // usada no cabeçalho ("Atendimento nº"). Sem entrada → null.
   const { data: ultimaEntrada } = await supabase
     .from("queue_entries")
-    .select("attendance_code, insurance")
+    .select("attendance_code, insurance, created_at")
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -430,6 +434,11 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
   // Numeração de atendimento (ficha) da mesma entrada; null fora de atendimento.
   const atendimentoCodigo =
     (ultimaEntrada?.attendance_code as string | null) ?? null;
+  // "Data de Admissão" nos documentos = entrada na fila do atendimento atual
+  // (mesma noção de "Data de Entrada" da Ficha de Atendimento); sem entrada → "—".
+  const dataAdmissao = ultimaEntrada?.created_at
+    ? fmtData(ultimaEntrada.created_at as string)
+    : "—";
 
   // Triagem mais recente do paciente (sinais aferidos + classificação de risco).
   // Erro/sem registro → null (a seção não aparece no prontuário).
@@ -486,6 +495,8 @@ export async function getResumo(patientId: string): Promise<Resumo | null> {
         (p.convenio as string | null) ||
         (ultimaEntrada?.insurance as string | null) ||
         "—",
+      plano: (p.plan as string | null) || "—",
+      dataAdmissao,
       manualRecord: (p.manual_record as string | null) ?? null,
       manualRecordPath: (p.manual_record_path as string | null) ?? null,
       manualRecordName: (p.manual_record_name as string | null) ?? null,

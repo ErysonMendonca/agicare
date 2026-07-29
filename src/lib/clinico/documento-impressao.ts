@@ -97,6 +97,39 @@ export function identPacienteHTML(nome: string, campos: CampoIdent[]): string {
   return `<table class="ident">${linhas.join("")}</table>`;
 }
 
+// ── Campos de identificação PADRÃO (todos os relatórios do prontuário) ──
+// Conjunto mínimo exigido em Anamnese, Evolução, Exames, Protético,
+// Receituário, Alta, Atestado, Ortograma, Procedimento, Enfermagem, etc.:
+// Prontuário, Atendimento, Convênio, Plano, Data de Admissão, Data de
+// Nascimento, Idade, Sexo e Nome da Mãe (o Nome do paciente já sai à parte,
+// na 1ª linha da tabela — ver `identPacienteHTML`). Cada documento pode
+// completar o array com campos próprios (ex.: Data do registro).
+export type IdentPadrao = {
+  registro: string;
+  atendimento: string | null;
+  convenio: string;
+  plano: string;
+  dataAdmissao: string;
+  nascimento: string;
+  idade: string;
+  sexo: string;
+  nomeMae: string;
+};
+
+export function camposIdentPadrao(d: IdentPadrao): CampoIdent[] {
+  return [
+    { lbl: "Prontuário", val: d.registro },
+    { lbl: "Atendimento", val: d.atendimento ?? "—" },
+    { lbl: "Convênio", val: d.convenio },
+    { lbl: "Plano", val: d.plano },
+    { lbl: "Data de Admissão", val: d.dataAdmissao },
+    { lbl: "Data de Nascimento", val: d.nascimento },
+    { lbl: "Idade", val: d.idade },
+    { lbl: "Sexo", val: d.sexo },
+    { lbl: "Nome da Mãe", val: d.nomeMae, span: 3 },
+  ];
+}
+
 // ── Rodapé: assinatura (logo abaixo do conteúdo) ──────────────────
 // Observação: o box de carimbo do CABEÇALHO foi removido de todos os
 // documentos. Aqui no rodapé fica só a linha de assinatura do profissional

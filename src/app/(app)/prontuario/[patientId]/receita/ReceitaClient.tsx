@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import type { Prescricao } from "@/lib/clinico/prescricao-shared";
 import {
+  camposIdentPadrao,
   esc,
   identPacienteHTML,
   limpo,
@@ -26,6 +27,11 @@ type Paciente = {
   atendimentoCodigo: string | null;
   idade: string;
   convenio: string;
+  plano: string;
+  dataAdmissao: string;
+  nascimento: string;
+  sexo: string;
+  nomeMae: string;
 };
 
 /**
@@ -67,11 +73,18 @@ function montarDocumento(
   const obsGerais = limpo(prescricao.observacoes);
 
   const ident = identPacienteHTML(paciente.nome, [
-    { lbl: "Prontuário", val: limpo(paciente.registro) || "—" },
     { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
-    { lbl: "Atendimento", val: paciente.atendimentoCodigo ? "#" + paciente.atendimentoCodigo : "—" },
-    { lbl: "Idade", val: limpo(paciente.idade) || "—" },
-    { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
+    ...camposIdentPadrao({
+      registro: limpo(paciente.registro) || "—",
+      atendimento: paciente.atendimentoCodigo,
+      convenio: limpo(paciente.convenio) || "—",
+      plano: limpo(paciente.plano) || "—",
+      dataAdmissao: limpo(paciente.dataAdmissao) || "—",
+      nascimento: limpo(paciente.nascimento) || "—",
+      idade: limpo(paciente.idade) || "—",
+      sexo: limpo(paciente.sexo) || "—",
+      nomeMae: limpo(paciente.nomeMae) || "—",
+    }),
     { lbl: "Data", val: limpo(prescricao.dataHora) || "—", span: 3 },
   ]);
 

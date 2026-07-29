@@ -182,7 +182,7 @@ export function AnotacaoTab({
                           { label: "Profissional", value: a.profissional },
                           { label: "Data", value: a.data },
                           { label: "Anotação", value: a.conteudo },
-                        ])
+                        ], a.atendimentoCodigo)
                       }
                       onCancel={() => setCancelando(a)}
                     />

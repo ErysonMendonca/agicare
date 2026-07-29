@@ -136,6 +136,7 @@ export function ProcedimentosTab({
                         cabecalho,
                         "Procedimento de enfermagem",
                         camposProc(p),
+                        p.atendimentoCodigo,
                       )
                     }
                     onCancel={() => setCancelando(p)}

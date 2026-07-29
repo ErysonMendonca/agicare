@@ -17,6 +17,7 @@ import { registrarEvolucao, editarEvolucao } from "@/lib/actions/evolucao";
 import { cancelarDocumento } from "@/lib/actions/documento-cancelamento";
 import {
   abrirImpressao,
+  camposIdentPadrao,
   corpoTexto,
   esc,
   identPacienteHTML,
@@ -31,6 +32,11 @@ type PacienteIdent = {
   registro: string;
   idade: string;
   convenio: string;
+  plano: string;
+  dataAdmissao: string;
+  nascimento: string;
+  sexo: string;
+  nomeMae: string;
 };
 
 /** Extrai o valor de um campo rotulado do conteúdo formatado da evolução. */
@@ -124,9 +130,17 @@ export function EvolucaoClient({
   /** Imprime uma evolução como documento próprio no modelo padrão. */
   function imprimirEvolucao(e: EvolucaoCard) {
     const ident = identPacienteHTML(paciente.nome, [
-      { lbl: "Nº Prontuário", val: limpo(paciente.registro) || "—" },
-      { lbl: "Idade", val: limpo(paciente.idade) || "—" },
-      { lbl: "Convênio", val: limpo(paciente.convenio) || "—" },
+      ...camposIdentPadrao({
+        registro: limpo(paciente.registro) || "—",
+        atendimento: e.atendimentoCodigo,
+        convenio: limpo(paciente.convenio) || "—",
+        plano: limpo(paciente.plano) || "—",
+        dataAdmissao: limpo(paciente.dataAdmissao) || "—",
+        nascimento: limpo(paciente.nascimento) || "—",
+        idade: limpo(paciente.idade) || "—",
+        sexo: limpo(paciente.sexo) || "—",
+        nomeMae: limpo(paciente.nomeMae) || "—",
+      }),
       { lbl: "Data/hora", val: limpo(e.dataHora) || "—" },
     ]);
 

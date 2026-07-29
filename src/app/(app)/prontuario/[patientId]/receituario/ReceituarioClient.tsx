@@ -89,6 +89,14 @@ export function ReceituarioClient({
     cidade: endereco.cidade,
     uf: endereco.uf,
     cep: endereco.cep,
+    atendimentoCodigo: paciente.atendimentoCodigo,
+    convenio: paciente.convenio,
+    plano: paciente.plano,
+    dataAdmissao: paciente.dataAdmissao,
+    nascimento: paciente.nascimento,
+    idade: paciente.idade,
+    sexo: paciente.sexo,
+    nomeMae: paciente.nomeMae,
   };
 
   /** Dispara a impressão do conteúdo conforme o tipo (CID opcional). */
