@@ -427,6 +427,8 @@ export type MenuCounters = {
   estoqueCriticos: number;
   /** Pacientes agendados para hoje que ainda não fizeram check-in. */
   checkinPendentes: number;
+  /** Procedimentos individuais (não atendimentos) com check-out ainda pendente. */
+  procedimentosPendentesCheckout: number;
 };
 
 const DEMO_COUNTERS: MenuCounters = {
@@ -434,13 +436,14 @@ const DEMO_COUNTERS: MenuCounters = {
   aguardandoPagamento: 1,
   estoqueCriticos: 2,
   checkinPendentes: 2,
+  procedimentosPendentesCheckout: 4,
 };
 
 export async function getMenuCounters(): Promise<MenuCounters> {
 
   const supabase = await createClient();
 
-  const [fila, pagamento, estoque, agendados] = await Promise.all([
+  const [fila, pagamento, estoque, agendados, eventosPendentes] = await Promise.all([
     supabase
       .from("queue_entries")
       .select("*", { count: "exact", head: true })
@@ -453,11 +456,38 @@ export async function getMenuCounters(): Promise<MenuCounters> {
     // Saldo/mínimo crus: o "crítico" é derivado (saldo < mínimo*0.5).
     supabase.from("stock_products").select("quantity, min_quantity"),
     listAgendadosHoje(),
+    // Eventos faturáveis ainda "pendentes" — base para contar PROCEDIMENTOS
+    // (não atendimentos) pendentes de check-out (ver abaixo).
+    supabase.from("billable_events").select("id").eq("status", "pendente"),
   ]);
 
   const filaAguardando = fila.count ?? 0;
   const aguardandoPagamento = pagamento.count ?? 0;
   const checkinPendentes = agendados.length;
+
+  // Cada evento pendente vira 1+ procedimentos a faturar: soma as execuções
+  // (procedure_executions) vinculadas a cada evento; eventos legados/sem
+  // execução vinculada contam como 1 (mesmo fallback usado no check-out real,
+  // ver getCheckoutData em billing.ts) — senão o badge zera quando o evento
+  // não tem procedure_executions ligado (ex.: dado antigo, convênio, etc.).
+  const eventoIds = (eventosPendentes.data ?? []).map((e) => e.id as string);
+  let procedimentosPendentesCheckout = eventoIds.length;
+  if (eventoIds.length > 0) {
+    const { data: execs } = await supabase
+      .from("procedure_executions")
+      .select("billable_event_id")
+      .in("billable_event_id", eventoIds);
+    const porEvento = new Map<string, number>();
+    for (const ex of execs ?? []) {
+      const id = ex.billable_event_id as string | null;
+      if (!id) continue;
+      porEvento.set(id, (porEvento.get(id) ?? 0) + 1);
+    }
+    procedimentosPendentesCheckout = eventoIds.reduce(
+      (acc, id) => acc + (porEvento.get(id) ?? 1),
+      0,
+    );
+  }
 
   const produtos = (estoque.data ?? []) as {
     quantity: number | null;
@@ -469,7 +499,13 @@ export async function getMenuCounters(): Promise<MenuCounters> {
     return minimo > 0 && saldo < minimo * 0.5;
   }).length;
 
-  return { filaAguardando, aguardandoPagamento, estoqueCriticos, checkinPendentes };
+  return {
+    filaAguardando,
+    aguardandoPagamento,
+    estoqueCriticos,
+    checkinPendentes,
+    procedimentosPendentesCheckout,
+  };
 }
 
 // ════════════════════════════════════════════════════════════════
