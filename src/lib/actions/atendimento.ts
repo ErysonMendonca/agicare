@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireClinic } from "@/lib/tenant";
 import { getCurrentUser, getRole } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
-import { listProcedimentosAtendimento } from "@/lib/data/atendimento";
+import { totalProcedimentosAtendimento } from "@/lib/data/atendimento";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;
 
@@ -158,8 +158,10 @@ export async function finalizarAtendimento(
     }
   }
 
-  // Computa o total dos procedimentos registrados no atendimento
-  const { total } = await listProcedimentosAtendimento(queueEntryId);
+  // Computa o total dos procedimentos registrados no atendimento (TODOS,
+  // documentados ou não — um procedimento já fotografado num documento
+  // continua devendo ser cobrado no faturamento).
+  const total = await totalProcedimentosAtendimento(queueEntryId);
 
   // Apenas gera o evento faturável se for particular.
   // Para convênio, o fluxo será abordado depois, conforme solicitado.
