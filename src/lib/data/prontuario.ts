@@ -229,6 +229,8 @@ const DEMO_RESUMO: Resumo = {
     genero: "Feminino",
     nomeMae: "Joana Silva Santos",
     convenio: "Unimed",
+    plano: "Nacional Flex",
+    dataAdmissao: "10/06/2026",
     manualRecord:
       "Prontuário manual anexado no cadastro (digitalização das fichas físicas anteriores).",
     manualRecordPath: null,
