@@ -36,6 +36,8 @@ export type CheckoutSalvo = {
   desconto: number;
   acrescimo: number;
   total: number;
+  /** Nº do atendimento (queue_entries.attendance_code); null = sem vínculo (legado/avulso). */
+  atendimentoCodigo: string | null;
   /** Dados da NF (pagador empresa) — preservados ao editar. */
   nfNumero: string;
   nfEmissao: string;
@@ -383,6 +385,17 @@ export async function listTissBatches(): Promise<LoteTISS[]> {
 // solicitados ao paciente (com código TUSS) + materiais do atendimento.
 // ════════════════════════════════════════════════════════════════
 
+/** Material (produto de estoque) vinculado ao procedimento (catálogo). */
+export type MaterialDoItem = { nome: string; unidade: string; quantidade: number };
+
+/** Instrumental vinculado ao procedimento (catálogo, com esterilização). */
+export type InstrumentoDoItem = {
+  nome: string;
+  sterilizationMethod: string | null;
+  validityDate: string | null;
+  lotCode: string | null;
+};
+
 export type ItemCheckout = {
   /** Origem do item (define cor/rótulo na UI). */
   source: "procedimento" | "exame" | "material" | "ajuste";
@@ -391,13 +404,28 @@ export type ItemCheckout = {
   descricao: string;
   qtd: number;
   valor: number;
+  /** UUID do procedimento no catálogo (0122) — usado para religar material/
+   *  instrumental sem depender do código TUSS (frágil quando não há um real).
+   *  Só quando source === "procedimento"; null = sem procedimento do catálogo casado. */
+  procedureId?: string | null;
+  /** Material do procedimento (catálogo) — só quando source === "procedimento". */
+  materiais?: MaterialDoItem[];
+  /** Instrumental do procedimento (catálogo) — idem. */
+  instrumentos?: InstrumentoDoItem[];
 };
 
 export type CheckoutData = {
   /** UUID interno do evento (necessário para gravar billing_items). */
   eventId: string | null;
   itens: ItemCheckout[];
+  /** Nº do atendimento (queue_entries.attendance_code); null = sem vínculo (legado/avulso). */
+  atendimentoCodigo: string | null;
 };
+
+/** Objeto do join aninhado pode vir como objeto único ou array — normaliza. */
+function one<T>(v: T | T[] | null | undefined): T | undefined {
+  return Array.isArray(v) ? v[0] : (v ?? undefined);
+}
 
 /**
  * Carrega os itens reais conferidos no check-out de um evento.
@@ -421,19 +449,26 @@ export async function getCheckoutData(
     .maybeSingle();
 
   if (!evt) {
-    return { eventId: null, itens: [] };
+    return { eventId: null, itens: [], atendimentoCodigo: null };
   }
 
   const valorEvento = Number(evt.amount ?? fallbackValor);
   const servico = evt.service ?? fallbackServico;
   const itens: ItemCheckout[] = [];
+  // Nº do atendimento (queue_entries.attendance_code) — vem junto da execução
+  // do procedimento (procedure_executions.queue_entry_id, 0073).
+  let atendimentoCodigo: string | null = null;
+  // Item + procedure_id (catálogo) de cada procedimento cobrado, para depois
+  // anexar material/instrumental — mantém a referência ao objeto já inserido
+  // em `itens` (mutação no lugar, sem precisar re-indexar por descrição/código).
+  const procItens: { item: ItemCheckout; procedureId: string | null }[] = [];
 
   // TODOS os procedimentos lançados no atendimento e vinculados a este evento
   // (billable_event_id) — cada um vira uma linha de cobrança no check-out.
   const clinicId = await getActiveClinicId();
   let execQuery = supabase
     .from("procedure_executions")
-    .select("amount, procedures(code, name)")
+    .select("amount, procedures(id, code, name), queue_entries(attendance_code)")
     .eq("billable_event_id", evt.id);
   // Defesa em profundidade: além do RLS, escopa pela clínica ativa.
   if (clinicId) execQuery = execQuery.eq("clinic_id", clinicId);
@@ -443,37 +478,49 @@ export async function getCheckoutData(
 
   if (execs && execs.length > 0) {
     for (const ex of execs) {
-      const p = (
-        Array.isArray(ex.procedures) ? ex.procedures[0] : ex.procedures
-      ) as { code: string | null; name: string | null } | null;
-      itens.push({
+      const p = one(ex.procedures) as
+        | { id: string | null; code: string | null; name: string | null }
+        | undefined;
+      const qe = one(ex.queue_entries) as
+        | { attendance_code: string | null }
+        | undefined;
+      if (!atendimentoCodigo && qe?.attendance_code) {
+        atendimentoCodigo = qe.attendance_code;
+      }
+      const item: ItemCheckout = {
         source: "procedimento",
         tipo: "TUSS",
         codigo: p?.code ?? "10101012",
         descricao: p?.name ?? servico,
         qtd: 1,
         valor: Math.round(Number(ex.amount ?? 0) * 100) / 100,
-      });
+        procedureId: p?.id ?? null,
+      };
+      itens.push(item);
+      procItens.push({ item, procedureId: p?.id ?? null });
     }
   } else {
     // Fallback (eventos legados, sem execuções vinculadas): procedimento
     // principal casado pelo nome do serviço, como antes.
     const { data: proc } = await supabase
       .from("procedures")
-      .select("code, name, price")
+      .select("id, code, name, price")
       .ilike("name", servico)
       .limit(1)
       .maybeSingle();
 
     const procValor = proc?.price ? Number(proc.price) : valorEvento;
-    itens.push({
+    const item: ItemCheckout = {
       source: "procedimento",
       tipo: "TUSS",
       codigo: proc?.code ?? "10101012",
       descricao: proc?.name ?? servico,
       qtd: 1,
       valor: Math.round(procValor * 100) / 100,
-    });
+      procedureId: proc?.id ?? null,
+    };
+    itens.push(item);
+    procItens.push({ item, procedureId: proc?.id ?? null });
   }
 
   // Exames faturáveis do paciente (código TUSS oficial).
@@ -512,7 +559,74 @@ export async function getCheckoutData(
     });
   }
 
-  return { eventId: evt.id, itens };
+  // Material/instrumental vinculados ao(s) procedimento(s) cobrado(s) (catálogo,
+  // 0117/0121) — anexa aos itens de origem "procedimento". Isolado: se a
+  // migration não estiver aplicada, a leitura falha sem derrubar o check-out.
+  const procedureIds = Array.from(
+    new Set(
+      procItens.map((p) => p.procedureId).filter((id): id is string => !!id),
+    ),
+  );
+  if (procedureIds.length > 0) {
+    const [instrRes, matsRes] = await Promise.all([
+      supabase
+        .from("procedure_instruments")
+        .select(
+          "procedure_id, attendance_options(label, sterilization_method, validity_date, lot_code)",
+        )
+        .in("procedure_id", procedureIds),
+      supabase
+        .from("procedure_materials")
+        .select("procedure_id, quantity, stock_products(name, unit)")
+        .in("procedure_id", procedureIds),
+    ]);
+
+    const instrumentosPorProc = new Map<string, InstrumentoDoItem[]>();
+    const materiaisPorProc = new Map<string, MaterialDoItem[]>();
+
+    for (const r of (instrRes.data ?? []) as {
+      procedure_id: string;
+      attendance_options:
+        | { label: string; sterilization_method: string | null; validity_date: string | null; lot_code: string | null }
+        | { label: string; sterilization_method: string | null; validity_date: string | null; lot_code: string | null }[]
+        | null;
+    }[]) {
+      const opt = one(r.attendance_options);
+      if (!opt) continue;
+      const lista = instrumentosPorProc.get(r.procedure_id) ?? [];
+      lista.push({
+        nome: opt.label,
+        sterilizationMethod: opt.sterilization_method ?? null,
+        validityDate: opt.validity_date ?? null,
+        lotCode: opt.lot_code ?? null,
+      });
+      instrumentosPorProc.set(r.procedure_id, lista);
+    }
+
+    for (const r of (matsRes.data ?? []) as {
+      procedure_id: string;
+      quantity: number | null;
+      stock_products: { name: string; unit: string | null } | { name: string; unit: string | null }[] | null;
+    }[]) {
+      const prod = one(r.stock_products);
+      if (!prod) continue;
+      const lista = materiaisPorProc.get(r.procedure_id) ?? [];
+      lista.push({
+        nome: prod.name,
+        unidade: prod.unit ?? "un",
+        quantidade: Number(r.quantity ?? 1),
+      });
+      materiaisPorProc.set(r.procedure_id, lista);
+    }
+
+    for (const { item, procedureId } of procItens) {
+      if (!procedureId) continue;
+      item.materiais = materiaisPorProc.get(procedureId) ?? [];
+      item.instrumentos = instrumentosPorProc.get(procedureId) ?? [];
+    }
+  }
+
+  return { eventId: evt.id, itens, atendimentoCodigo };
 }
 
 /** Lista eventos faturáveis: do banco quando configurado, mock no modo demo. */
@@ -585,7 +699,7 @@ export async function getCheckoutSalvo(
   // mostradas separadamente a partir das colunas do evento).
   const { data: rows } = await supabase
     .from("billing_items")
-    .select("description, quantity, unit_price, amount, source, code, kind")
+    .select("description, quantity, unit_price, amount, source, code, kind, procedure_id")
     .eq("event_id", evt.id);
 
   const itens: ItemCheckout[] = (rows ?? [])
@@ -601,7 +715,117 @@ export async function getCheckoutSalvo(
       descricao: (i.description as string | null) ?? "Item",
       qtd: Number(i.quantity ?? 1),
       valor: Number(i.unit_price ?? i.amount ?? 0),
+      procedureId: (i.procedure_id as string | null) ?? null,
     }));
+
+  // Nº do atendimento: via procedure_executions ligados a este evento (o vínculo
+  // (queue_entry_id, 0073) sobrevive à regravação de billing_items no check-out).
+  let atendimentoCodigo: string | null = null;
+  let execQuery = supabase
+    .from("procedure_executions")
+    .select("queue_entries(attendance_code)")
+    .eq("billable_event_id", evt.id);
+  if (clinicId) execQuery = execQuery.eq("clinic_id", clinicId);
+  const { data: execRows } = await execQuery.limit(5);
+  for (const ex of execRows ?? []) {
+    const qe = one(ex.queue_entries) as { attendance_code: string | null } | undefined;
+    if (qe?.attendance_code) {
+      atendimentoCodigo = qe.attendance_code;
+      break;
+    }
+  }
+
+  // Material/instrumental do(s) procedimento(s) cobrado(s) (catálogo). Prioriza
+  // o procedure_id gravado direto no item (0122); só cai no casamento por
+  // código TUSS para itens LEGADOS (check-out feito antes da 0122).
+  const itensSemProcedureId = itens.filter(
+    (i) => i.source === "procedimento" && !i.procedureId && i.codigo !== "—",
+  );
+  if (itensSemProcedureId.length > 0) {
+    const codigosProc = Array.from(
+      new Set(itensSemProcedureId.map((i) => i.codigo)),
+    );
+    const { data: procs } = await supabase
+      .from("procedures")
+      .select("id, code")
+      .in("code", codigosProc);
+    const idPorCodigo = new Map(
+      (procs ?? []).map((p) => [p.code as string, p.id as string]),
+    );
+    for (const item of itensSemProcedureId) {
+      item.procedureId = idPorCodigo.get(item.codigo) ?? null;
+    }
+  }
+
+  {
+    const procedureIds = Array.from(
+      new Set(
+        itens
+          .filter((i) => i.source === "procedimento")
+          .map((i) => i.procedureId)
+          .filter((id): id is string => !!id),
+      ),
+    );
+
+    if (procedureIds.length > 0) {
+      const [instrRes, matsRes] = await Promise.all([
+        supabase
+          .from("procedure_instruments")
+          .select(
+            "procedure_id, attendance_options(label, sterilization_method, validity_date, lot_code)",
+          )
+          .in("procedure_id", procedureIds),
+        supabase
+          .from("procedure_materials")
+          .select("procedure_id, quantity, stock_products(name, unit)")
+          .in("procedure_id", procedureIds),
+      ]);
+
+      const instrumentosPorProc = new Map<string, InstrumentoDoItem[]>();
+      const materiaisPorProc = new Map<string, MaterialDoItem[]>();
+
+      for (const r of (instrRes.data ?? []) as {
+        procedure_id: string;
+        attendance_options:
+          | { label: string; sterilization_method: string | null; validity_date: string | null; lot_code: string | null }
+          | { label: string; sterilization_method: string | null; validity_date: string | null; lot_code: string | null }[]
+          | null;
+      }[]) {
+        const opt = one(r.attendance_options);
+        if (!opt) continue;
+        const lista = instrumentosPorProc.get(r.procedure_id) ?? [];
+        lista.push({
+          nome: opt.label,
+          sterilizationMethod: opt.sterilization_method ?? null,
+          validityDate: opt.validity_date ?? null,
+          lotCode: opt.lot_code ?? null,
+        });
+        instrumentosPorProc.set(r.procedure_id, lista);
+      }
+
+      for (const r of (matsRes.data ?? []) as {
+        procedure_id: string;
+        quantity: number | null;
+        stock_products: { name: string; unit: string | null } | { name: string; unit: string | null }[] | null;
+      }[]) {
+        const prod = one(r.stock_products);
+        if (!prod) continue;
+        const lista = materiaisPorProc.get(r.procedure_id) ?? [];
+        lista.push({
+          nome: prod.name,
+          unidade: prod.unit ?? "un",
+          quantidade: Number(r.quantity ?? 1),
+        });
+        materiaisPorProc.set(r.procedure_id, lista);
+      }
+
+      for (const item of itens) {
+        if (item.source !== "procedimento" || !item.procedureId) continue;
+        item.materiais = materiaisPorProc.get(item.procedureId) ?? [];
+        item.instrumentos = instrumentosPorProc.get(item.procedureId) ?? [];
+      }
+    }
+  }
 
   const kind = ((evt.kind as string | null) ?? "particular") as
     | "particular"
@@ -618,6 +842,7 @@ export async function getCheckoutSalvo(
     desconto: Number(evt.discount ?? 0),
     acrescimo: Number(evt.surcharge ?? 0),
     total: Number(evt.net_amount ?? evt.amount ?? 0),
+    atendimentoCodigo,
     nfNumero: (evt.nf_number as string | null) ?? "",
     nfEmissao: ((evt.nf_issue_date as string | null) ?? "").slice(0, 10),
     nfVencimento: ((evt.nf_due_date as string | null) ?? "").slice(0, 10),

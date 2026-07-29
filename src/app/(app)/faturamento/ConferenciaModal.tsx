@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { Fragment, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -21,6 +21,8 @@ import { cn } from "@/lib/utils";
 import { EmBreve } from "@/components/ui/EmBreve";
 import { qrToSvg } from "@/lib/integrations/qrcode";
 import { type Evento, type ItemCheckout } from "@/lib/data/billing";
+import { type ClinicaImpressao } from "@/lib/clinico/documento-impressao";
+import { imprimirRecibo as imprimirReciboDoc } from "./ReciboImpressao";
 import {
   registrarCheckout,
   carregarItensCheckout,
@@ -54,6 +56,7 @@ export function ConferenciaModal({
   podeAjustar,
   procedimentos,
   modo = "conferir",
+  clinica,
   open,
   onClose,
 }: {
@@ -62,6 +65,8 @@ export function ConferenciaModal({
   procedimentos: any[];
   /** conferir (pendente) | editar (regrava) | visualizar/imprimir (recibo read-only). */
   modo?: "conferir" | "editar" | "visualizar" | "imprimir";
+  /** Dados da clínica para o cabeçalho do recibo impresso. */
+  clinica: ClinicaImpressao;
   open: boolean;
   onClose: () => void;
 }) {
@@ -93,6 +98,9 @@ export function ConferenciaModal({
   // conferência nova. `totalSalvo` é o net_amount autoritativo (read-only).
   const [dataRecibo, setDataRecibo] = useState<string | null>(null);
   const [totalSalvo, setTotalSalvo] = useState<number | null>(null);
+  // Nº do atendimento (queue_entries.attendance_code) — NÃO é o evento.codigo
+  // (código interno do evento faturável, outro identificador).
+  const [atendimentoCodigo, setAtendimentoCodigo] = useState<string | null>(null);
 
   // Carrega os itens: conferência nova (procedimentos do atendimento) OU o
   // check-out já gravado (editar/visualizar/imprimir → itens+forma+ajustes reais).
@@ -105,7 +113,9 @@ export function ConferenciaModal({
             evento.servico,
             evento.valorNumerico,
           ).then((res) => {
-            if (ativo) setItens(res.itens);
+            if (!ativo) return;
+            setItens(res.itens);
+            setAtendimentoCodigo(res.atendimentoCodigo);
           })
         : carregarCheckoutSalvo(evento.codigo).then(({ recibo }) => {
             if (!ativo || !recibo) return;
@@ -117,6 +127,7 @@ export function ConferenciaModal({
             setAcrescimo(String(recibo.acrescimo));
             setDataRecibo(recibo.data);
             setTotalSalvo(recibo.total);
+            setAtendimentoCodigo(recibo.atendimentoCodigo);
             // Repopula os dados da NF (pagador empresa) p/ não zerar ao salvar.
             setNfNumero(recibo.nfNumero);
             setNfEmissao(recibo.nfEmissao);
@@ -166,31 +177,35 @@ export function ConferenciaModal({
   const [sucesso, setSucesso] = useState(false);
 
   /**
-   * Imprime o recibo numa janela dedicada (copia os estilos da página), sem
-   * trocar o DOM da app nem recarregar — preserva o estado da tela de faturamento.
+   * Imprime o recibo no MESMO modelo padrão dos documentos do prontuário
+   * (cabeçalho da clínica, identificação, corpo com moldura, assinatura do
+   * paciente) — janela nova, sem tocar no DOM da app viva.
    */
   function imprimirRecibo() {
-    const printContent = document.getElementById("recibo-print");
-    if (!printContent) return;
-    const win = window.open("", "_blank", "width=820,height=720");
-    if (!win) {
-      toast.error("Habilite pop-ups para imprimir o recibo.");
-      return;
-    }
-    const estilos = Array.from(
-      document.querySelectorAll('link[rel="stylesheet"], style'),
-    )
-      .map((n) => n.outerHTML)
-      .join("");
-    win.document.write(
-      `<!doctype html><html><head><meta charset="utf-8"><title>Recibo · ${evento.codigo}</title>${estilos}</head><body>${printContent.innerHTML}</body></html>`,
+    const formaLabel =
+      forma === "particular"
+        ? (pagamentos.find((p) => p.id === pagamento)?.label ?? pagamento)
+        : (formas.find((f) => f.id === forma)?.label ?? forma);
+
+    imprimirReciboDoc(
+      {
+        clinica,
+        paciente: evento.paciente,
+        atendimento: atendimentoCodigo ?? "",
+        data: dataRecibo ?? new Date().toLocaleDateString("pt-BR"),
+        forma: formaLabel,
+      },
+      itens.map((i) => ({
+        descricao: i.descricao,
+        qtd: i.qtd,
+        valor: i.valor,
+        materiais: i.materiais ?? [],
+        instrumentos: i.instrumentos ?? [],
+      })),
+      descontoNum,
+      acrescimoNum,
+      somenteLeitura && totalSalvo != null ? totalSalvo : totalFinal,
     );
-    win.document.close();
-    win.focus();
-    setTimeout(() => {
-      win.print();
-      win.close();
-    }, 300);
   }
 
   function handleConfirmar() {
@@ -235,21 +250,27 @@ export function ConferenciaModal({
             <Button variant="ghost" onClick={onClose}>
               Fechar
             </Button>
-            <Button onClick={imprimirRecibo}>
+            <Button onClick={imprimirRecibo} disabled={carregando && somenteLeitura}>
               <Printer className="h-4 w-4" />
               Imprimir Recibo
             </Button>
           </>
         }
       >
-        <div id="recibo-print" className="p-6 bg-white text-ink print:p-0">
+        {carregando && somenteLeitura ? (
+          <div className="flex items-center justify-center gap-2 px-10 py-20 text-sm text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Carregando informações do recibo...
+          </div>
+        ) : (
+        <div className="p-6 bg-white text-ink">
           <div className="text-center border-b border-line pb-4 mb-4">
             <h2 className="text-lg font-bold">RECIBO DE PAGAMENTO</h2>
             <p className="text-sm">AgiCare - Clínica Médica</p>
           </div>
           <div className="space-y-2 text-sm mb-6">
             <p><strong>Paciente:</strong> {evento.paciente}</p>
-            <p><strong>Atendimento:</strong> {evento.codigo}</p>
+            <p><strong>Atendimento nº:</strong> {atendimentoCodigo ?? "—"}</p>
             <p><strong>Data:</strong> {dataRecibo ?? new Date().toLocaleDateString("pt-BR")}</p>
           </div>
           <table className="w-full text-sm mb-6 border-collapse">
@@ -262,16 +283,43 @@ export function ConferenciaModal({
               </tr>
             </thead>
             <tbody>
-              {itens.map((i, idx) => (
-                <tr key={idx} className="border-b border-line">
-                  <td className="py-2">{i.descricao}</td>
-                  <td className="text-right py-2">{i.qtd}</td>
-                  <td className="text-right py-2">{formatBRL(i.valor)}</td>
-                  <td className="text-right py-2">
-                    {formatBRL(i.valor * i.qtd)}
-                  </td>
-                </tr>
-              ))}
+              {itens.map((i, idx) => {
+                const temMaterial = (i.materiais?.length ?? 0) > 0;
+                const temInstrumental = (i.instrumentos?.length ?? 0) > 0;
+                return (
+                  <Fragment key={idx}>
+                    <tr className="border-b border-line">
+                      <td className="py-2">{i.descricao}</td>
+                      <td className="text-right py-2">{i.qtd}</td>
+                      <td className="text-right py-2">{formatBRL(i.valor)}</td>
+                      <td className="text-right py-2">
+                        {formatBRL(i.valor * i.qtd)}
+                      </td>
+                    </tr>
+                    {(temMaterial || temInstrumental) && (
+                      <tr className="border-b border-line">
+                        <td colSpan={4} className="pb-2 text-xs text-muted">
+                          {temMaterial && (
+                            <span>
+                              <strong className="font-medium text-ink">Material:</strong>{" "}
+                              {i.materiais!
+                                .map((m) => `${m.nome} (${m.quantidade} ${m.unidade})`)
+                                .join(", ")}
+                            </span>
+                          )}
+                          {temMaterial && temInstrumental && " · "}
+                          {temInstrumental && (
+                            <span>
+                              <strong className="font-medium text-ink">Instrumental:</strong>{" "}
+                              {i.instrumentos!.map((inst) => inst.nome).join(", ")}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
               {descontoNum > 0 && (
                 <tr className="border-b border-line">
                   <td className="py-2 text-red-600" colSpan={3}>
@@ -313,6 +361,7 @@ export function ConferenciaModal({
             <div className="mt-4 border-b border-ink w-64 mx-auto"></div>
           </div>
         </div>
+        )}
       </Modal>
     );
   }

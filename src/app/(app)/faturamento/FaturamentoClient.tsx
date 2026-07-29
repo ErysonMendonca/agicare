@@ -32,6 +32,7 @@ import {
   type GuiaTISS,
   type LoteTISS,
 } from "@/lib/data/billing";
+import { type ClinicaImpressao } from "@/lib/clinico/documento-impressao";
 import { ConferenciaModal } from "./ConferenciaModal";
 import { TissPanel } from "./TissPanel";
 
@@ -58,6 +59,7 @@ export function FaturamentoClient({
   procedimentos,
   kpis,
   valorTotalLabel,
+  clinica,
 }: {
   eventos: Evento[];
   guias: GuiaTISS[];
@@ -67,6 +69,8 @@ export function FaturamentoClient({
   procedimentos: any[];
   kpis: { total: number; pendentes: number; faturados: number; glosados: number };
   valorTotalLabel: string;
+  /** Dados da clínica para o cabeçalho do recibo impresso. */
+  clinica: ClinicaImpressao;
 }) {
   const [aba, setAba] = useState<Aba>("eventos");
   const [selected, setSelected] = useState<Evento | null>(null);
@@ -387,6 +391,7 @@ export function FaturamentoClient({
           podeAjustar={podeAjustar}
           procedimentos={procedimentos}
           modo={modo}
+          clinica={clinica}
           open={!!selected}
           onClose={() => setSelected(null)}
         />
