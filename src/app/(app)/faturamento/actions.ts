@@ -211,6 +211,7 @@ export async function registrarCheckout(
       quantity: 1,
       unit_price: -descontoFinal,
       amount: -descontoFinal,
+      procedure_id: null,
     });
   }
   if (acrescimoFinal > 0) {
@@ -223,6 +224,7 @@ export async function registrarCheckout(
       quantity: 1,
       unit_price: acrescimoFinal,
       amount: acrescimoFinal,
+      procedure_id: null,
     });
   }
 
