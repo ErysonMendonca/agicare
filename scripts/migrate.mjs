@@ -13,6 +13,16 @@
 import { readFileSync, readdirSync } from "node:fs";
 import pg from "pg";
 
+// ── OBSOLETO ─────────────────────────────────────────────────────
+// Runner de migrations do Postgres do Supabase, abandonado nesta migração
+// para MySQL. Mantido só como referência histórica de supabase/migrations/.
+// O schema atual vive pronto em mysql/agicare_mysql.sql.
+console.error(
+  "✗ scripts/migrate.mjs aplica migrations no Postgres do Supabase, que não " +
+  "é mais usado. O schema MySQL já está pronto em mysql/agicare_mysql.sql.",
+);
+process.exit(1);
+
 // ── env ──────────────────────────────────────────────────────────
 readFileSync(".env.local", "utf8").split(/\r?\n/).forEach((l) => {
   const m = l.match(/^([^=#]+)=(.*)$/);

@@ -21,6 +21,16 @@
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
+// ── OBSOLETO ─────────────────────────────────────────────────────
+// Testava o isolamento multitenant via RLS do Supabase. O isolamento agora
+// é aplicado por src/lib/db/query-builder.ts (injeta clinic_id em toda
+// consulta) — não há RLS de banco a testar em MySQL.
+console.error(
+  "✗ scripts/test-cross-tenant.mjs testa RLS do Supabase, que não é mais " +
+  "usado. O isolamento multitenant hoje é feito por src/lib/db/query-builder.ts.",
+);
+process.exit(1);
+
 // ── env ──────────────────────────────────────────────────────────
 const env = {};
 for (const line of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split(/\r?\n/)) {

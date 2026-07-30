@@ -4,6 +4,17 @@
 // Idempotente: limpa as tabelas de domínio e repovoa.
 import { readFileSync } from "node:fs";
 
+// ── OBSOLETO ─────────────────────────────────────────────────────
+// Este script fala com o Supabase (REST/PostgREST), abandonado nesta
+// migração para MySQL. Mantido só como referência histórica da lógica de
+// seed. Para popular o banco MySQL local, use mysql/agicare_mysql.sql
+// (já vem com admin + config + CIDs) — ver mysql/README.md.
+console.error(
+  "✗ scripts/seed.mjs fala com o Supabase, que não é mais usado. " +
+  "Para semear o MySQL, importe mysql/agicare_mysql.sql (ver mysql/README.md).",
+);
+process.exit(1);
+
 // ── env ──────────────────────────────────────────────────────────
 readFileSync(".env.local", "utf8").split(/\r?\n/).forEach((l) => {
   const m = l.match(/^([^=#]+)=(.*)$/);

@@ -17,6 +17,15 @@
 // (fallback: patients.clinic_id). Loga tudo o que move.
 import { readFileSync } from "node:fs";
 
+// ── OBSOLETO ─────────────────────────────────────────────────────
+// Movia arquivos no Supabase Storage, abandonado nesta migração para MySQL
+// (anexos agora ficam em STORAGE_DIR no disco — ver src/lib/db/storage.ts).
+console.error(
+  "✗ scripts/migrate-protetico-paths.mjs fala com o Supabase Storage, que " +
+  "não é mais usado. Anexos hoje ficam em STORAGE_DIR (disco local).",
+);
+process.exit(1);
+
 // ── env ──────────────────────────────────────────────────────────
 readFileSync(".env.local", "utf8").split(/\r?\n/).forEach((l) => {
   const m = l.match(/^([^=#]+)=(.*)$/);
