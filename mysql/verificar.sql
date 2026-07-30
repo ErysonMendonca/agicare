@@ -1,7 +1,16 @@
 -- ════════════════════════════════════════════════════════════════
 -- Conferência da importação do agicare em MySQL/MariaDB.
 --
---   mysql -u root agicare < mysql\verificar.sql
+--   mysql -u root agicare --force --default-character-set=utf8mb4 \
+--        < mysql\verificar.sql
+--
+-- As duas flags são necessárias:
+--   --force                       o bloco 6 provoca erros de propósito; sem
+--                                 isso o cliente aborta no primeiro e os
+--                                 testes seguintes não rodam.
+--   --default-character-set=utf8mb4  diz ao cliente que ESTE ARQUIVO está em
+--                                 UTF-8. Sem isso, no console do Windows os
+--                                 acentos dos literais SQL chegam corrompidos.
 --
 -- Cada bloco imprime "esperado" ao lado do "encontrado" para dar para
 -- comparar de bate-pronto.
@@ -13,7 +22,7 @@ SELECT 'tabelas'      AS item, 84  AS esperado, COUNT(*) AS encontrado
   FROM information_schema.tables
  WHERE table_schema = 'agicare' AND table_type = 'BASE TABLE'
 UNION ALL
-SELECT 'colunas', 1078, COUNT(*)
+SELECT 'colunas', 1083, COUNT(*)
   FROM information_schema.columns WHERE table_schema = 'agicare'
 UNION ALL
 SELECT 'chaves estrangeiras', 247, COUNT(*)
@@ -42,9 +51,20 @@ UNION ALL SELECT 'clinic_settings',        1, COUNT(*) FROM clinic_settings;
 
 
 SELECT '=== 3. ACENTUAÇÃO (utf8mb4) ===' AS ``;
--- Se aparecer "Ã§" ou "?" em vez de "ç", o charset da conexão está errado.
-SELECT code, description FROM cid_codes
- WHERE description LIKE '%ç%' OR description LIKE '%ã%' LIMIT 3;
+-- Testa por CONTAGEM DE BYTES em vez de comparar com um literal acentuado:
+-- LENGTH() conta bytes, CHAR_LENGTH() conta caracteres. Se bytes > caracteres,
+-- há caractere multibyte gravado — ou seja, o acento chegou como UTF-8 de
+-- verdade. Assim o teste não depende do charset do console nem do arquivo.
+SELECT 'descrições com acento' AS ``, COUNT(*) AS encontrado,
+       'deve ser > 0' AS esperado
+  FROM cid_codes WHERE LENGTH(description) > CHAR_LENGTH(description);
+
+-- Amostra para inspeção visual (só legível se o console estiver em UTF-8):
+SELECT code, description, LENGTH(description) AS bytes,
+       CHAR_LENGTH(description) AS caracteres
+  FROM cid_codes
+ WHERE LENGTH(description) > CHAR_LENGTH(description)
+ ORDER BY code LIMIT 3;
 
 
 SELECT '=== 4. CONTA ADMIN ===' AS ``;

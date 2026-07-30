@@ -6,7 +6,7 @@ MySQL 8, com os dados básicos já semeados.
 ## Importar
 
 ```bash
-mysql -u root -p < agicare_mysql.sql
+mysql -u root --default-character-set=utf8mb4 < agicare_mysql.sql
 ```
 
 Cria o banco `agicare` (utf8mb4 / InnoDB) e popula tudo.
@@ -24,6 +24,19 @@ dessas versões por causa de `DEFAULT` de expressão, `CHECK` e colunas geradas.
 
 No XAMPP o binário fica em `C:\xampp\mysql\bin\mysql.exe` e o root normalmente não
 tem senha (use sem `-p`).
+
+## Conferir a importação
+
+```bash
+mysql -u root agicare --force --default-character-set=utf8mb4 < verificar.sql
+```
+
+Compara "esperado" com "encontrado" para estrutura e dados, e roda 4 testes que
+gravam dado inválido de propósito para provar que as constraints estão valendo
+(CHECK, ENUM, índice único sobre coluna gerada, normalização de CPF).
+
+O `--force` é obrigatório: sem ele o cliente aborta no primeiro erro provocado e
+os testes seguintes não rodam.
 
 ## O que vem dentro
 
