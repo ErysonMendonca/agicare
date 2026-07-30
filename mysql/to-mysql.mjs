@@ -78,6 +78,22 @@ function tipoMySQL(col) {
   return "TEXT"; // fallback conservador
 }
 
+/** Valor JS → expressão JSON_OBJECT/JSON_ARRAY (portável MySQL 8 + MariaDB). */
+function jsonExpr(v) {
+  if (v === null) return "CAST('null' AS CHAR)";
+  if (Array.isArray(v)) {
+    return v.length === 0 ? "JSON_ARRAY()" : `JSON_ARRAY(${v.map(jsonExpr).join(", ")})`;
+  }
+  if (typeof v === "object") {
+    const pares = Object.entries(v);
+    return pares.length === 0
+      ? "JSON_OBJECT()"
+      : `JSON_OBJECT(${pares.map(([k, x]) => `'${k.replace(/'/g, "''")}', ${jsonExpr(x)}`).join(", ")})`;
+  }
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return `'${String(v).replace(/'/g, "''")}'`;
+}
+
 /** DEFAULT Postgres → DEFAULT MySQL (null = sem default). */
 function defaultMySQL(col, tipo) {
   const d = col.column_default;
@@ -99,9 +115,15 @@ function defaultMySQL(col, tipo) {
   const lit = d.match(/^'((?:[^']|'')*)'::[\w .\[\]"]+$/);
   if (lit) {
     const v = lit[1];
-    // JSON só aceita DEFAULT como expressão: CAST(... AS JSON).
+    // JSON só aceita DEFAULT como expressão. Constrói com JSON_OBJECT/
+    // JSON_ARRAY em vez de CAST(... AS JSON): funciona igual no MySQL 8 e no
+    // MariaDB (onde JSON é apelido de LONGTEXT e o CAST pode não existir).
     if (tipo.startsWith("JSON")) {
-      return `(CAST('${v.replace(/'/g, "''")}' AS JSON))`;
+      try {
+        return `(${jsonExpr(JSON.parse(v))})`;
+      } catch {
+        return null; // JSON inválido no default: melhor não emitir
+      }
     }
     return `'${v.replace(/'/g, "''")}'`;
   }
@@ -222,7 +244,12 @@ for (const t of tabelasOrdenadas) {
         let expr = chk[1]
           .replace(/::[a-z_ ]+(\[\])?/gi, "")   // remove casts
           .replace(/"/g, "`")                    // identificadores
-          .replace(/\bANY \(ARRAY\[(.*?)\]\)/gis, "($1)")
+          // `x = ANY (ARRAY[...])` é a forma Postgres de "x está na lista".
+          // Precisa virar `x IN (...)`: trocar só o ARRAY[] por () deixaria
+          // `x = ('a','b')`, que compara escalar com linha e é ERRO (4078 no
+          // MariaDB, "Operand should contain 1 column(s)" no MySQL).
+          .replace(/=\s*ANY\s*\(\s*ARRAY\[(.*?)\]\s*\)/gis, "IN ($1)")
+          .replace(/(?:<>|!=)\s*ALL\s*\(\s*ARRAY\[(.*?)\]\s*\)/gis, "NOT IN ($1)")
           .replace(/~~\*/g, "LIKE").replace(/~~/g, "LIKE");
         // Só emite CHECKs que não usam funções/recursos exclusivos do PG.
         if (!/\b(jsonb_|to_tsvector|similar to|~|array_|regexp_)/i.test(expr)) {

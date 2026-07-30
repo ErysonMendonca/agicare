@@ -193,7 +193,7 @@ CREATE TABLE IF NOT EXISTS `attendance_records` (
   `observacoes` TEXT NULL,
   `created_by` CHAR(36) NULL,
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT `attendance_records_carater_check` CHECK ((carater = ('urgencia', 'eletivo'))),
+  CONSTRAINT `attendance_records_carater_check` CHECK ((carater IN ('urgencia', 'eletivo'))),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -312,7 +312,7 @@ CREATE TABLE IF NOT EXISTS `cargos` (
   `name` TEXT NOT NULL,
   `base_role` ENUM('admin','medico','recepcao','paciente') NOT NULL,
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT `chk_cargos_base_role` CHECK ((base_role = ('admin', 'medico', 'recepcao'))),
+  CONSTRAINT `chk_cargos_base_role` CHECK ((base_role IN ('admin', 'medico', 'recepcao'))),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -395,7 +395,7 @@ CREATE TABLE IF NOT EXISTS `clinic_settings` (
   `backup` JSON NOT NULL DEFAULT (JSON_OBJECT()),
   `notifications` JSON NOT NULL DEFAULT (JSON_OBJECT()),
   `branding` JSON NOT NULL DEFAULT (JSON_OBJECT()),
-  `attendance_flow` JSON NOT NULL DEFAULT (CAST('{"stages": ["recepcao", "triagem", "atendimento"]}' AS JSON)),
+  `attendance_flow` JSON NOT NULL DEFAULT (JSON_OBJECT('stages', JSON_ARRAY('recepcao', 'triagem', 'atendimento'))),
   `totem_enabled` TINYINT(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -448,8 +448,8 @@ CREATE TABLE IF NOT EXISTS `dental_chart_marks` (
   `marking` VARCHAR(255) NOT NULL,
   `note` TEXT NULL,
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT `dental_chart_marks_marking_check` CHECK ((marking = ('ausente', 'extracao_indicada', 'restauracao', 'carie', 'tratamento_canal', 'coroa', 'protese_fixa', 'implante', 'protese_removivel', 'selante', 'outros'))),
-  CONSTRAINT `dental_chart_marks_tooth_fdi_check` CHECK ((tooth = (11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48))),
+  CONSTRAINT `dental_chart_marks_marking_check` CHECK ((marking IN ('ausente', 'extracao_indicada', 'restauracao', 'carie', 'tratamento_canal', 'coroa', 'protese_fixa', 'implante', 'protese_removivel', 'selante', 'outros'))),
+  CONSTRAINT `dental_chart_marks_tooth_fdi_check` CHECK ((tooth IN (11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48))),
   PRIMARY KEY (`id`),
   UNIQUE KEY `dental_chart_marks_chart_tooth_marking_key` (`chart_id`, `tooth`, `marking`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -655,8 +655,8 @@ CREATE TABLE IF NOT EXISTS `notification_log` (
   `payload` JSON NOT NULL DEFAULT (JSON_OBJECT()),
   `sent_at` DATETIME(6) NULL,
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT `notification_log_channel_check` CHECK ((channel = ('email', 'sms', 'whatsapp'))),
-  CONSTRAINT `notification_log_status_check` CHECK ((status = ('enviado', 'pendente', 'nao_configurado', 'desativado', 'erro'))),
+  CONSTRAINT `notification_log_channel_check` CHECK ((channel IN ('email', 'sms', 'whatsapp'))),
+  CONSTRAINT `notification_log_status_check` CHECK ((status IN ('enviado', 'pendente', 'nao_configurado', 'desativado', 'erro'))),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -790,8 +790,8 @@ CREATE TABLE IF NOT EXISTS `payments` (
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   CONSTRAINT `payments_amount_check` CHECK ((amount > (0))),
-  CONSTRAINT `payments_method_check` CHECK ((method = ('pix', 'cartao', 'boleto', 'dinheiro', 'convenio'))),
-  CONSTRAINT `payments_status_check` CHECK ((status = ('pendente', 'confirmado', 'falhou', 'cancelado'))),
+  CONSTRAINT `payments_method_check` CHECK ((method IN ('pix', 'cartao', 'boleto', 'dinheiro', 'convenio'))),
+  CONSTRAINT `payments_status_check` CHECK ((status IN ('pendente', 'confirmado', 'falhou', 'cancelado'))),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -915,7 +915,7 @@ CREATE TABLE IF NOT EXISTS `procedure_instructions` (
   `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `notify_channel` VARCHAR(255) NOT NULL DEFAULT 'email',
-  CONSTRAINT `procedure_instructions_notify_channel_chk` CHECK ((notify_channel = ('email', 'sms', 'ambos'))),
+  CONSTRAINT `procedure_instructions_notify_channel_chk` CHECK ((notify_channel IN ('email', 'sms', 'ambos'))),
   PRIMARY KEY (`id`),
   UNIQUE KEY `procedure_instructions_procedure_id_key` (`procedure_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1024,7 +1024,7 @@ CREATE TABLE IF NOT EXISTS `product_categories` (
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT `product_categories_level_check` CHECK ((level = (1, 2, 3))),
+  CONSTRAINT `product_categories_level_check` CHECK ((level IN (1, 2, 3))),
   CONSTRAINT `product_categories_nivel1_sem_pai` CHECK (((level <> 1) OR (parent_id IS NULL))),
   CONSTRAINT `product_categories_nivel_filho_com_pai` CHECK (((level = 1) OR (parent_id IS NOT NULL))),
   PRIMARY KEY (`id`)
@@ -1110,7 +1110,7 @@ CREATE TABLE IF NOT EXISTS `product_xyz` (
   `end_date` DATE NULL,
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-  CONSTRAINT `product_xyz_xyz_class_check` CHECK ((xyz_class = ('X', 'Y', 'Z'))),
+  CONSTRAINT `product_xyz_xyz_class_check` CHECK ((xyz_class IN ('X', 'Y', 'Z'))),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1172,7 +1172,7 @@ CREATE TABLE IF NOT EXISTS `professionals` (
   `professional_type` TEXT NULL,
   `department` TEXT NULL,
   `job_title` TEXT NULL,
-  CONSTRAINT `chk_professionals_person_type` CHECK (((person_type IS NULL) OR (person_type = ('cpf', 'cnpj')))),
+  CONSTRAINT `chk_professionals_person_type` CHECK (((person_type IS NULL) OR (person_type IN ('cpf', 'cnpj')))),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -1525,7 +1525,7 @@ CREATE TABLE IF NOT EXISTS `triage_records` (
   `recorded_by` CHAR(36) NULL,
   `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `data` JSON NOT NULL DEFAULT (JSON_OBJECT()),
-  CONSTRAINT `triage_records_risk_level_check` CHECK ((risk_level = ('azul', 'verde', 'amarelo', 'laranja', 'vermelho'))),
+  CONSTRAINT `triage_records_risk_level_check` CHECK ((risk_level IN ('azul', 'verde', 'amarelo', 'laranja', 'vermelho'))),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -2034,7 +2034,7 @@ INSERT INTO `auth_users`
   (`id`, `email`, `encrypted_password`, `email_confirmed_at`, `raw_user_meta_data`)
 VALUES
   ('00000000-0000-0000-0000-0000000000a1', 'admin@agicare.local',
-   '$2b$10$WxuQBGH.LgwaqKrCfUq7ye16Y0HoQV6EGhiLt9X3hBQdgf.3U.2DK',
+   '$2b$10$kcO10yyz.h9OLGFN3aaeA.Qo4hsvzrKA..1bwIgcZuRbE/6GySnDC',
    CURRENT_TIMESTAMP(6),
    '{"full_name":"Administrador","role":"admin"}');
 

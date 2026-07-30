@@ -189,6 +189,28 @@ for (const [t, d] of tabelas) {
   }
 }
 
+// ── 8b. CHECK: comparação de escalar com LISTA (row) ────────────────
+// `col = ('a','b')` passa no parser mas é erro no engine (MariaDB 4078 /
+// MySQL "Operand should contain 1 column(s)"). O certo é `col IN (...)`.
+{
+  const reChk = /CONSTRAINT `(\w+)` CHECK \((.*)\)$/gm;
+  let c;
+  while ((c = reChk.exec(sql))) {
+    const expr = c[2];
+    // operador de comparação seguido de lista com vírgula no mesmo nível
+    const rowCmp = expr.match(/(?:[<>]=?|=|<>|!=)\s*\(\s*(?:'[^']*'|-?[\d.]+)\s*,/);
+    if (rowCmp) {
+      P("ERRO", `CHECK \`${c[1]}\` compara escalar com lista: ${expr.slice(0, 90)} — use IN (...).`);
+    }
+    // resíduos de sintaxe Postgres que não deveriam sobrar
+    for (const pg of ["ANY (ARRAY", "ALL (ARRAY", "::"]) {
+      if (expr.includes(pg)) {
+        P("ERRO", `CHECK \`${c[1]}\` tem resíduo de sintaxe Postgres "${pg}": ${expr.slice(0, 90)}`);
+      }
+    }
+  }
+}
+
 // ── 9. AUTO_INCREMENT precisa ser (parte de) chave ──────────────────
 for (const [t, d] of tabelas) {
   for (const [c, col] of d.cols) {
