@@ -211,6 +211,41 @@ for (const [t, d] of tabelas) {
   }
 }
 
+// ── 8c. Colunas geradas: existem, vêm antes do índice, sem resíduo PG ──
+{
+  const criadas = new Map(); // nome → posição no arquivo
+  const reGen = /ALTER TABLE `(\w+)` ADD COLUMN `(\w+)` [\w()]+ AS \((.*?)\) VIRTUAL;/g;
+  let g;
+  while ((g = reGen.exec(sql))) {
+    criadas.set(g[2], g.index);
+    const tabela = tabelas.get(g[1]);
+    if (!tabela) P("ERRO", `Coluna gerada em tabela inexistente: ${g[1]}.${g[2]}`);
+    // MySQL/MariaDB não conhecem estas funções do Postgres
+    for (const pg of ["btrim", "::", "ANY (ARRAY", "'g')"]) {
+      if (g[3].includes(pg)) {
+        P("ERRO", `Coluna gerada ${g[1]}.${g[2]} tem resíduo Postgres "${pg}": ${g[3]}`);
+      }
+    }
+    if (/\\[Ddws]/.test(g[3])) {
+      P("ERRO", `Coluna gerada ${g[1]}.${g[2]} usa classe regex do Postgres (\\D/\\d/\\w/\\s): ${g[3]}`);
+    }
+  }
+  // Todo `gen_*` usado em índice tem que ter sido criado ANTES
+  const reUso = /CREATE (?:UNIQUE )?INDEX `\w+` ON `\w+` \((.*?)\);/g;
+  let u;
+  while ((u = reUso.exec(sql))) {
+    for (const raw of u[1].split(",")) {
+      const nome = raw.trim().replace(/`/g, "").replace(/\(\d+\)$/, "");
+      if (!/^gen_/.test(nome)) continue;
+      if (!criadas.has(nome)) {
+        P("ERRO", `Índice usa coluna gerada que não existe: ${nome}`);
+      } else if (criadas.get(nome) > u.index) {
+        P("ERRO", `Coluna gerada ${nome} é criada DEPOIS do índice que a usa.`);
+      }
+    }
+  }
+}
+
 // ── 9. AUTO_INCREMENT precisa ser (parte de) chave ──────────────────
 for (const [t, d] of tabelas) {
   for (const [c, col] of d.cols) {

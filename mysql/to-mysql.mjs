@@ -276,6 +276,35 @@ out.push(`\n\n-- ═════════════════════
 -- no bloco de avisos no fim do arquivo.
 -- ════════════════════════════════════════════════════════════════`);
 
+// Funções do Postgres que não existem (ou têm assinatura diferente) no
+// MySQL/MariaDB e aparecem nas expressões de índice.
+function traduzExpr(e) {
+  let s = e.replace(/::[a-z_ ]+(\[\])?/gi, "");        // casts
+  // regexp_replace(x, '\D', '', 'g') → REGEXP_REPLACE(x, '[^0-9]', '')
+  // (no MySQL/MariaDB a substituição já é global; o 4º argumento não existe)
+  s = s.replace(
+    /regexp_replace\(\s*([\w`."]+)\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*(?:,\s*'[a-z]*'\s*)?\)/gi,
+    (_, col, pat, rep) => {
+      const p = pat.replace(/\\D/g, "[^0-9]").replace(/\\d/g, "[0-9]")
+                   .replace(/\\s/g, "[[:space:]]").replace(/\\w/g, "[[:alnum:]_]");
+      return `REGEXP_REPLACE(${col}, '${p}', '${rep}')`;
+    });
+  s = s.replace(/\bbtrim\(/gi, "TRIM(");               // btrim → TRIM
+  s = s.replace(/\bltrim\(/gi, "LTRIM(").replace(/\brtrim\(/gi, "RTRIM(");
+  s = s.replace(/\blower\(/gi, "LOWER(").replace(/\bupper\(/gi, "UPPER(");
+  s = s.replace(/\bcoalesce\(/gi, "COALESCE(");
+  return s;
+}
+
+/** Nome curto e estável para a coluna gerada (limite de 64 chars do MySQL). */
+function nomeColunaGerada(indexname, pos) {
+  const base = `gen_${indexname}_${pos}`;
+  return base.length <= 64 ? base : `gen_${indexname.slice(0, 52)}_${pos}`;
+}
+
+const colunasGeradas = [];
+const idxOut = [];
+
 const pkUqNomes = new Set(
   S.constraints.filter((c) => c.contype === "p" || c.contype === "u").map((c) => c.conname),
 );
@@ -290,11 +319,24 @@ for (const i of S.indices) {
   const exprCols = m[1].split(/,(?![^(]*\))/).map((x) =>
     x.trim().replace(/"/g, "").replace(/\s+(ASC|DESC)$/i, "").replace(/\s+\w+_ops$/, ""));
 
-  // Índices funcionais (lower(x), coalesce(...)) → MySQL 8 aceita ((expr)).
-  const partes = exprCols.map((c) => {
-    if (/[()]/.test(c)) return `(${c.replace(/::[a-z_ ]+/gi, "")})`;
+  // Índices FUNCIONAIS (lower(x), regexp_replace(...)): o MySQL 8 aceita
+  // ((expr)) direto, mas o MariaDB NÃO. A forma que funciona nos dois é
+  // criar uma COLUNA GERADA (virtual) com a expressão e indexar a coluna.
+  const partes = exprCols.map((c, k) => {
+    if (/[()]/.test(c)) {
+      const expr = traduzExpr(c);
+      const nomeGer = nomeColunaGerada(i.indexname, k);
+      const tipoGer = /REGEXP_REPLACE/i.test(expr)
+        ? "VARCHAR(32)"                       // normalização só de dígitos
+        : /^COALESCE\([\w`]+, *'[0-9a-f-]{36}'\)$/i.test(expr)
+          ? "CHAR(36)"                        // uuid com fallback
+          : "VARCHAR(191)";
+      colunasGeradas.push(
+        `ALTER TABLE ${q(i.tablename)} ADD COLUMN ${q(nomeGer)} ${tipoGer} ` +
+        `AS (${expr}) VIRTUAL;`);
+      return q(nomeGer);
+    }
     const col = S.colunas.find((x) => x.table_name === i.tablename && x.column_name === c);
-    // TEXT precisa de prefixo no índice
     if (col && (col.data_type === "text" || col.udt_name === "citext")
         && tipoMySQL(col) === "TEXT") return `${q(c)}(191)`;
     return q(c);
@@ -302,13 +344,27 @@ for (const i of S.indices) {
 
   if (parcial && uniq) {
     avisos.push(`UNIQUE PARCIAL perdeu a condição "${m[2]?.trim()}" → virou índice não-único: ${i.tablename}.${i.indexname}. Garanta a regra na aplicação.`);
-    out.push(`CREATE INDEX ${q(i.indexname)} ON ${q(i.tablename)} (${partes.join(", ")});`);
+    idxOut.push(`CREATE INDEX ${q(i.indexname)} ON ${q(i.tablename)} (${partes.join(", ")});`);
   } else if (parcial) {
-    out.push(`CREATE INDEX ${q(i.indexname)} ON ${q(i.tablename)} (${partes.join(", ")});`);
+    idxOut.push(`CREATE INDEX ${q(i.indexname)} ON ${q(i.tablename)} (${partes.join(", ")});`);
   } else {
-    out.push(`CREATE ${uniq ? "UNIQUE " : ""}INDEX ${q(i.indexname)} ON ${q(i.tablename)} (${partes.join(", ")});`);
+    idxOut.push(`CREATE ${uniq ? "UNIQUE " : ""}INDEX ${q(i.indexname)} ON ${q(i.tablename)} (${partes.join(", ")});`);
   }
 }
+
+// As colunas geradas precisam existir ANTES dos índices que as usam.
+if (colunasGeradas.length > 0) {
+  out.push(`
+-- ── Colunas geradas (para índices funcionais) ──
+-- O Postgres indexava expressões diretamente (ex.: lower(name)). O MySQL 8
+-- aceita índice funcional, o MariaDB não — a forma que funciona nos dois é
+-- materializar a expressão numa coluna VIRTUAL (não ocupa espaço em disco)
+-- e indexar essa coluna. São colunas derivadas: não devem ser escritas pela
+-- aplicação, o banco as calcula sozinho.`);
+  out.push(colunasGeradas.join("\n"));
+  out.push("");
+}
+out.push(idxOut.join("\n"));
 
 // ── 5. Foreign keys ─────────────────────────────────────────────────
 out.push(`\n\n-- ════════════════════════════════════════════════════════════════

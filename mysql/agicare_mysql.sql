@@ -1572,6 +1572,24 @@ CREATE TABLE IF NOT EXISTS `vital_signs` (
 -- NÃO preserva a unicidade condicional. Os casos afetados estão listados
 -- no bloco de avisos no fim do arquivo.
 -- ════════════════════════════════════════════════════════════════
+
+-- ── Colunas geradas (para índices funcionais) ──
+-- O Postgres indexava expressões diretamente (ex.: lower(name)). O MySQL 8
+-- aceita índice funcional, o MariaDB não — a forma que funciona nos dois é
+-- materializar a expressão numa coluna VIRTUAL (não ocupa espaço em disco)
+-- e indexar essa coluna. São colunas derivadas: não devem ser escritas pela
+-- aplicação, o banco as calcula sozinho.
+ALTER TABLE `cargos` ADD COLUMN `gen_uq_cargos_clinic_name_1` VARCHAR(191) AS (LOWER(name)) VIRTUAL;
+ALTER TABLE `patients` ADD COLUMN `gen_uq_patients_clinic_cns_1` VARCHAR(32) AS (REGEXP_REPLACE(cns, '[^0-9]', '')) VIRTUAL;
+ALTER TABLE `patients` ADD COLUMN `gen_uq_patients_clinic_cpf_1` VARCHAR(32) AS (REGEXP_REPLACE(cpf, '[^0-9]', '')) VIRTUAL;
+ALTER TABLE `product_categories` ADD COLUMN `gen_uq_product_categories_irmaos_1` CHAR(36) AS (COALESCE(parent_id, '00000000-0000-0000-0000-000000000000')) VIRTUAL;
+ALTER TABLE `product_categories` ADD COLUMN `gen_uq_product_categories_irmaos_2` VARCHAR(191) AS (LOWER(label)) VIRTUAL;
+ALTER TABLE `professionals` ADD COLUMN `gen_uq_professionals_clinic_conselho_1` VARCHAR(191) AS (LOWER(TRIM(COALESCE(council_name, '')))) VIRTUAL;
+ALTER TABLE `professionals` ADD COLUMN `gen_uq_professionals_clinic_conselho_2` VARCHAR(191) AS (LOWER(TRIM(COALESCE(council_uf, '')))) VIRTUAL;
+ALTER TABLE `professionals` ADD COLUMN `gen_uq_professionals_clinic_conselho_3` VARCHAR(32) AS (REGEXP_REPLACE(council_number, '[^0-9]', '')) VIRTUAL;
+ALTER TABLE `professionals` ADD COLUMN `gen_uq_professionals_clinic_document_1` VARCHAR(32) AS (REGEXP_REPLACE(document, '[^0-9]', '')) VIRTUAL;
+ALTER TABLE `professionals` ADD COLUMN `gen_uq_professionals_clinic_email_1` VARCHAR(191) AS (LOWER(TRIM(email))) VIRTUAL;
+
 CREATE INDEX `idx_access_logs_clinic` ON `access_logs` (`clinic_id`);
 CREATE INDEX `idx_access_logs_patient` ON `access_logs` (`patient_id`, `created_at`);
 CREATE INDEX `idx_access_logs_user` ON `access_logs` (`user_id`, `created_at`);
@@ -1611,7 +1629,7 @@ CREATE INDEX `idx_care_checks_sched` ON `care_checks` (`scheduled_at`);
 CREATE INDEX `idx_care_orders_clinic` ON `care_orders` (`clinic_id`);
 CREATE INDEX `idx_care_orders_patient` ON `care_orders` (`patient_id`, `created_at`);
 CREATE INDEX `idx_cargos_clinic` ON `cargos` (`clinic_id`);
-CREATE UNIQUE INDEX `uq_cargos_clinic_name` ON `cargos` (`clinic_id`, (lower(name)));
+CREATE UNIQUE INDEX `uq_cargos_clinic_name` ON `cargos` (`clinic_id`, `gen_uq_cargos_clinic_name_1`);
 CREATE INDEX `idx_certificates_cancelled` ON `certificates` (`cancelled_at`);
 CREATE INDEX `idx_certificates_clinic` ON `certificates` (`clinic_id`);
 CREATE INDEX `idx_certificates_patient` ON `certificates` (`patient_id`, `created_at`);
@@ -1666,8 +1684,8 @@ CREATE INDEX `idx_nursing_procedures_queue_entry` ON `nursing_procedures` (`queu
 CREATE INDEX `idx_patients_active` ON `patients` (`active`);
 CREATE INDEX `idx_patients_clinic` ON `patients` (`clinic_id`);
 CREATE INDEX `idx_patients_origin` ON `patients` (`origin`);
-CREATE INDEX `uq_patients_clinic_cns` ON `patients` (`clinic_id`, (regexp_replace(cns, '\D', '', 'g')));
-CREATE INDEX `uq_patients_clinic_cpf` ON `patients` (`clinic_id`, (regexp_replace(cpf, '\D', '', 'g')));
+CREATE INDEX `uq_patients_clinic_cns` ON `patients` (`clinic_id`, `gen_uq_patients_clinic_cns_1`);
+CREATE INDEX `uq_patients_clinic_cpf` ON `patients` (`clinic_id`, `gen_uq_patients_clinic_cpf_1`);
 CREATE UNIQUE INDEX `uq_patients_clinic_record_number` ON `patients` (`clinic_id`, `record_number`);
 CREATE INDEX `idx_payments_clinic` ON `payments` (`clinic_id`);
 CREATE INDEX `idx_payments_event` ON `payments` (`event_id`);
@@ -1699,7 +1717,7 @@ CREATE INDEX `idx_product_active_ingredients_product` ON `product_active_ingredi
 CREATE INDEX `idx_product_admin_routes_product` ON `product_admin_routes` (`product_id`);
 CREATE INDEX `idx_product_brands_product` ON `product_brands` (`product_id`);
 CREATE INDEX `idx_product_categories_clinic_parent_sort` ON `product_categories` (`clinic_id`, `parent_id`, `sort_order`);
-CREATE UNIQUE INDEX `uq_product_categories_irmaos` ON `product_categories` (`clinic_id`, (COALESCE(parent_id, '00000000-0000-0000-0000-000000000000')), (lower(label)));
+CREATE UNIQUE INDEX `uq_product_categories_irmaos` ON `product_categories` (`clinic_id`, `gen_uq_product_categories_irmaos_1`, `gen_uq_product_categories_irmaos_2`);
 CREATE INDEX `idx_product_min_max_product` ON `product_min_max` (`product_id`);
 CREATE INDEX `idx_product_request_items_req` ON `product_request_items` (`request_id`);
 CREATE INDEX `idx_product_requests_status` ON `product_requests` (`clinic_id`, `status`, `created_at`);
@@ -1708,9 +1726,9 @@ CREATE INDEX `idx_product_units_product` ON `product_units` (`product_id`);
 CREATE INDEX `idx_product_xyz_product` ON `product_xyz` (`product_id`);
 CREATE INDEX `idx_prof_ins_cred_prof` ON `professional_insurance_credentials` (`professional_id`);
 CREATE INDEX `idx_professionals_clinic` ON `professionals` (`clinic_id`);
-CREATE INDEX `uq_professionals_clinic_conselho` ON `professionals` (`clinic_id`, (lower(btrim(COALESCE(council_name, '')))), (lower(btrim(COALESCE(council_uf, '')))), (regexp_replace(council_number, '\D', '', 'g')));
-CREATE INDEX `uq_professionals_clinic_document` ON `professionals` (`clinic_id`, (regexp_replace(document, '\D', '', 'g')));
-CREATE INDEX `uq_professionals_clinic_email` ON `professionals` (`clinic_id`, (lower(btrim(email))));
+CREATE INDEX `uq_professionals_clinic_conselho` ON `professionals` (`clinic_id`, `gen_uq_professionals_clinic_conselho_1`, `gen_uq_professionals_clinic_conselho_2`, `gen_uq_professionals_clinic_conselho_3`);
+CREATE INDEX `uq_professionals_clinic_document` ON `professionals` (`clinic_id`, `gen_uq_professionals_clinic_document_1`);
+CREATE INDEX `uq_professionals_clinic_email` ON `professionals` (`clinic_id`, `gen_uq_professionals_clinic_email_1`);
 CREATE INDEX `profiles_username_key` ON `profiles` (`username`);
 CREATE INDEX `idx_prosthetic_files_clinic` ON `prosthetic_files` (`clinic_id`);
 CREATE INDEX `idx_prosthetic_files_order` ON `prosthetic_files` (`order_id`);
@@ -2034,7 +2052,7 @@ INSERT INTO `auth_users`
   (`id`, `email`, `encrypted_password`, `email_confirmed_at`, `raw_user_meta_data`)
 VALUES
   ('00000000-0000-0000-0000-0000000000a1', 'admin@agicare.local',
-   '$2b$10$kcO10yyz.h9OLGFN3aaeA.Qo4hsvzrKA..1bwIgcZuRbE/6GySnDC',
+   '$2b$10$k2Hy4TVHL8kQFbFq05gIte4uebwYolXvHWXaDyvDHM41vMOLyliK2',
    CURRENT_TIMESTAMP(6),
    '{"full_name":"Administrador","role":"admin"}');
 
