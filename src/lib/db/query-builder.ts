@@ -221,7 +221,11 @@ function parseOr(expr: string, tabela: string): { sql: string; params: unknown[]
   const pedacos: string[] = [];
   const params: unknown[] = [];
   for (const p of partes) {
-    const m = p.match(/^([\w.]+)\.(\w+)\.([\s\S]*)$/);
+    // A coluna é `\w+` (sem ponto) e o operador vem em seguida. Não usar
+    // `[\w.]+` para a coluna: sendo guloso, em "cpf.eq.529.982.247-25" ele
+    // engole "cpf.eq.529" como coluna e lê "982" como operador. O VALOR pode
+    // conter pontos (CPF, CNS, decimal), então é ele que fica com o resto.
+    const m = p.match(/^(\w+)\.([a-z]+)\.([\s\S]*)$/i);
     if (!m) throw new Error(`Filtro .or() não reconhecido: "${p}"`);
     const [, col, op, bruto] = m;
     const cat = catDe(tabela, col);

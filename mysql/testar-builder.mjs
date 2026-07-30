@@ -121,6 +121,19 @@ await teste("or do PostgREST",
   () => db.from("patients").select("id").or("cpf.eq.111,full_name.ilike.*ana*"),
   "WHERE (`cpf` = ? OR `full_name` LIKE ?)", ["111", "%ana%"]);
 
+// Regressão: valor COM PONTOS (CPF formatado). Um regex guloso na coluna lê
+// "cpf.eq.529" como coluna e "982" como operador — foi o que quebrou o
+// cadastro de paciente na primeira execução real.
+await teste("or com valor contendo pontos (CPF formatado)",
+  () => db.from("patients").select("id")
+    .or("cpf.eq.529.982.247-25,cns.eq.123 4567 8901 2345"),
+  "WHERE (`cpf` = ? OR `cns` = ?)",
+  ["529.982.247-25", "123 4567 8901 2345"]);
+
+await teste("or com valor decimal",
+  () => db.from("billable_events").select("id").or("amount.gte.10.50"),
+  "WHERE (`amount` >= ?)", [10.5]);
+
 await teste("not",
   () => db.from("queue_entries").select("id").not("status", "eq", "finalizado"),
   "WHERE NOT (t0.`status` = ?)", ["finalizado"]);
