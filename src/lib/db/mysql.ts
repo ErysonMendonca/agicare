@@ -32,14 +32,33 @@ export function getPool(): Pool {
   if (g.__agicarePool) return g.__agicarePool;
   if (pool) return pool;
 
+  // TLS: bancos gerenciados (e conexão entre máquinas) exigem. MYSQL_SSL=1
+  // liga com verificação; MYSQL_SSL=skip-verify aceita certificado
+  // autoassinado — só use quando a rede entre app e banco já for confiável.
+  const modoSsl = process.env.MYSQL_SSL ?? "";
+  const ssl =
+    modoSsl === "1" || modoSsl === "true"
+      ? { rejectUnauthorized: true }
+      : modoSsl === "skip-verify"
+        ? { rejectUnauthorized: false }
+        : undefined;
+
   pool = mysql.createPool({
     host: exigir("MYSQL_HOST", "127.0.0.1"),
     port: Number(exigir("MYSQL_PORT", "3306")),
     user: exigir("MYSQL_USER", "root"),
     password: process.env.MYSQL_PASSWORD ?? "",
     database: exigir("MYSQL_DATABASE", "agicare"),
+    ...(ssl ? { ssl } : {}),
     waitForConnections: true,
     connectionLimit: Number(process.env.MYSQL_POOL_SIZE ?? 10),
+    // Sem timeout, um banco inacessível deixa a request pendurada até o
+    // navegador desistir, sem erro no log.
+    connectTimeout: Number(process.env.MYSQL_CONNECT_TIMEOUT_MS ?? 10_000),
+    // Mantém as conexões do pool vivas: firewall/NAT de VPS costuma cortar
+    // conexão ociosa em silêncio, e a próxima query falharia.
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10_000,
     // Datas como string crua: a conversão para o formato esperado pela
     // aplicação é feita no query builder, com base no schema-meta. Deixar o
     // driver criar Date aqui embaralharia o fuso (o banco guarda UTC).

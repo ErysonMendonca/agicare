@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...exceto o template, que não tem segredo e documenta o que precisa ser
+# configurado no servidor.
+!.env.example
 
 # claude code (config local, não versionado)
 /.claude/

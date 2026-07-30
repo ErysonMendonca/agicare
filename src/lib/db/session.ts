@@ -29,13 +29,23 @@ export type Sessao = {
 
 let segredoAvisado = false;
 
+/**
+ * Só é desenvolvimento quando NODE_ENV diz EXPLICITAMENTE "development".
+ * Qualquer outro valor (produção, teste, vazio, ou um NODE_ENV esquecido no
+ * .env) cai no caminho seguro. O contrário — liberar tudo que "não é
+ * production" — deixaria o servidor sem segredo e com cookie sem `secure`
+ * caso a variável não chegasse configurada.
+ */
+const ehDesenvolvimento = process.env.NODE_ENV === "development";
+
 function segredo(): string {
   const s = process.env.AUTH_SECRET;
   if (s && s.length >= 32) return s;
-  if (process.env.NODE_ENV === "production") {
+  if (!ehDesenvolvimento) {
     throw new Error(
       "AUTH_SECRET ausente ou curto (mínimo 32 caracteres). " +
-      "Sem ele as sessões não podem ser assinadas com segurança.",
+      "Sem ele as sessões não podem ser assinadas com segurança. " +
+      "Gere um com: node -e \"console.log(require('crypto').randomBytes(32).toString('base64url'))\"",
     );
   }
   // Em desenvolvimento, deriva um segredo estável do diretório do projeto
@@ -109,7 +119,10 @@ const opcoesCookie = {
   httpOnly: true,          // inacessível ao JavaScript da página
   sameSite: "lax" as const, // sobrevive à navegação, bloqueia CSRF entre sites
   path: "/",
-  secure: process.env.NODE_ENV === "production",
+  // `secure` exige HTTPS. Fora de desenvolvimento é sempre ligado — se o
+  // servidor estiver em HTTP puro, o login não vai funcionar, e isso é
+  // intencional: enviar o cookie de sessão em claro é pior do que não logar.
+  secure: !ehDesenvolvimento,
 };
 
 /**
