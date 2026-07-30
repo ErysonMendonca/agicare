@@ -169,6 +169,18 @@ out.push(`-- ══════════════════════�
 -- │ · auth.users      → tabela auth_users (substitui o Supabase Auth)│
 -- └─────────────────────────────────────────────────────────────────┘
 -- ════════════════════════════════════════════════════════════════
+--
+-- ⚠  ESTE SCRIPT ESPERA UM BANCO \`agicare\` LIMPO.
+--    Ele cria as tabelas do zero e insere os dados semeados, então NÃO é
+--    idempotente: rodar duas vezes falha (índice ou chave duplicada). Se uma
+--    importação anterior falhou no meio, apague o banco antes de repetir:
+--
+--      mysql -u root -e "DROP DATABASE IF EXISTS agicare;"
+--
+--    Os CREATE TABLE são intencionalmente SEM "IF NOT EXISTS": assim, um
+--    banco sujo falha na primeira linha com mensagem clara, em vez de
+--    quebrar 1.400 linhas depois com um erro confuso.
+-- ════════════════════════════════════════════════════════════════
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -184,7 +196,7 @@ USE \`agicare\`;
 -- MySQL isso passa a ser responsabilidade da aplicação. A senha deve
 -- ser gravada como HASH (bcrypt/argon2), NUNCA em texto puro.
 -- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS \`auth_users\` (
+CREATE TABLE \`auth_users\` (
   \`id\`                 CHAR(36)     NOT NULL DEFAULT (UUID()),
   \`email\`              VARCHAR(255) NOT NULL,
   \`encrypted_password\` VARCHAR(255) NULL,
@@ -262,7 +274,7 @@ for (const t of tabelasOrdenadas) {
   }
 
   out.push(`\n-- ── ${t} ──`);
-  out.push(`CREATE TABLE IF NOT EXISTS ${q(t)} (`);
+  out.push(`CREATE TABLE ${q(t)} (`);
   out.push(linhas.join(",\n"));
   out.push(`) ENGINE=InnoDB${autoInc ? "" : ""} DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
 }

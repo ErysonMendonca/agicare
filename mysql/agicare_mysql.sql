@@ -21,6 +21,18 @@
 -- │ · auth.users      → tabela auth_users (substitui o Supabase Auth)│
 -- └─────────────────────────────────────────────────────────────────┘
 -- ════════════════════════════════════════════════════════════════
+--
+-- ⚠  ESTE SCRIPT ESPERA UM BANCO `agicare` LIMPO.
+--    Ele cria as tabelas do zero e insere os dados semeados, então NÃO é
+--    idempotente: rodar duas vezes falha (índice ou chave duplicada). Se uma
+--    importação anterior falhou no meio, apague o banco antes de repetir:
+--
+--      mysql -u root -e "DROP DATABASE IF EXISTS agicare;"
+--
+--    Os CREATE TABLE são intencionalmente SEM "IF NOT EXISTS": assim, um
+--    banco sujo falha na primeira linha com mensagem clara, em vez de
+--    quebrar 1.400 linhas depois com um erro confuso.
+-- ════════════════════════════════════════════════════════════════
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -36,7 +48,7 @@ USE `agicare`;
 -- MySQL isso passa a ser responsabilidade da aplicação. A senha deve
 -- ser gravada como HASH (bcrypt/argon2), NUNCA em texto puro.
 -- ────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS `auth_users` (
+CREATE TABLE `auth_users` (
   `id`                 CHAR(36)     NOT NULL DEFAULT (UUID()),
   `email`              VARCHAR(255) NOT NULL,
   `encrypted_password` VARCHAR(255) NULL,
@@ -52,7 +64,7 @@ CREATE TABLE IF NOT EXISTS `auth_users` (
 
 
 -- ── access_logs ──
-CREATE TABLE IF NOT EXISTS `access_logs` (
+CREATE TABLE `access_logs` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `user_id` CHAR(36) NULL,
   `user_name` TEXT NULL,
@@ -67,7 +79,7 @@ CREATE TABLE IF NOT EXISTS `access_logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── anamnese_templates ──
-CREATE TABLE IF NOT EXISTS `anamnese_templates` (
+CREATE TABLE `anamnese_templates` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `specialty` VARCHAR(255) NOT NULL,
@@ -80,7 +92,7 @@ CREATE TABLE IF NOT EXISTS `anamnese_templates` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── anamneses ──
-CREATE TABLE IF NOT EXISTS `anamneses` (
+CREATE TABLE `anamneses` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NULL,
@@ -99,7 +111,7 @@ CREATE TABLE IF NOT EXISTS `anamneses` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── appointment_notifications ──
-CREATE TABLE IF NOT EXISTS `appointment_notifications` (
+CREATE TABLE `appointment_notifications` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `channel` ENUM('sms','email','whatsapp') NOT NULL,
   `protocol` VARCHAR(255) NOT NULL,
@@ -112,7 +124,7 @@ CREATE TABLE IF NOT EXISTS `appointment_notifications` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── appointments ──
-CREATE TABLE IF NOT EXISTS `appointments` (
+CREATE TABLE `appointments` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NULL,
@@ -131,7 +143,7 @@ CREATE TABLE IF NOT EXISTS `appointments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── assessment_scales ──
-CREATE TABLE IF NOT EXISTS `assessment_scales` (
+CREATE TABLE `assessment_scales` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NULL,
   `professional_id` CHAR(36) NULL,
@@ -146,7 +158,7 @@ CREATE TABLE IF NOT EXISTS `assessment_scales` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── attendance_options ──
-CREATE TABLE IF NOT EXISTS `attendance_options` (
+CREATE TABLE `attendance_options` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `category` VARCHAR(255) NOT NULL,
@@ -164,7 +176,7 @@ CREATE TABLE IF NOT EXISTS `attendance_options` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── attendance_records ──
-CREATE TABLE IF NOT EXISTS `attendance_records` (
+CREATE TABLE `attendance_records` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `queue_entry_id` CHAR(36) NULL,
@@ -198,7 +210,7 @@ CREATE TABLE IF NOT EXISTS `attendance_records` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── billable_events ──
-CREATE TABLE IF NOT EXISTS `billable_events` (
+CREATE TABLE `billable_events` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` VARCHAR(255) NOT NULL,
   `patient_id` CHAR(36) NULL,
@@ -224,7 +236,7 @@ CREATE TABLE IF NOT EXISTS `billable_events` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── billing_items ──
-CREATE TABLE IF NOT EXISTS `billing_items` (
+CREATE TABLE `billing_items` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `event_id` CHAR(36) NULL,
   `kind` ENUM('tuss','material','ajuste') NOT NULL DEFAULT 'tuss',
@@ -241,7 +253,7 @@ CREATE TABLE IF NOT EXISTS `billing_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── budget_items ──
-CREATE TABLE IF NOT EXISTS `budget_items` (
+CREATE TABLE `budget_items` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `budget_id` CHAR(36) NOT NULL,
@@ -254,7 +266,7 @@ CREATE TABLE IF NOT EXISTS `budget_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── budgets ──
-CREATE TABLE IF NOT EXISTS `budgets` (
+CREATE TABLE `budgets` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `code` TEXT NULL,
@@ -270,7 +282,7 @@ CREATE TABLE IF NOT EXISTS `budgets` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── care_checks ──
-CREATE TABLE IF NOT EXISTS `care_checks` (
+CREATE TABLE `care_checks` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `sae_id` CHAR(36) NULL,
   `patient_id` CHAR(36) NULL,
@@ -292,7 +304,7 @@ CREATE TABLE IF NOT EXISTS `care_checks` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── care_orders ──
-CREATE TABLE IF NOT EXISTS `care_orders` (
+CREATE TABLE `care_orders` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `prescription_id` CHAR(36) NULL,
   `patient_id` CHAR(36) NOT NULL,
@@ -306,7 +318,7 @@ CREATE TABLE IF NOT EXISTS `care_orders` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── cargos ──
-CREATE TABLE IF NOT EXISTS `cargos` (
+CREATE TABLE `cargos` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `name` TEXT NOT NULL,
@@ -317,7 +329,7 @@ CREATE TABLE IF NOT EXISTS `cargos` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── certificates ──
-CREATE TABLE IF NOT EXISTS `certificates` (
+CREATE TABLE `certificates` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NULL,
@@ -346,7 +358,7 @@ CREATE TABLE IF NOT EXISTS `certificates` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── cid_codes ──
-CREATE TABLE IF NOT EXISTS `cid_codes` (
+CREATE TABLE `cid_codes` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` VARCHAR(255) NOT NULL,
   `description` TEXT NOT NULL,
@@ -357,7 +369,7 @@ CREATE TABLE IF NOT EXISTS `cid_codes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── clinic_members ──
-CREATE TABLE IF NOT EXISTS `clinic_members` (
+CREATE TABLE `clinic_members` (
   `clinic_id` CHAR(36) NOT NULL,
   `user_id` CHAR(36) NOT NULL,
   `role` ENUM('admin','medico','recepcao','paciente') NOT NULL DEFAULT 'recepcao',
@@ -368,7 +380,7 @@ CREATE TABLE IF NOT EXISTS `clinic_members` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── clinic_settings ──
-CREATE TABLE IF NOT EXISTS `clinic_settings` (
+CREATE TABLE `clinic_settings` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_name` TEXT NULL,
   `cnpj` TEXT NULL,
@@ -401,7 +413,7 @@ CREATE TABLE IF NOT EXISTS `clinic_settings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── clinics ──
-CREATE TABLE IF NOT EXISTS `clinics` (
+CREATE TABLE `clinics` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `name` TEXT NOT NULL,
   `slug` VARCHAR(255) NULL,
@@ -414,7 +426,7 @@ CREATE TABLE IF NOT EXISTS `clinics` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── consent_templates ──
-CREATE TABLE IF NOT EXISTS `consent_templates` (
+CREATE TABLE `consent_templates` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `title` TEXT NOT NULL,
@@ -427,7 +439,7 @@ CREATE TABLE IF NOT EXISTS `consent_templates` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── consents ──
-CREATE TABLE IF NOT EXISTS `consents` (
+CREATE TABLE `consents` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NULL,
@@ -441,7 +453,7 @@ CREATE TABLE IF NOT EXISTS `consents` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── dental_chart_marks ──
-CREATE TABLE IF NOT EXISTS `dental_chart_marks` (
+CREATE TABLE `dental_chart_marks` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `chart_id` CHAR(36) NOT NULL,
   `tooth` SMALLINT NOT NULL,
@@ -455,7 +467,7 @@ CREATE TABLE IF NOT EXISTS `dental_chart_marks` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── dental_charts ──
-CREATE TABLE IF NOT EXISTS `dental_charts` (
+CREATE TABLE `dental_charts` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `patient_id` CHAR(36) NOT NULL,
@@ -472,7 +484,7 @@ CREATE TABLE IF NOT EXISTS `dental_charts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── dispensation_items ──
-CREATE TABLE IF NOT EXISTS `dispensation_items` (
+CREATE TABLE `dispensation_items` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `dispensation_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NULL,
@@ -491,7 +503,7 @@ CREATE TABLE IF NOT EXISTS `dispensation_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── dispensations ──
-CREATE TABLE IF NOT EXISTS `dispensations` (
+CREATE TABLE `dispensations` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` TEXT NOT NULL,
   `kind` ENUM('prescricao','setor') NOT NULL DEFAULT 'prescricao',
@@ -512,7 +524,7 @@ CREATE TABLE IF NOT EXISTS `dispensations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── exam_orders ──
-CREATE TABLE IF NOT EXISTS `exam_orders` (
+CREATE TABLE `exam_orders` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NULL,
@@ -533,7 +545,7 @@ CREATE TABLE IF NOT EXISTS `exam_orders` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── fluid_balance ──
-CREATE TABLE IF NOT EXISTS `fluid_balance` (
+CREATE TABLE `fluid_balance` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NULL,
   `cycle_start` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -545,7 +557,7 @@ CREATE TABLE IF NOT EXISTS `fluid_balance` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── fluid_balance_entries ──
-CREATE TABLE IF NOT EXISTS `fluid_balance_entries` (
+CREATE TABLE `fluid_balance_entries` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `balance_id` CHAR(36) NOT NULL,
   `kind` ENUM('ganho','perda') NOT NULL,
@@ -559,7 +571,7 @@ CREATE TABLE IF NOT EXISTS `fluid_balance_entries` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── inventories ──
-CREATE TABLE IF NOT EXISTS `inventories` (
+CREATE TABLE `inventories` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` TEXT NOT NULL,
   `kind` ENUM('geral','parcial') NOT NULL DEFAULT 'geral',
@@ -573,7 +585,7 @@ CREATE TABLE IF NOT EXISTS `inventories` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── inventory_counts ──
-CREATE TABLE IF NOT EXISTS `inventory_counts` (
+CREATE TABLE `inventory_counts` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `inventory_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NULL,
@@ -588,7 +600,7 @@ CREATE TABLE IF NOT EXISTS `inventory_counts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── lab_cases ──
-CREATE TABLE IF NOT EXISTS `lab_cases` (
+CREATE TABLE `lab_cases` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` VARCHAR(255) NOT NULL,
   `patient_id` CHAR(36) NULL,
@@ -609,7 +621,7 @@ CREATE TABLE IF NOT EXISTS `lab_cases` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── medical_records ──
-CREATE TABLE IF NOT EXISTS `medical_records` (
+CREATE TABLE `medical_records` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NOT NULL,
@@ -626,7 +638,7 @@ CREATE TABLE IF NOT EXISTS `medical_records` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── medical_records_scanned ──
-CREATE TABLE IF NOT EXISTS `medical_records_scanned` (
+CREATE TABLE `medical_records_scanned` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `tenant_id` CHAR(36) NOT NULL,
   `patient_id` CHAR(36) NOT NULL,
@@ -641,7 +653,7 @@ CREATE TABLE IF NOT EXISTS `medical_records_scanned` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── notification_log ──
-CREATE TABLE IF NOT EXISTS `notification_log` (
+CREATE TABLE `notification_log` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `channel` TEXT NOT NULL,
@@ -661,7 +673,7 @@ CREATE TABLE IF NOT EXISTS `notification_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── nursing_evolutions ──
-CREATE TABLE IF NOT EXISTS `nursing_evolutions` (
+CREATE TABLE `nursing_evolutions` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NULL,
   `professional_id` CHAR(36) NULL,
@@ -681,7 +693,7 @@ CREATE TABLE IF NOT EXISTS `nursing_evolutions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── nursing_notes ──
-CREATE TABLE IF NOT EXISTS `nursing_notes` (
+CREATE TABLE `nursing_notes` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` TEXT NOT NULL,
   `patient_id` CHAR(36) NULL,
@@ -699,7 +711,7 @@ CREATE TABLE IF NOT EXISTS `nursing_notes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── nursing_procedures ──
-CREATE TABLE IF NOT EXISTS `nursing_procedures` (
+CREATE TABLE `nursing_procedures` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NULL,
   `professional_id` CHAR(36) NULL,
@@ -721,7 +733,7 @@ CREATE TABLE IF NOT EXISTS `nursing_procedures` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── patients ──
-CREATE TABLE IF NOT EXISTS `patients` (
+CREATE TABLE `patients` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `profile_id` CHAR(36) NULL,
   `full_name` TEXT NOT NULL,
@@ -776,7 +788,7 @@ CREATE TABLE IF NOT EXISTS `patients` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── payments ──
-CREATE TABLE IF NOT EXISTS `payments` (
+CREATE TABLE `payments` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `event_id` CHAR(36) NULL,
@@ -796,7 +808,7 @@ CREATE TABLE IF NOT EXISTS `payments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── permission_templates ──
-CREATE TABLE IF NOT EXISTS `permission_templates` (
+CREATE TABLE `permission_templates` (
   `template` VARCHAR(255) NOT NULL DEFAULT 'default',
   `role` ENUM('admin','medico','recepcao','paciente') NOT NULL,
   `module` VARCHAR(255) NOT NULL,
@@ -809,7 +821,7 @@ CREATE TABLE IF NOT EXISTS `permission_templates` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── prescription_checks ──
-CREATE TABLE IF NOT EXISTS `prescription_checks` (
+CREATE TABLE `prescription_checks` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `prescription_id` CHAR(36) NULL,
@@ -826,7 +838,7 @@ CREATE TABLE IF NOT EXISTS `prescription_checks` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── prescription_items ──
-CREATE TABLE IF NOT EXISTS `prescription_items` (
+CREATE TABLE `prescription_items` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `prescription_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NULL,
@@ -843,7 +855,7 @@ CREATE TABLE IF NOT EXISTS `prescription_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── prescriptions ──
-CREATE TABLE IF NOT EXISTS `prescriptions` (
+CREATE TABLE `prescriptions` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NULL,
@@ -859,7 +871,7 @@ CREATE TABLE IF NOT EXISTS `prescriptions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── procedure_document_items ──
-CREATE TABLE IF NOT EXISTS `procedure_document_items` (
+CREATE TABLE `procedure_document_items` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `document_id` CHAR(36) NOT NULL,
   `procedure_id` CHAR(36) NULL,
@@ -871,7 +883,7 @@ CREATE TABLE IF NOT EXISTS `procedure_document_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── procedure_documents ──
-CREATE TABLE IF NOT EXISTS `procedure_documents` (
+CREATE TABLE `procedure_documents` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `patient_id` CHAR(36) NOT NULL,
@@ -888,7 +900,7 @@ CREATE TABLE IF NOT EXISTS `procedure_documents` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── procedure_executions ──
-CREATE TABLE IF NOT EXISTS `procedure_executions` (
+CREATE TABLE `procedure_executions` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `procedure_id` CHAR(36) NOT NULL,
@@ -905,7 +917,7 @@ CREATE TABLE IF NOT EXISTS `procedure_executions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── procedure_instructions ──
-CREATE TABLE IF NOT EXISTS `procedure_instructions` (
+CREATE TABLE `procedure_instructions` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `procedure_id` CHAR(36) NOT NULL,
   `pre_instructions` TEXT NULL,
@@ -921,7 +933,7 @@ CREATE TABLE IF NOT EXISTS `procedure_instructions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── procedure_instruments ──
-CREATE TABLE IF NOT EXISTS `procedure_instruments` (
+CREATE TABLE `procedure_instruments` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `procedure_id` CHAR(36) NOT NULL,
   `option_id` CHAR(36) NOT NULL,
@@ -931,7 +943,7 @@ CREATE TABLE IF NOT EXISTS `procedure_instruments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── procedure_materials ──
-CREATE TABLE IF NOT EXISTS `procedure_materials` (
+CREATE TABLE `procedure_materials` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `procedure_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NOT NULL,
@@ -942,7 +954,7 @@ CREATE TABLE IF NOT EXISTS `procedure_materials` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── procedure_professionals ──
-CREATE TABLE IF NOT EXISTS `procedure_professionals` (
+CREATE TABLE `procedure_professionals` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `procedure_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NOT NULL,
@@ -952,7 +964,7 @@ CREATE TABLE IF NOT EXISTS `procedure_professionals` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── procedures ──
-CREATE TABLE IF NOT EXISTS `procedures` (
+CREATE TABLE `procedures` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` VARCHAR(255) NOT NULL,
   `name` TEXT NOT NULL,
@@ -979,7 +991,7 @@ CREATE TABLE IF NOT EXISTS `procedures` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_active_ingredients ──
-CREATE TABLE IF NOT EXISTS `product_active_ingredients` (
+CREATE TABLE `product_active_ingredients` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NOT NULL,
@@ -990,7 +1002,7 @@ CREATE TABLE IF NOT EXISTS `product_active_ingredients` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_admin_routes ──
-CREATE TABLE IF NOT EXISTS `product_admin_routes` (
+CREATE TABLE `product_admin_routes` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NOT NULL,
@@ -1001,7 +1013,7 @@ CREATE TABLE IF NOT EXISTS `product_admin_routes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_brands ──
-CREATE TABLE IF NOT EXISTS `product_brands` (
+CREATE TABLE `product_brands` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NOT NULL,
@@ -1014,7 +1026,7 @@ CREATE TABLE IF NOT EXISTS `product_brands` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_categories ──
-CREATE TABLE IF NOT EXISTS `product_categories` (
+CREATE TABLE `product_categories` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `parent_id` CHAR(36) NULL,
@@ -1031,7 +1043,7 @@ CREATE TABLE IF NOT EXISTS `product_categories` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_min_max ──
-CREATE TABLE IF NOT EXISTS `product_min_max` (
+CREATE TABLE `product_min_max` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NOT NULL,
@@ -1043,7 +1055,7 @@ CREATE TABLE IF NOT EXISTS `product_min_max` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_request_items ──
-CREATE TABLE IF NOT EXISTS `product_request_items` (
+CREATE TABLE `product_request_items` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `request_id` CHAR(36) NOT NULL,
@@ -1057,7 +1069,7 @@ CREATE TABLE IF NOT EXISTS `product_request_items` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_requests ──
-CREATE TABLE IF NOT EXISTS `product_requests` (
+CREATE TABLE `product_requests` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `code` TEXT NOT NULL,
@@ -1074,7 +1086,7 @@ CREATE TABLE IF NOT EXISTS `product_requests` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_requisition_locations ──
-CREATE TABLE IF NOT EXISTS `product_requisition_locations` (
+CREATE TABLE `product_requisition_locations` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NOT NULL,
@@ -1085,7 +1097,7 @@ CREATE TABLE IF NOT EXISTS `product_requisition_locations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_units ──
-CREATE TABLE IF NOT EXISTS `product_units` (
+CREATE TABLE `product_units` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NOT NULL,
@@ -1101,7 +1113,7 @@ CREATE TABLE IF NOT EXISTS `product_units` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── product_xyz ──
-CREATE TABLE IF NOT EXISTS `product_xyz` (
+CREATE TABLE `product_xyz` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `product_id` CHAR(36) NOT NULL,
@@ -1115,7 +1127,7 @@ CREATE TABLE IF NOT EXISTS `product_xyz` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── professional_insurance_credentials ──
-CREATE TABLE IF NOT EXISTS `professional_insurance_credentials` (
+CREATE TABLE `professional_insurance_credentials` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NOT NULL,
@@ -1135,7 +1147,7 @@ CREATE TABLE IF NOT EXISTS `professional_insurance_credentials` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── professionals ──
-CREATE TABLE IF NOT EXISTS `professionals` (
+CREATE TABLE `professionals` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `profile_id` CHAR(36) NOT NULL,
   `specialty` TEXT NULL,
@@ -1177,7 +1189,7 @@ CREATE TABLE IF NOT EXISTS `professionals` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── profiles ──
-CREATE TABLE IF NOT EXISTS `profiles` (
+CREATE TABLE `profiles` (
   `id` CHAR(36) NOT NULL,
   `full_name` TEXT NULL,
   `role` ENUM('admin','medico','recepcao','paciente') NOT NULL DEFAULT 'paciente',
@@ -1190,7 +1202,7 @@ CREATE TABLE IF NOT EXISTS `profiles` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── prosthetic_files ──
-CREATE TABLE IF NOT EXISTS `prosthetic_files` (
+CREATE TABLE `prosthetic_files` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `order_id` CHAR(36) NOT NULL,
   `file_name` TEXT NOT NULL,
@@ -1203,7 +1215,7 @@ CREATE TABLE IF NOT EXISTS `prosthetic_files` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── prosthetic_orders ──
-CREATE TABLE IF NOT EXISTS `prosthetic_orders` (
+CREATE TABLE `prosthetic_orders` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `professional_id` CHAR(36) NULL,
@@ -1228,7 +1240,7 @@ CREATE TABLE IF NOT EXISTS `prosthetic_orders` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── purchase_requests ──
-CREATE TABLE IF NOT EXISTS `purchase_requests` (
+CREATE TABLE `purchase_requests` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` TEXT NOT NULL,
   `product_id` CHAR(36) NULL,
@@ -1243,7 +1255,7 @@ CREATE TABLE IF NOT EXISTS `purchase_requests` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── queue_entries ──
-CREATE TABLE IF NOT EXISTS `queue_entries` (
+CREATE TABLE `queue_entries` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `ticket_code` TEXT NOT NULL,
   `patient_id` CHAR(36) NULL,
@@ -1268,7 +1280,7 @@ CREATE TABLE IF NOT EXISTS `queue_entries` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── quotations ──
-CREATE TABLE IF NOT EXISTS `quotations` (
+CREATE TABLE `quotations` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `purchase_request_id` CHAR(36) NOT NULL,
   `supplier_id` CHAR(36) NULL,
@@ -1285,7 +1297,7 @@ CREATE TABLE IF NOT EXISTS `quotations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── role_permissions ──
-CREATE TABLE IF NOT EXISTS `role_permissions` (
+CREATE TABLE `role_permissions` (
   `role` ENUM('admin','medico','recepcao','paciente') NOT NULL,
   `module` VARCHAR(255) NOT NULL,
   `can_view` TINYINT(1) NOT NULL DEFAULT 0,
@@ -1299,7 +1311,7 @@ CREATE TABLE IF NOT EXISTS `role_permissions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── sae_records ──
-CREATE TABLE IF NOT EXISTS `sae_records` (
+CREATE TABLE `sae_records` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NULL,
   `professional_id` CHAR(36) NULL,
@@ -1319,7 +1331,7 @@ CREATE TABLE IF NOT EXISTS `sae_records` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── schedule_blocks ──
-CREATE TABLE IF NOT EXISTS `schedule_blocks` (
+CREATE TABLE `schedule_blocks` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `schedule_id` CHAR(36) NULL,
   `professional_id` CHAR(36) NULL,
@@ -1333,7 +1345,7 @@ CREATE TABLE IF NOT EXISTS `schedule_blocks` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── schedules ──
-CREATE TABLE IF NOT EXISTS `schedules` (
+CREATE TABLE `schedules` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` VARCHAR(255) NOT NULL,
   `description` TEXT NULL,
@@ -1361,7 +1373,7 @@ CREATE TABLE IF NOT EXISTS `schedules` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── stock_movements ──
-CREATE TABLE IF NOT EXISTS `stock_movements` (
+CREATE TABLE `stock_movements` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `product_id` CHAR(36) NOT NULL,
   `type` ENUM('entrada','saida','ajuste') NOT NULL,
@@ -1380,7 +1392,7 @@ CREATE TABLE IF NOT EXISTS `stock_movements` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── stock_products ──
-CREATE TABLE IF NOT EXISTS `stock_products` (
+CREATE TABLE `stock_products` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` VARCHAR(255) NOT NULL,
   `name` TEXT NOT NULL,
@@ -1440,7 +1452,7 @@ CREATE TABLE IF NOT EXISTS `stock_products` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── suppliers ──
-CREATE TABLE IF NOT EXISTS `suppliers` (
+CREATE TABLE `suppliers` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `name` TEXT NOT NULL,
   `cnpj` TEXT NULL,
@@ -1454,7 +1466,7 @@ CREATE TABLE IF NOT EXISTS `suppliers` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── system_logs ──
-CREATE TABLE IF NOT EXISTS `system_logs` (
+CREATE TABLE `system_logs` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NULL,
   `actor_user_id` CHAR(36) NULL,
@@ -1471,7 +1483,7 @@ CREATE TABLE IF NOT EXISTS `system_logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── tiss_batches ──
-CREATE TABLE IF NOT EXISTS `tiss_batches` (
+CREATE TABLE `tiss_batches` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `code` VARCHAR(255) NOT NULL,
   `insurance` TEXT NULL,
@@ -1486,7 +1498,7 @@ CREATE TABLE IF NOT EXISTS `tiss_batches` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── tiss_guides ──
-CREATE TABLE IF NOT EXISTS `tiss_guides` (
+CREATE TABLE `tiss_guides` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `guide_number` TEXT NOT NULL,
   `patient_id` CHAR(36) NULL,
@@ -1506,7 +1518,7 @@ CREATE TABLE IF NOT EXISTS `tiss_guides` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── triage_records ──
-CREATE TABLE IF NOT EXISTS `triage_records` (
+CREATE TABLE `triage_records` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `queue_entry_id` CHAR(36) NULL,
@@ -1530,7 +1542,7 @@ CREATE TABLE IF NOT EXISTS `triage_records` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── triage_templates ──
-CREATE TABLE IF NOT EXISTS `triage_templates` (
+CREATE TABLE `triage_templates` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `clinic_id` CHAR(36) NOT NULL,
   `specialty` VARCHAR(255) NOT NULL,
@@ -1543,7 +1555,7 @@ CREATE TABLE IF NOT EXISTS `triage_templates` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ── vital_signs ──
-CREATE TABLE IF NOT EXISTS `vital_signs` (
+CREATE TABLE `vital_signs` (
   `id` CHAR(36) NOT NULL DEFAULT (UUID()),
   `patient_id` CHAR(36) NOT NULL,
   `recorded_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -2052,7 +2064,7 @@ INSERT INTO `auth_users`
   (`id`, `email`, `encrypted_password`, `email_confirmed_at`, `raw_user_meta_data`)
 VALUES
   ('00000000-0000-0000-0000-0000000000a1', 'admin@agicare.local',
-   '$2b$10$k2Hy4TVHL8kQFbFq05gIte4uebwYolXvHWXaDyvDHM41vMOLyliK2',
+   '$2b$10$tvhsLJLux2JXYhLWpJXpiO434Lzz4Qg5GErEF7VFjPA2KYxXgDkvS',
    CURRENT_TIMESTAMP(6),
    '{"full_name":"Administrador","role":"admin"}');
 

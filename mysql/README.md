@@ -9,8 +9,21 @@ MySQL 8, com os dados básicos já semeados.
 mysql -u root -p < agicare_mysql.sql
 ```
 
-Cria o banco `agicare` (utf8mb4 / InnoDB) e popula tudo. Requer **MySQL 8.0.16+**
-(usa `DEFAULT` de expressão, `CHECK` e `JSON`).
+Cria o banco `agicare` (utf8mb4 / InnoDB) e popula tudo.
+
+Testado em **MariaDB 10.4** (XAMPP) e compatível com **MySQL 8.0.16+** — precisa
+dessas versões por causa de `DEFAULT` de expressão, `CHECK` e colunas geradas.
+
+> **O script espera um banco `agicare` limpo.** Ele não é idempotente: rodar duas
+> vezes falha com chave/índice duplicado. Se uma importação falhar no meio, apague
+> antes de repetir:
+>
+> ```bash
+> mysql -u root -e "DROP DATABASE IF EXISTS agicare;"
+> ```
+
+No XAMPP o binário fica em `C:\xampp\mysql\bin\mysql.exe` e o root normalmente não
+tem senha (use sem `-p`).
 
 ## O que vem dentro
 

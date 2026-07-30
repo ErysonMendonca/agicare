@@ -8,7 +8,7 @@ const P = (sev, msg) => problemas.push({ sev, msg });
 
 // ── Parse das tabelas geradas ───────────────────────────────────────
 const tabelas = new Map(); // nome → { cols: Map(nome→tipo), pk: [], uniques: [] }
-const reTable = /CREATE TABLE IF NOT EXISTS `(\w+)` \(([\s\S]*?)\n\) ENGINE=InnoDB/g;
+const reTable = /CREATE TABLE `(\w+)` \(([\s\S]*?)\n\) ENGINE=InnoDB/g;
 let m;
 while ((m = reTable.exec(sql))) {
   const nome = m[1];
