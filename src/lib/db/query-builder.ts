@@ -221,7 +221,7 @@ function parseOr(expr: string, tabela: string): { sql: string; params: unknown[]
   const pedacos: string[] = [];
   const params: unknown[] = [];
   for (const p of partes) {
-    const m = p.match(/^([\w.]+)\.(\w+)\.(.*)$/s);
+    const m = p.match(/^([\w.]+)\.(\w+)\.([\s\S]*)$/);
     if (!m) throw new Error(`Filtro .or() não reconhecido: "${p}"`);
     const [, col, op, bruto] = m;
     const cat = catDe(tabela, col);
@@ -253,6 +253,12 @@ function parseOr(expr: string, tabela: string): { sql: string; params: unknown[]
 
 type Ordem = { col: string; asc: boolean };
 
+// O padrão é `Linha[]` (= Record<string, any>[]), não `any[]`.
+// A diferença importa: com `any[]`, o padrão muito usado no projeto
+// `Array.isArray(p.x) ? p.x : []` gera a união `any[] | never[]`, e o TS
+// desiste de dar tipo contextual ao callback do .map() seguinte
+// (noImplicitAny). Com Record<string, any> a narrowing funciona.
+// `single()`/`maybeSingle()` estreitam para `any`, como o PostgREST devolvia.
 class Consulta<T = Linha[]> implements PromiseLike<Resposta<T>> {
   private filtros: Filtro[] = [];
   private ordens: Ordem[] = [];
@@ -367,9 +373,9 @@ class Consulta<T = Linha[]> implements PromiseLike<Resposta<T>> {
   range(de: number, ate: number): this {
     this.off = de; this.lim = ate - de + 1; return this;
   }
-  single(): Consulta<Linha> {
+  single(): Consulta<Linha | null> {
     this.umSo = "single"; this.lim = 2;
-    return this as unknown as Consulta<Linha>;
+    return this as unknown as Consulta<Linha | null>;
   }
   maybeSingle(): Consulta<Linha | null> {
     this.umSo = "maybe"; this.lim = 2;

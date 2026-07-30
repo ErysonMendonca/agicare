@@ -46,3 +46,8 @@ next-env.d.ts
 
 # Scripts temporários de desenvolvimento (não versionar)
 scratch/
+
+# Anexos gravados localmente (substitui o Supabase Storage)
+/storage/
+# Backup do .env antes da migração para MySQL
+.env.local.supabase.bak

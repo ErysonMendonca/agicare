@@ -259,10 +259,10 @@ function monthRange(offset: number): { start: Date; end: Date } {
 }
 
 /** Taxa de ocupação (%) de um conjunto de agendamentos. */
-function ocupacaoDe(rows: { status: string }[]): number {
+function ocupacaoDe(rows: { status?: unknown }[]): number {
   if (!rows.length) return 0;
   const ocupados = rows.filter((a) =>
-    ["confirmado", "em_atendimento", "concluido"].includes(a.status),
+    ["confirmado", "em_atendimento", "concluido"].includes(String(a.status)),
   ).length;
   return Math.round((ocupados / rows.length) * 1000) / 10;
 }
@@ -338,7 +338,7 @@ export async function getDashboardKpis(
   const pacientesAntes = pacPrev.count ?? 0;
   const consultasHoje = hoje.count ?? 0;
 
-  const sumAmount = (rows: { amount: number | null }[] | null) =>
+  const sumAmount = (rows: { amount?: unknown }[] | null) =>
     (rows ?? []).reduce((s, b) => s + Number(b.amount ?? 0), 0);
   const receitaCur = sumAmount(billsCur.data);
   const receitaPrev = sumAmount(billsPrev.data);

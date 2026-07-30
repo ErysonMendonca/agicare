@@ -3,19 +3,19 @@
 import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getCurrentUser } from "@/lib/auth";
-import { DEMO_CLINIC_ID, multitenantSchemaMissing } from "@/lib/tenant";
+import { multitenantSchemaMissing } from "@/lib/tenant";
+import { definirClinicaAtiva } from "@/lib/db/auth";
 
 /**
  * Server Actions de TENANT (seleção/troca de clínica ativa).
  *
  * Fluxo de "clínica ativa" (multitenant):
  *  1. O usuário escolhe uma clínica da qual é membro ATIVO.
- *  2. Gravamos `app_metadata.active_clinic_id` no usuário via SERVICE-ROLE
- *     (`auth.admin.updateUserById`) — é a única forma de mexer em app_metadata.
- *  3. Sinalizamos ao CLIENT para chamar `supabase.auth.refreshSession()`. O
- *     refresh re-emite o Access Token, o Custom Access Token Hook (0022) lê a
- *     membership e re-carimba o claim `active_clinic_id`. A partir daí a RLS
- *     (0021) passa a enxergar a clínica escolhida.
+ *  2. Gravamos a clínica ativa na SESSÃO (cookie assinado). No Supabase isso
+ *     era o claim `app_metadata.active_clinic_id`, recarimbado no JWT pelo
+ *     Custom Access Token Hook (0022).
+ *  3. A partir daí o cliente de banco passa a injetar esse clinic_id em toda
+ *     consulta — é o que substitui a RLS (0021) no MySQL.
  *
  * ANTI-IDOR: validamos no servidor que o usuário possui membership ATIVA na
  * clínica alvo ANTES de gravar o claim. Sem isso, qualquer um poderia setar a
@@ -70,20 +70,16 @@ export async function setActiveClinic(clinicId: string): Promise<SetClinicState>
     return { error: "Você não pertence a esta clínica." };
   }
 
-  // Grava o claim de clínica ativa. Mesclamos com o app_metadata existente para
-  // não descartar outros metadados.
-  const { error: updateError } = await service.auth.admin.updateUserById(
-    current.userId,
-    {
-      app_metadata: { active_clinic_id: targetClinicId },
-    },
-  );
-
-  if (updateError) {
+  // Grava a clínica ativa NA SESSÃO. No Supabase isso era um claim em
+  // app_metadata, recarimbado no JWT pelo hook da 0022; com sessão própria
+  // basta reemitir o cookie assinado. `definirClinicaAtiva` revalida a
+  // membership por conta própria (segunda barreira anti-IDOR).
+  const gravou = await definirClinicaAtiva(targetClinicId);
+  if (!gravou) {
     return { error: "Não foi possível selecionar a clínica." };
   }
 
-  // refresh=true → o CLIENT precisa chamar refreshSession() para o hook
-  // re-carimbar o JWT com a nova clínica antes de prosseguir ao dashboard.
+  // refresh=true → o client reemite o cookie e navega. Mantido para não
+  // alterar o contrato com a tela de login.
   return { ok: true, refresh: true };
 }

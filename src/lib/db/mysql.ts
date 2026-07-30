@@ -55,7 +55,21 @@ export function getPool(): Pool {
   return pool;
 }
 
-export type Linha = Record<string, unknown>;
+/**
+ * Linha genérica do banco.
+ *
+ * O valor é `any` DE PROPÓSITO: sem tipos gerados, o supabase-js também
+ * devolvia `any`, e os ~540 pontos de chamada foram escritos contando com
+ * isso (`r.code ?? "—"` atribuído a `string`, por exemplo). Usar `unknown`
+ * aqui seria mais correto no vácuo, mas exigiria cast em centenas de
+ * lugares — trabalho que só existiria por causa da troca de banco e que
+ * abriria espaço para erro em cada conversão feita à mão.
+ *
+ * O caminho para tipar isso de verdade é gerar tipos por tabela a partir do
+ * schema-meta e parametrizar `from<T>()` — melhoria separada desta migração.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Linha = Record<string, any>;
 
 /** Executa SQL parametrizado e devolve as linhas. */
 export async function consultar<T = Linha>(
