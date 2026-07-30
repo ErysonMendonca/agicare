@@ -15,12 +15,10 @@ export type {
 } from "@/lib/clinico/protetico-shared";
 
 import type { PedidoProtetico } from "@/lib/clinico/protetico-shared";
+import { dataBR } from "@/lib/format/data-br";
 
 function fmtData(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("pt-BR");
+  return dataBR(iso);
 }
 
 function fmtDataHora(iso: string | null): string {

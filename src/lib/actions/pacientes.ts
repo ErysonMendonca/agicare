@@ -226,11 +226,6 @@ export async function createPacienteCompleto(
     };
   }
   const d = parsed.data;
-  const enderecoPartes = [d.address, d.district, d.city, d.uf, d.cep].filter(
-    Boolean,
-  );
-  const notas =
-    enderecoPartes.length > 0 ? `Endereço: ${enderecoPartes.join(", ")}` : null;
 
   // Autorização de módulo (defesa-em-profundidade, além do requireClinic + RLS).
   const guard = await requirePacientesAccess();
@@ -286,7 +281,16 @@ export async function createPacienteCompleto(
       origin: d.origin || null,
       phone: d.cell || d.phone || null,
       email: d.email || null,
-      notes: notas,
+      // Endereço nas COLUNAS ESTRUTURADAS (0026), igual ao caminho de edição.
+      // Antes o cadastro concatenava tudo em `notes` como
+      // "Endereço: rua, bairro, cidade, uf, cep" e a leitura desfazia por
+      // split(","). Bastava a rua ter uma vírgula ("Rua das Flores, 123")
+      // para todos os campos deslocarem um lugar na exibição.
+      cep: d.cep || null,
+      address: d.address || null,
+      district: d.district || null,
+      city: d.city || null,
+      state: d.uf || null,
       death_date: d.death_date || null,
       death_cause: d.death_cause || null,
       active: !d.death_date, // óbito → inativo

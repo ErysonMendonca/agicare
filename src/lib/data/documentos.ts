@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { extrairConselho } from "@/lib/clinico/conselho";
+import { dataBR } from "@/lib/format/data-br";
 
 export type Documento = {
   id: string;
@@ -30,9 +31,7 @@ export type Documento = {
 };
 
 function fmtData(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("pt-BR");
+  return dataBR(iso);
 }
 
 function fmtDataHora(iso: string | null): string {

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { type FilaItem } from "@/lib/data/queue";
+import { dataBR, idadeAnos } from "@/lib/format/data-br";
 
 export type Identificacao = {
   nome: string;
@@ -187,19 +188,16 @@ export async function listAtendimentosPorData(
 }
 
 /** Idade em anos a partir da data de nascimento (ISO). */
+// Idade via idadeAnos: além do desvio de fuso da data pura, a conta
+// antiga dividia por 365,25 dias, o que errava a idade de quem faz
+// aniversário perto de hoje.
 function calcIdade(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const diff = Date.now() - d.getTime();
-  const anos = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
-  return `${anos} anos`;
+  const anos = idadeAnos(iso);
+  return anos === null ? "—" : `${anos} anos`;
 }
 
 function fmtData(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+  return dataBR(iso) ?? "—";
 }
 
 function fmtDataHora(iso: string | null): string {

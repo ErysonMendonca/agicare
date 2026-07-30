@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireClinic } from "@/lib/tenant";
+import { dataBR, idadeAnos } from "@/lib/format/data-br";
 
 export type Paciente = {
   id: string;
@@ -317,18 +318,16 @@ const GENERO: Record<string, string> = {
   outro: "Outro",
 };
 
+// Idade via idadeAnos: além do desvio de fuso da data pura, a conta
+// antiga dividia por 365,25 dias, o que errava a idade de quem faz
+// aniversário perto de hoje.
 function calcIdade(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const anos = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000));
-  return `${anos} anos`;
+  const anos = idadeAnos(iso);
+  return anos === null ? "—" : `${anos} anos`;
 }
 
 function fmtData(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+  return dataBR(iso) ?? "—";
 }
 
 function fmtDataHora(iso: string | null): string {
