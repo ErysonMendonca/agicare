@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyProfessional } from "@/lib/permissions";
 import { getRole } from "@/lib/auth";
 import { type Status } from "@/components/ui/Badge";
+import { idadeAnos } from "@/lib/format/data-br";
 
 export type Tag = { label: string; status: "danger" | "warn" };
 
@@ -90,13 +91,15 @@ function labelSexo(g: string | null | undefined): string {
   return GENERO_LABEL[g.toLowerCase()] ?? g;
 }
 
-/** Idade em anos ("X anos") a partir do birth_date; "" quando ausente/inválido. */
+/**
+ * Idade em anos ("X anos") a partir do birth_date; "" quando ausente/inválido.
+ * Usa idadeAnos: a conta anterior dividia o intervalo por 365,25 dias e errava
+ * a idade de quem faz aniversário perto de hoje, além de sofrer o desvio de
+ * fuso da coluna `date` (meia-noite UTC lida em GMT-3).
+ */
 function calcIdade(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const anos = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000));
-  return anos >= 0 ? `${anos} anos` : "";
+  const anos = idadeAnos(iso);
+  return anos === null ? "" : `${anos} anos`;
 }
 
 /** Nº de prontuário: zero-pad para 6 dígitos quando puramente numérico; senão cru. */

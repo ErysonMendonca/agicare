@@ -59,12 +59,26 @@ eq("aniversário foi ONTEM → já completou", idadeAnos(anos(40, -1)), 40);
 eq("recém-nascido", idadeAnos(iso(hoje)), 0);
 eq("idade de null", idadeAnos(null), null);
 
-// A conta antiga (divisão por 365,25 dias) errava justamente o caso do
-// aniversário no dia: confirma que agora não erra mais.
-const nasc = anos(30);
-const antiga = Math.floor(
-  (Date.now() - new Date(nasc).getTime()) / (365.25 * 24 * 3600 * 1000));
-console.log(`aniversário hoje (${nasc}): conta antiga = ${antiga}, nova = ${idadeAnos(nasc)}`);
+// Idades altas: com 365,25 dias o erro acumula e aparece mesmo longe do
+// aniversário, porque o número de anos bissextos reais difere da média.
+eq("80 anos, aniversário hoje", idadeAnos(anos(80)), 80);
+eq("100 anos, aniversário hoje", idadeAnos(anos(100)), 100);
+eq("1 ano, aniversário hoje", idadeAnos(anos(1)), 1);
+
+// 29/02: quem nasceu em ano bissexto não deve "perder" idade em ano comum.
+eq("nascido em 29/02/2000, hoje em 2026", idadeAnos("2000-02-29"), 26);
+
+// Compara com a conta antiga nos casos onde ela errava, para o teste
+// documentar o problema em vez de só afirmar o correto.
+console.log("\ncomparação com a conta antiga (divisão por 365,25 dias):");
+for (const n of [1, 30, 80, 100]) {
+  const nasc = anos(n);
+  const antiga = Math.floor(
+    (Date.now() - new Date(nasc).getTime()) / (365.25 * 24 * 3600 * 1000));
+  const nova = idadeAnos(nasc);
+  const marca = antiga === nova ? "  " : "→ errava:";
+  console.log(`  ${marca} aniversário hoje, ${n} anos: antiga = ${antiga}, nova = ${nova}`);
+}
 
 rmSync(TMP, { recursive: true, force: true });
 console.log(`\n${"═".repeat(56)}`);
