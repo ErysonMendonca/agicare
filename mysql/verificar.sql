@@ -95,9 +95,12 @@ INSERT INTO product_categories (clinic_id, level, label)
 VALUES ('00000000-0000-0000-0000-000000000001', 99, 'Nivel Invalido');
 
 SELECT 'Teste B: ENUM deve rejeitar papel inexistente' AS ``;
--- Esperado: ERROR 1265 — Data truncated for column 'role'
-INSERT INTO profiles (id, full_name, role)
-VALUES (UUID(), 'Teste', 'papel_que_nao_existe');
+-- Usa cargos.base_role (ENUM) e não profiles.role: profiles.id tem FK para
+-- auth_users, então um id novo estouraria a FK (1452) ANTES de o ENUM ser
+-- avaliado, e o teste não provaria nada sobre o ENUM.
+-- Esperado: ERROR 1265 — Data truncated for column 'base_role'
+INSERT INTO cargos (clinic_id, name, base_role)
+VALUES ('00000000-0000-0000-0000-000000000001', 'Teste Enum', 'papel_que_nao_existe');
 
 SELECT 'Teste C: coluna gerada + UNIQUE (colisão por maiúscula/minúscula)' AS ``;
 -- O índice único é sobre LOWER(name) numa coluna VIRTUAL: 'Cargo X' e
@@ -120,9 +123,10 @@ SET FOREIGN_KEY_CHECKS = 1;
 
 
 SELECT '=== 7. LIMPEZA DO TESTE ===' AS ``;
-DELETE FROM cargos   WHERE name LIKE '%TESTE UNICO%';
+DELETE FROM cargos   WHERE name LIKE '%TESTE UNICO%' OR name = 'Teste Enum';
 DELETE FROM patients WHERE full_name = 'Paciente Teste';
 DELETE FROM product_categories WHERE label = 'Nivel Invalido';
 SELECT 'resíduo de teste (deve ser 0)' AS ``,
-       (SELECT COUNT(*) FROM cargos   WHERE name LIKE '%TESTE UNICO%')
+       (SELECT COUNT(*) FROM cargos
+         WHERE name LIKE '%TESTE UNICO%' OR name = 'Teste Enum')
      + (SELECT COUNT(*) FROM patients WHERE full_name = 'Paciente Teste') AS restantes;
