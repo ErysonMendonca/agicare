@@ -1,7 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import {
-  ATTENDANCE_OPTION_CATEGORIES,
-  type AttendanceOptionCategory,
   type AttendanceOptionsByCategory,
 } from "./attendance-options.shared";
 

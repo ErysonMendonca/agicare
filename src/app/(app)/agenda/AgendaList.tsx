@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, useEffect } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
@@ -9,7 +9,6 @@ import {
   Stethoscope,
   UserPlus,
   Clock,
-  CheckCircle2,
   Activity,
   CheckCheck,
 } from "lucide-react";
@@ -110,9 +109,15 @@ export function AgendaList({
   const inicio = (paginaSegura - 1) * POR_PAGINA;
   const visiveis = filtrados.slice(inicio, inicio + POR_PAGINA);
 
-  useEffect(() => {
+  // Volta para a página 1 quando os filtros mudam. Ajuste feito DURANTE o
+  // render (padrão React p/ "resetar estado quando uma prop muda"), em vez
+  // de useEffect — evita o render em cascata que o effect causaria.
+  const filtrosKey = `${busca}|${data}|${profissional}|${status}`;
+  const [filtrosKeyAnterior, setFiltrosKeyAnterior] = useState(filtrosKey);
+  if (filtrosKey !== filtrosKeyAnterior) {
+    setFiltrosKeyAnterior(filtrosKey);
     setPagina(1);
-  }, [busca, data, profissional, status]);
+  }
 
   return (
     <>

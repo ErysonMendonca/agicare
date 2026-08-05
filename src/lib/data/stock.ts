@@ -42,18 +42,6 @@ function derivarStatus(saldo: number, minimo: number): StatusEstoque {
 }
 
 /** Mock usado no modo demo (espelha o Figma). */
-const MOCK_RAW: Array<Omit<ProdutoEstoque, "status">> = [
-  { id: "1", codigo: "MED-8842", produto: "Dipirona 500mg (ampola)", categoria: "Medicamento", unidade: "ampola", saldo: 12, minimo: 50, lote: "LT-8842", ativo: true, custo: 1.2, preco: 3.5, validade: "10/2026", localizacao: "Prateleira A3", fornecedor: "Cristália", barcode: "7891234560012" },
-  { id: "2", codigo: "SOL-7720", produto: "Soro Fisiológico 0,9% 500ml", categoria: "Solução", unidade: "unidade", saldo: 28, minimo: 40, lote: "LT-7720", ativo: true, custo: 2.8, preco: 6.9, validade: "03/2027", localizacao: "Prateleira B1", fornecedor: "Fresenius", barcode: "7891234560029" },
-  { id: "3", codigo: "MAT-3391", produto: "Luva Cirúrgica nº 7,5", categoria: "Material", unidade: "caixa", saldo: 6, minimo: 30, lote: "LT-3391", ativo: true, custo: 18.0, preco: 39.9, validade: "08/2027", localizacao: "Prateleira C2", fornecedor: "Descarpack", barcode: "7891234560050" },
-  { id: "4", codigo: "MAT-5510", produto: "Seringa 10ml", categoria: "Material", unidade: "unidade", saldo: 9, minimo: 25, lote: "LT-5510", ativo: true, custo: 0.45, preco: 1.2, validade: "12/2026", localizacao: "Prateleira C4", fornecedor: "BD", barcode: "7891234560067" },
-  { id: "5", codigo: "MED-6604", produto: "Paracetamol 750mg (comprimido)", categoria: "Medicamento", unidade: "comprimido", saldo: 180, minimo: 100, lote: "LT-6604", ativo: true, custo: 0.18, preco: 0.5, validade: "06/2027", localizacao: "Prateleira A1", fornecedor: "EMS", barcode: "7891234560043" },
-];
-
-const MOCK: ProdutoEstoque[] = MOCK_RAW.map((p) => ({
-  ...p,
-  status: derivarStatus(p.saldo, p.minimo),
-}));
 
 /** Formata uma data ISO/Date em MM/AAAA (validade). */
 function fmtValidade(iso: string | null): string {
@@ -197,60 +185,6 @@ export type ProdutoCompleto = {
   solComponenteDiluente: boolean;
 };
 
-const MOCK_PRODUTO_COMPLETO: ProdutoCompleto = {
-  id: "1",
-  codigo: "000001",
-  name: "Dipirona 500mg (ampola)",
-  activeIngredient: "Dipirona sódica",
-  presentation: "Ampola 2ml",
-  barcode: "7891234560012",
-  anvisaRegistration: "1.0000.0000",
-  category: "Medicamento",
-  therapeuticClass: "Analgésico",
-  unit: "ampola",
-  controlledClass: null,
-  requiresPrescription: false,
-  manufacturer: "Cristália",
-  supplierId: null,
-  active: true,
-  notes: null,
-  quantity: 12,
-  minQuantity: 50,
-  maxQuantity: 0,
-  location: "Prateleira A3",
-  lot: "LT-8842",
-  expiry: null,
-  cost: 1.2,
-  price: 3.5,
-  productType: null,
-  productGroup: null,
-  classification: null,
-  subclassification: null,
-  port344: false,
-  cfop: null,
-  ncm: null,
-  cest: null,
-  ctrlLoteValidade: true,
-  ctrlOpme: false,
-  ctrlNumeroSerie: false,
-  ctrlMarca: false,
-  prescQualquerVia: false,
-  prescQualquerFrequencia: false,
-  prescSeNecessario: false,
-  solicitaSeNecessario: null,
-  salPrincipioAtivo: null,
-  infoAltoCusto: false,
-  infoAltoRisco: false,
-  infoUrgencia: false,
-  infoOncologia: false,
-  infoAntimicrobianoRestrito: false,
-  infoDva: false,
-  infoUsoContinuo: false,
-  infoNaoPadrao: false,
-  solComponenteDiluido: false,
-  solComponenteDiluente: false,
-};
-
 /**
  * Carrega UM produto completo para o editor. Escopo por clínica ativa + RLS de
  * staff. Retorna null quando não encontrado (ou fora do escopo). Só o produto —
@@ -342,13 +276,6 @@ export type Fornecedor = {
   ativo: boolean;
 };
 
-const MOCK_FORNECEDORES: Fornecedor[] = [
-  { id: "1", nome: "Cristália Produtos Químicos", cnpj: "44.734.671/0001-51", contato: "Vendas — (19) 3863-9500", ativo: true },
-  { id: "2", nome: "Fresenius Kabi", cnpj: "49.324.221/0001-04", contato: "Comercial — (11) 4197-7100", ativo: true },
-  { id: "3", nome: "Descarpack Descartáveis", cnpj: "01.376.989/0001-50", contato: "SAC — (11) 3622-8200", ativo: true },
-  { id: "4", nome: "EMS Pharma", cnpj: "57.507.378/0003-65", contato: "Vendas — (19) 3887-9000", ativo: false },
-];
-
 export async function listSuppliers(): Promise<Fornecedor[]> {
 
   const supabase = await createClient();
@@ -394,53 +321,6 @@ export type Dispensacao = {
   /** Motivo da recusa (só quando statusRaw === "cancelado"). */
   motivoRecusa: string | null;
 };
-
-const MOCK_DISPENSACOES: Dispensacao[] = [
-  {
-    id: "d1", codigo: "PRESC-001", tipo: "Prescrição",
-    status: { label: "Pendente", tone: "warn" }, statusRaw: "pendente", urgente: true, progresso: 0,
-    origem: { rotulo: "Paciente", nome: "Maria Silva", identificador: "PAC-2025-0123" },
-    solicitante: { nome: "Dr. João Santos", data: "15/01/2025 14:30" },
-    motivoRecusa: null,
-    itens: [
-      { nome: "Dipirona 500mg", quantidade: "3 ampolas", localizacao: "Prateleira A3", codigoBarras: "7891234560012", lote: "LT-8842", validade: "10/2026", separado: false },
-      { nome: "Soro Fisiológico 0,9% 500ml", quantidade: "2 unidades", localizacao: "Prateleira B1", codigoBarras: "7891234560029", lote: "LT-7720", validade: "03/2027", separado: false },
-    ],
-  },
-  {
-    id: "d2", codigo: "PRESC-002", tipo: "Prescrição",
-    status: { label: "Pendente", tone: "warn" }, statusRaw: "pendente", urgente: false, progresso: 0,
-    origem: { rotulo: "Paciente", nome: "João Pedro Oliveira", identificador: "PAC-2025-0098" },
-    solicitante: { nome: "Dra. Ana Costa", data: "15/01/2025 13:10" },
-    motivoRecusa: null,
-    itens: [
-      { nome: "Amoxicilina 875mg", quantidade: "14 comprimidos", localizacao: "Prateleira A2", codigoBarras: "7891234560036", lote: "LT-1180", validade: "01/2027", separado: false },
-      { nome: "Paracetamol 750mg", quantidade: "10 comprimidos", localizacao: "Prateleira A1", codigoBarras: "7891234560043", lote: "LT-6604", validade: "06/2027", separado: false },
-    ],
-  },
-  {
-    id: "d3", codigo: "REQ-014", tipo: "Setor",
-    status: { label: "Em Separação", tone: "active" }, statusRaw: "separacao", urgente: false, progresso: 50,
-    origem: { rotulo: "Setor", nome: "UTI Adulto", identificador: "SET-UTI-01" },
-    solicitante: { nome: "Enf. Carla Menezes", data: "15/01/2025 11:45" },
-    motivoRecusa: null,
-    itens: [
-      { nome: "Luva Cirúrgica nº 7,5", quantidade: "5 caixas", localizacao: "Prateleira C2", codigoBarras: "7891234560050", lote: "LT-3391", validade: "08/2027", separado: true },
-      { nome: "Seringa 10ml", quantidade: "50 unidades", localizacao: "Prateleira C4", codigoBarras: "7891234560067", lote: "LT-5510", validade: "12/2026", separado: false },
-    ],
-  },
-  {
-    id: "d4", codigo: "REQ-015", tipo: "Setor",
-    status: { label: "Recusado", tone: "danger" }, statusRaw: "cancelado", urgente: false, progresso: 0,
-    origem: { rotulo: "Setor", nome: "Centro Cirúrgico", identificador: "SET-CC-02" },
-    solicitante: { nome: "Enf. Roberto Lima", data: "15/01/2025 10:20" },
-    motivoRecusa: "Itens indisponíveis no estoque; solicitar via compra.",
-    itens: [
-      { nome: "Compressa de Gaze Estéril", quantidade: "20 pacotes", localizacao: "Prateleira D1", codigoBarras: "7891234560074", lote: "LT-9921", validade: "05/2028", separado: false },
-      { nome: "Álcool 70% 1L", quantidade: "8 frascos", localizacao: "Prateleira D3", codigoBarras: "7891234560081", lote: "LT-4410", validade: "11/2026", separado: false },
-    ],
-  },
-];
 
 const KIND_TIPO: Record<string, Tipo> = { prescricao: "Prescrição", setor: "Setor" };
 const DISP_STATUS: Record<string, { label: string; tone: Status }> = {
@@ -519,11 +399,6 @@ export type ItemPrescrito = {
   /** Saldo atual no estoque (informativo); null quando sem vínculo. */
   saldo: number | null;
 };
-
-const MOCK_PRESCRITOS: ItemPrescrito[] = [
-  { prescriptionItemId: "pi-1", productId: "1", nome: "Dipirona 500mg (ampola)", concentracao: "500mg", posologia: "1 ampola 6/6h", unidade: "ampola", saldo: 12 },
-  { prescriptionItemId: "pi-2", productId: "5", nome: "Paracetamol 750mg (comprimido)", concentracao: "750mg", posologia: "1 comprimido 8/8h", unidade: "comprimido", saldo: 180 },
-];
 
 /**
  * Medicamentos prescritos a um paciente (join prescriptions → prescription_items),
@@ -626,12 +501,6 @@ export type EntradaProduto = {
   valorTotal: number;
 };
 
-const MOCK_ENTRADAS: EntradaProduto[] = [
-  { id: "e1", nota: "NF-e 0012345", fornecedor: "Cristália Produtos Químicos", data: "12/01/2025", itens: 8, valorTotal: 2480.0 },
-  { id: "e2", nota: "NF-e 0009981", fornecedor: "Descarpack Descartáveis", data: "08/01/2025", itens: 3, valorTotal: 1196.7 },
-  { id: "e3", nota: "NF-e 0010220", fornecedor: "Fresenius Kabi", data: "03/01/2025", itens: 5, valorTotal: 845.5 },
-];
-
 export async function listEntradas(): Promise<EntradaProduto[]> {
 
   const supabase = await createClient();
@@ -698,24 +567,6 @@ const COMPRA_STATUS: Record<string, { label: string; tone: Status }> = {
   aprovado: { label: "Aprovado", tone: "ok" },
   reprovado: { label: "Reprovado", tone: "danger" },
 };
-
-const MOCK_COMPRAS: SolicitacaoCompra[] = [
-  {
-    id: "c1", codigo: "SC-2025-001", produto: "Luva Cirúrgica nº 7,5", quantidade: "40 caixas",
-    justificativa: "Saldo crítico (6 caixas) abaixo do mínimo de 30. Alta demanda no Centro Cirúrgico.",
-    status: COMPRA_STATUS.cotacao, statusRaw: "cotacao",
-    cotacoes: [
-      { fornecedor: "Descarpack Descartáveis", valor: 720.0, prazo: "5 dias úteis", anexo: "cotacao-descarpack.pdf", anexoPath: null, aprovada: null },
-      { fornecedor: "BD Brasil", valor: 760.0, prazo: "3 dias úteis", anexo: "cotacao-bd.pdf", anexoPath: null, aprovada: null },
-    ],
-  },
-  {
-    id: "c2", codigo: "SC-2025-002", produto: "Soro Fisiológico 0,9% 500ml", quantidade: "120 unidades",
-    justificativa: "Reposição programada — saldo abaixo do mínimo.",
-    status: COMPRA_STATUS.solicitado, statusRaw: "solicitado",
-    cotacoes: [],
-  },
-];
 
 export async function listCompras(): Promise<SolicitacaoCompra[]> {
 

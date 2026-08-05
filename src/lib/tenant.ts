@@ -43,9 +43,10 @@ export function multitenantSchemaMissing(
 
 /** Multitenant está provisionado no banco? (probe em clinic_members; cache por request). */
 export const isMultitenantProvisioned = cache(async (): Promise<boolean> => {
-  const supabase = await createClient()
-  const { error } = await supabase.from('clinic_members').select('clinic_id').limit(1)
-  return !multitenantSchemaMissing(error)
+  // Com MySQL o schema é criado inteiro pelo agicare_mysql.sql: clinic_members
+  // sempre existe. O probe antigo servia para detectar migrations não
+  // aplicadas no Supabase; aqui a resposta é constante.
+  return true
 })
 
 /**
@@ -99,7 +100,7 @@ export const getMyClinics = cache(async (): Promise<MyClinic[]> => {
   // clinics é coberto pela policy clinics_member_read.
   const { data, error } = await supabase
     .from('clinic_members')
-    .select('role, clinics:clinic_id ( id, name )')
+    .select('role, clinics(id, name)')
     .eq('user_id', user.id)
     .eq('active', true)
 

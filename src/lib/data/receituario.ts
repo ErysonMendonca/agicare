@@ -33,21 +33,6 @@ function tipoFromKind(kind: string): Receituario["tipo"] {
   return kind === "receituario_especial" ? "especial" : "simples";
 }
 
-const DEMO_RECEITUARIOS: Receituario[] = [
-  {
-    id: "demo-rec-1",
-    tipo: "simples",
-    texto: "Dipirona 500mg — 1 comprimido de 6/6h por 3 dias.",
-    dataHora: "12/06/2026 09:10",
-    profissional: "Dra. Ana Beatriz Costa",
-    atendimentoCodigo: "0001",
-    cid10: null,
-    exibirCid: true,
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
-
 /** Lista os receituários (simples/especial) emitidos para o paciente. */
 export async function listReceituarios(
   patientId: string,
@@ -95,14 +80,6 @@ export type PacienteEndereco = {
   cidade: string;
   uf: string;
   cep: string;
-};
-
-const DEMO_ENDERECO: PacienteEndereco = {
-  endereco: "Av. Paulista, 1000",
-  bairro: "Bela Vista",
-  cidade: "São Paulo",
-  uf: "SP",
-  cep: "01310-100",
 };
 
 /** Endereço do paciente para o cabeçalho do receituário. Fallback vazio. */

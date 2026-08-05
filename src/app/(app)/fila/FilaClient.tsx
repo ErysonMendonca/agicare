@@ -131,8 +131,6 @@ export function FilaClient({
   fila,
   agendados = [],
   stages = DEFAULT_STAGES,
-  attendanceOptions,
-  profissionais = [],
   triageTemplates = [],
   kpis,
   kpisProntuario,

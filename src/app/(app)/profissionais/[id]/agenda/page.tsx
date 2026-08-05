@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   CalendarDays,
   Clock,
-  CheckCircle2,
   Activity,
   CheckCheck,
   CalendarClock,

@@ -911,11 +911,14 @@ function EditarPedidoModal({
   const [occlusion, setOcclusion] = useState("");
   const [clinicalNotes, setClinicalNotes] = useState("");
 
-  // Preenche os campos quando um pedido é aberto para edição.
+  // Preenche os campos quando um pedido é aberto para edição. Ajuste feito
+  // DURANTE o render (padrão React p/ "resetar estado quando uma prop
+  // muda"), usando useState (não ref — refs não devem ser lidos/gravados
+  // durante o render) para rastrear qual pedido já foi carregado.
   const pedidoId = pedido?.id ?? null;
-  const carregadoRef = useRef<string | null>(null);
-  if (pedido && carregadoRef.current !== pedidoId) {
-    carregadoRef.current = pedidoId;
+  const [carregado, setCarregado] = useState<string | null>(null);
+  if (pedido && carregado !== pedidoId) {
+    setCarregado(pedidoId);
     setTeeth(pedido.teeth === "—" ? "" : pedido.teeth);
     setWorkType(pedido.workType === "—" ? "" : pedido.workType);
     setUrgent(pedido.urgent);
@@ -925,7 +928,7 @@ function EditarPedidoModal({
     setOcclusion(pedido.occlusion);
     setClinicalNotes(pedido.clinicalNotes);
   }
-  if (!pedido) carregadoRef.current = null;
+  if (!pedido && carregado !== null) setCarregado(null);
 
   function salvar() {
     if (!pedido) return;

@@ -34,53 +34,6 @@ export type NotificationLogItem = {
   patientId: string | null;
 };
 
-const DEMO_LOG: NotificationLogItem[] = [
-  {
-    id: "demo-1",
-    canal: "whatsapp",
-    template: "agendamento_confirmado",
-    destino: "(11) *****-1234",
-    provider: "whatsapp-stub",
-    status: "enviado",
-    error: null,
-    timestampISO: "2026-06-16T13:40:00.000Z",
-    patientId: null,
-  },
-  {
-    id: "demo-2",
-    canal: "email",
-    template: "lembrete_consulta",
-    destino: "m****@gmail.com",
-    provider: "resend",
-    status: "enviado",
-    error: null,
-    timestampISO: "2026-06-16T11:05:00.000Z",
-    patientId: null,
-  },
-  {
-    id: "demo-3",
-    canal: "sms",
-    template: "lembrete_consulta",
-    destino: "(11) *****-9876",
-    provider: "sms-stub",
-    status: "nao_configurado",
-    error: "Provedor de SMS não configurado.",
-    timestampISO: "2026-06-15T18:20:00.000Z",
-    patientId: null,
-  },
-  {
-    id: "demo-4",
-    canal: "whatsapp",
-    template: "resultado_exame",
-    destino: "(11) *****-1234",
-    provider: null,
-    status: "desativado",
-    error: null,
-    timestampISO: "2026-06-15T09:00:00.000Z",
-    patientId: null,
-  },
-];
-
 /**
  * Lista o histórico de notificações disparadas da clínica ativa (mais
  * recentes primeiro). RLS isola por tenant; só staff lê. Demo/erro → amostra

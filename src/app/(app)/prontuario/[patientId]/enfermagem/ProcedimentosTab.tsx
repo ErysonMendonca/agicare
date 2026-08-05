@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Syringe, Search, Plus, User, MapPin } from "lucide-react";
 import { toast } from "sonner";
@@ -228,8 +228,12 @@ function ProcedimentoModal({
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
-  // Pré-carrega os campos ao abrir em modo edição.
-  useEffect(() => {
+  // Pré-carrega os campos ao (re)abrir em modo edição. Ajuste feito DURANTE
+  // o render (padrão React p/ "resetar estado quando uma prop muda"), em vez
+  // de useEffect — evita o render em cascata que o effect causaria.
+  const [openAnterior, setOpenAnterior] = useState(open);
+  if (open !== openAnterior) {
+    setOpenAnterior(open);
     if (open && procedimento) {
       const limpa = (v: string) => (v === "—" ? "" : v);
       setForm({
@@ -240,7 +244,7 @@ function ProcedimentoModal({
         notes: "",
       });
     }
-  }, [open, procedimento]);
+  }
 
   function set(field: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [field]: value }));

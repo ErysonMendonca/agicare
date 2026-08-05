@@ -29,6 +29,7 @@ export default async function EvolucaoPage({
         patientId={patientId}
         clinica={{
           nome: settings.clinicName,
+          logo: settings.branding.logoUrl,
           cnpj: settings.cnpj,
           endereco: settings.address,
           telefone: settings.phone,

@@ -2,7 +2,8 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, type Cliente } from "@/lib/supabase/server";
+import type { Linha } from "@/lib/db/mysql";
 import { requireClinic } from "@/lib/tenant";
 import { enviarNotificacao } from "@/lib/integrations/notifications";
 import { logAction } from "@/lib/system-log";
@@ -102,8 +103,24 @@ export type CreateAppointmentInput = z.input<typeof createSchema>;
 /**
  * Valida se um dia/horário está disponível na escala e desocupado.
  */
+/** Linha de `schedules` no formato selecionado por `validarDisponibilidadeHorario`. */
+type EscalaRow = {
+  professional_id: string | null;
+  specialty: string | null;
+  slot_minutes: number | null;
+  overbook_limit: number | null;
+  weekdays: number[] | null;
+  start_time: string;
+  end_time: string;
+  week_hours: unknown;
+  active: boolean;
+  start_date: string | null;
+  end_date: string | null;
+  recurring_blocks: unknown;
+};
+
 async function validarDisponibilidadeHorario(
-  supabase: any,
+  supabase: Cliente,
   dateISO: string,
   timeHHMM: string,
   professionalId: string | null,
@@ -132,8 +149,8 @@ async function validarDisponibilidadeHorario(
     .eq("active", true);
 
   // Encontra a escala que cobre o profissional ou a especialidade neste dia da semana e período
-  const escala = (escalas ?? []).find(
-    (e: any) =>
+  const escala = ((escalas ?? []) as EscalaRow[]).find(
+    (e) =>
       ((professionalId && e.professional_id === professionalId) ||
         (especialidade && e.specialty === especialidade)) &&
       (Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false) &&
@@ -598,17 +615,10 @@ function msgConflitoEscala(c: { code: string; start: string; end: string }): str
  */
 async function agendamentoDependenteDaEscala(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  escala: {
-    id: string;
-    specialty: string | null;
-    professional_id: string | null;
-    service_type: string | null;
-    procedure_codes: string[] | null;
-    exam_tuss_codes: string[] | null;
-    start_date: unknown;
-    end_date: unknown;
-    weekdays: unknown;
-  },
+  // Linha de `schedules` como vem do banco. A camada de dados devolve um
+  // registro genérico (não uma forma fixa), e o corpo desta função já trata
+  // os campos de forma defensiva.
+  escala: Linha,
 ): Promise<{ paciente: string; quando: string } | null> {
   const s = escala.start_date ? String(escala.start_date).slice(0, 10) : "";
   const e = escala.end_date ? String(escala.end_date).slice(0, 10) : "";
@@ -641,14 +651,14 @@ async function agendamentoDependenteDaEscala(
     if (escala.service_type === "Procedimento") {
       if (sType === "Procedimento" && escala.procedure_codes && escala.procedure_codes.length > 0) {
         const reasonText = String(a.reason || "").toLowerCase();
-        matches = escala.procedure_codes.some((code) => {
+        matches = escala.procedure_codes.some((code: string) => {
           return reasonText.includes(code.toLowerCase());
         });
       }
     } else if (escala.service_type === "Exame") {
       if (sType === "Exame" && escala.exam_tuss_codes && escala.exam_tuss_codes.length > 0) {
         const reasonText = String(a.reason || "").toLowerCase();
-        matches = escala.exam_tuss_codes.some((code) => {
+        matches = escala.exam_tuss_codes.some((code: string) => {
           return reasonText.includes(code.toLowerCase());
         });
       }
@@ -1129,11 +1139,6 @@ function gerarHorarios(start: string, end: string, stepMin: number): string[] {
   return out;
 }
 
-/** Grade padrão (fallback): 08:00–18:00 a cada 30 min. */
-function gradePadrao(): string[] {
-  return gerarHorarios("08:00", "18:00", 30);
-}
-
 /** "HH:mm" → minutos desde meia-noite. */
 function horaToMin(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -1171,7 +1176,7 @@ type Intervalo = [number, number];
  * usando a DURAÇÃO real (`ends_at`). Sem `ends_at`, assume `slotMinutes`.
  */
 function ocupacaoIntervalos(
-  ags: Array<{ starts_at: unknown; ends_at?: unknown; status?: unknown }>,
+  ags: Array<{ starts_at?: unknown; ends_at?: unknown; status?: unknown }>,
   slotMinutes: number,
 ): Intervalo[] {
   const out: Intervalo[] = [];

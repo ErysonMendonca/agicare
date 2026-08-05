@@ -56,6 +56,7 @@ export default async function FaturamentoPage() {
         valorTotalLabel={formatBRL(valorTotal)}
         clinica={{
           nome: settings.clinicName,
+          logo: settings.branding.logoUrl,
           cnpj: settings.cnpj,
           endereco: settings.address,
           telefone: settings.phone,
@@ -64,3 +65,4 @@ export default async function FaturamentoPage() {
     </>
   );
 }
+

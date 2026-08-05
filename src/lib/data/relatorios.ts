@@ -346,23 +346,6 @@ const UTILIZACAO_COLUNAS = {
 export type UtilizacaoItem = { valor: string; count: number };
 export type UtilizacaoAtendimentoBI = Record<string, UtilizacaoItem[]>;
 
-const UTILIZACAO_DEMO: UtilizacaoAtendimentoBI = {
-  origem: [
-    { valor: "1 - RECEPÇÃO", count: 142 },
-    { valor: "2 - PRONTO ATENDIMENTO", count: 87 },
-    { valor: "3 - INTERNAÇÃO", count: 18 },
-  ],
-  convenio: [
-    { valor: "SUS", count: 121 },
-    { valor: "Unimed", count: 64 },
-    { valor: "Particular", count: 41 },
-  ],
-  carater: [
-    { valor: "eletivo", count: 168 },
-    { valor: "urgencia", count: 79 },
-  ],
-};
-
 /**
  * Agrega o uso de cada opção por categoria. Retorna, por categoria, a lista
  * de `{ valor, count }` ordenada do mais usado ao menos usado.

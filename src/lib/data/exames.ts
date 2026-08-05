@@ -36,51 +36,6 @@ function fmtDataHora(iso: string | null): string {
   })}`;
 }
 
-const DEMO_EXAMES: ExamOrder[] = [
-  {
-    id: "demo-exam-1",
-    exame: "Hemograma completo",
-    tuss: "40304361",
-    categoria: "laboratorial",
-    status: "solicitado",
-    observacoes: "Coleta em jejum de 8h.",
-    lateralidade: null,
-    quando: "12/06/2026 09:15",
-    profissional: "Dra. Ana Beatriz Costa",
-    atendimentoCodigo: "0001",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "demo-exam-2",
-    exame: "Raio-X de tórax",
-    tuss: "40901114",
-    categoria: "imagem",
-    status: "concluido",
-    observacoes: null,
-    lateralidade: "Bilateral",
-    quando: "10/06/2026 14:40",
-    profissional: "Dr. Carlos Eduardo",
-    atendimentoCodigo: "0002",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "demo-exam-3",
-    exame: "TSH - Hormônio tireoestimulante",
-    tuss: "40316105",
-    categoria: "laboratorial",
-    status: "solicitado",
-    observacoes: "Avaliar função tireoidiana.",
-    lateralidade: null,
-    quando: "10/06/2026 14:38",
-    profissional: "Dr. Carlos Eduardo",
-    atendimentoCodigo: "0002",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
-
 /**
  * Lista os pedidos de exame do paciente (mais recentes primeiro).
  * Resiliente: erro/sem permissão → lista vazia (não derruba a seção).
@@ -91,7 +46,15 @@ export async function listExamOrders(patientId: string): Promise<ExamOrder[]> {
   const { data, error } = await supabase
     .from("exam_orders")
     .select(
-      "id, exam_name, tuss_code, category, status, notes, laterality, created_at, cancelled_at, cancel_reason, profiles:created_by(full_name), queue_entries(attendance_code)",
+      // "profiles!created_by(...)" — hint via "!" (sintaxe suportada pelo
+      // query-builder MySQL). O select original usava "profiles:created_by(...)"
+      // (sintaxe de alias do PostgREST/Supabase), que o resolvedor de embeds
+      // daqui não reconhece — a coluna via "!" some literalmente do nome da
+      // tabela buscada no grafo de FKs, o embed nunca casa, a query falha com
+      // "não tem relação com exam_orders no schema" e, como o erro só faz
+      // `listExamOrders` cair no `if (error || !data) return []`, TODO pedido
+      // de exame ficava invisível nesta aba (embora gravado no banco).
+      "id, exam_name, tuss_code, category, status, notes, laterality, created_at, cancelled_at, cancel_reason, profiles!created_by(full_name), queue_entries(attendance_code)",
     )
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });

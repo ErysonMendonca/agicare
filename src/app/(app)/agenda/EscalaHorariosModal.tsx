@@ -171,7 +171,7 @@ export function EscalaHorariosModal({
         return s <= dataFim && dataInicio <= en;
       }) ?? null
     );
-  }, [escalas, especialidade, dataInicio, dataFim, escalaParaEditar]);
+  }, [escalas, especialidade, dataInicio, dataFim, escalaParaEditar, tipo]);
   // Diálogo de bloqueio do horário no dia selecionado: alvo + motivo.
   const [bloqueioAlvo, setBloqueioAlvo] = useState<string | null>(null);
   const [motivoBloqueio, setMotivoBloqueio] = useState("");

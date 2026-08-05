@@ -50,6 +50,7 @@ export default async function AtenderSolicitacaoPage({
         produtos={produtos.filter((p) => p.ativo)}
         clinica={{
           nome: settings.clinicName,
+          logo: settings.branding.logoUrl,
           cnpj: settings.cnpj,
           endereco: settings.address,
           telefone: settings.phone,

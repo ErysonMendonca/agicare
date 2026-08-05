@@ -1,7 +1,7 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ClienteServico } from './service'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getCurrentUser } from '@/lib/auth'
-import { getActiveClinicId, DEMO_CLINIC_ID } from '@/lib/tenant'
+import { getActiveClinicId } from '@/lib/tenant'
 
 /**
  * withTenantService — uso de SERVICE-ROLE com isolamento MANUAL de tenant.
@@ -33,7 +33,7 @@ export class TenantAuthError extends Error {
 
 export type TenantServiceCtx = {
   /** Client service-role (ignora RLS). */
-  svc: SupabaseClient
+  svc: ClienteServico
   /** Clínica ativa do admin logado — carimbe/filtre por ela SEMPRE. */
   clinicId: string
   /** Usuário logado (admin validado na clínica ativa). */

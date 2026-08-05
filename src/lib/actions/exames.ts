@@ -70,6 +70,73 @@ export async function criarPedidoExame(
   return { ok: true };
 }
 
+const itemLoteSchema = z.object({
+  tuss_code: z.string().trim().min(1, "Exame inválido."),
+  exam_name: z.string().trim().min(1, "Exame inválido."),
+  notes: z.string().trim().optional(),
+  laterality: z.string().trim().optional(),
+});
+
+const criarLoteSchema = z.object({
+  patientId: z.string().min(1, "Paciente inválido."),
+  category: z.enum(["laboratorial", "imagem"]),
+  itens: z.array(itemLoteSchema).min(1, "Selecione ao menos um exame."),
+});
+
+export type CriarLotePedidosExamesInput = z.infer<typeof criarLoteSchema>;
+
+/**
+ * Cria vários pedidos de exame de uma só vez, todos da MESMA categoria —
+ * usado pelo fluxo "Solicitação de Exames" (categoria → seleção múltipla →
+ * Lateralidade/Obs por exame). Lateralidade só é gravada para "imagem"
+ * (Laboratoriais não têm esse campo, conforme especificado pelo cliente).
+ */
+export async function criarPedidosExames(
+  input: CriarLotePedidosExamesInput,
+): Promise<ActionState> {
+  const parsed = criarLoteSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+
+  const guard = await requireClinico();
+  if ("error" in guard) return { error: guard.error };
+
+  const clinicId = await requireClinic();
+  const supabase = await createClient();
+  const professionalId = await getMyProfessionalId(guard.userId);
+  const d = parsed.data;
+
+  // Vincula todos os pedidos ao atendimento corrente do paciente (histórico por atendimento).
+  const ativo = await getAtendimentoAtivo(d.patientId);
+
+  for (const item of d.itens) {
+    const { error } = await supabase.from("exam_orders").insert({
+      clinic_id: clinicId,
+      patient_id: d.patientId,
+      professional_id: professionalId,
+      created_by: guard.userId,
+      queue_entry_id: ativo?.queueEntryId ?? null,
+      tuss_code: item.tuss_code || null,
+      exam_name: item.exam_name,
+      category: d.category,
+      status: "solicitado",
+      notes: item.notes || null,
+      laterality:
+        d.category === "imagem" &&
+        item.laterality &&
+        item.laterality !== "Não se aplica"
+          ? item.laterality
+          : null,
+    });
+    if (error) return { error: error.message };
+  }
+
+  await logAccess({ patientId: d.patientId, module: "exames", action: "create" });
+
+  revalidatePath(`/prontuario/${d.patientId}/exames`);
+  revalidatePath(`/prontuario/${d.patientId}`);
+  return { ok: true };
+}
+
 /** Alterna o status de um pedido de exame (solicitado ↔ concluido). */
 export async function atualizarStatusExame(
   id: string,

@@ -4,6 +4,15 @@
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
+// ── OBSOLETO ─────────────────────────────────────────────────────
+// Comparava o schema do Postgres do Supabase com supabase/migrations/,
+// abandonado nesta migração para MySQL.
+console.error(
+  "✗ scripts/schema-check.mjs introspecciona o Postgres do Supabase, que " +
+  "não é mais usado. O schema MySQL vive em mysql/agicare_mysql.sql.",
+);
+process.exit(1);
+
 // carrega .env.local manualmente
 const env = {};
 for (const line of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split(/\r?\n/)) {

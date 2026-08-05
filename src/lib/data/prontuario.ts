@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { type FilaItem } from "@/lib/data/queue";
+import { dataBR, idadeAnos } from "@/lib/format/data-br";
 
 export type Identificacao = {
   nome: string;
@@ -187,19 +188,16 @@ export async function listAtendimentosPorData(
 }
 
 /** Idade em anos a partir da data de nascimento (ISO). */
+// Idade via idadeAnos: além do desvio de fuso da data pura, a conta
+// antiga dividia por 365,25 dias, o que errava a idade de quem faz
+// aniversário perto de hoje.
 function calcIdade(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const diff = Date.now() - d.getTime();
-  const anos = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
-  return `${anos} anos`;
+  const anos = idadeAnos(iso);
+  return anos === null ? "—" : `${anos} anos`;
 }
 
 function fmtData(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+  return dataBR(iso) ?? "—";
 }
 
 function fmtDataHora(iso: string | null): string {
@@ -216,93 +214,6 @@ const GENERO: Record<string, string> = {
   masculino: "Masculino",
   feminino: "Feminino",
   outro: "Outro",
-};
-
-const DEMO_RESUMO: Resumo = {
-  identificacao: {
-    nome: "Maria Silva Santos",
-    registro: "REG-000123",
-    atendimentoCodigo: "100001",
-    idade: "40 anos",
-    nascimento: "12/03/1985",
-    cpf: "123.456.789-09",
-    genero: "Feminino",
-    nomeMae: "Joana Silva Santos",
-    convenio: "Unimed",
-    plano: "Nacional Flex",
-    dataAdmissao: "10/06/2026",
-    manualRecord:
-      "Prontuário manual anexado no cadastro (digitalização das fichas físicas anteriores).",
-    manualRecordPath: null,
-    manualRecordName: null,
-  },
-  vitais: {
-    recordedAt: "12/06/2026 08:10",
-    pa: "120/80 mmHg",
-    fc: "72 bpm",
-    fr: "16 irpm",
-    temp: "36.5 °C",
-    peso: "75 kg",
-    altura: "1.75 m",
-    spo2: "98 %",
-    glucose: "92 mg/dL",
-  },
-  triagem: {
-    recordedAt: "12/06/2026 07:55",
-    pa: "130/85 mmHg",
-    fc: "78 bpm",
-    fr: "18 irpm",
-    temp: "37.1 °C",
-    peso: "75 kg",
-    altura: "1.75 m",
-    spo2: "97 %",
-    glucose: "98 mg/dL",
-    riskLevel: "amarelo",
-    notes: "Dor torácica leve à entrada; classificada como urgente.",
-    data: [],
-  },
-  evolucoes: [
-    {
-      id: "1",
-      data: "12/06/2026 08:30",
-      profissional: "Dra. Ana Beatriz Costa",
-      conteudo: "Consulta inicial. Paciente refere dor torácica leve...",
-    },
-    {
-      id: "2",
-      data: "01/05/2026 14:00",
-      profissional: "Dra. Ana Beatriz Costa",
-      conteudo: "Retorno. Exames dentro da normalidade.",
-    },
-  ],
-  prescricoesAtivas: [
-    {
-      id: "m1",
-      medicamento: "Dipirona 500mg",
-      dosagem: "1 ampola · Endovenosa (EV) · 6/6h",
-      duracao: "3 dias",
-    },
-    {
-      id: "m2",
-      medicamento: "Omeprazol 40mg",
-      dosagem: "1 cp · Oral · 1x ao dia",
-      duracao: "14 dias",
-    },
-  ],
-  examesSolicitados: [
-    {
-      id: "e1",
-      nome: "Hemograma completo",
-      categoria: "laboratorial",
-      status: "solicitado",
-    },
-    {
-      id: "e2",
-      nome: "Eletrocardiograma",
-      categoria: "imagem",
-      status: "concluido",
-    },
-  ],
 };
 
 /** Resumo 360º do paciente para o prontuário. Resiliente à migration 0004. */

@@ -1,7 +1,6 @@
 "use server";
 
 import { z } from "zod";
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireClinic } from "@/lib/tenant";
 import { logAction } from "@/lib/system-log";
@@ -49,10 +48,6 @@ async function validarProduto(
     .eq("clinic_id", clinicId)
     .maybeSingle();
   return data ? null : "Produto não encontrado nesta clínica.";
-}
-
-function revalidateProduto(productId: string) {
-  revalidatePath(`/estoque/produtos/${productId}`);
 }
 
 // ── Helpers genéricos de escrita ────────────────────────────────────
@@ -782,8 +777,9 @@ export async function setProdutoSelecoes(
       entityId: productId,
     });
     return { ok: true };
-  } catch (err: any) {
+  } catch (err) {
     console.error("Unhandled exception in setProdutoSelecoes:", err);
-    return { error: `Erro inesperado no servidor: ${err.message || String(err)}` };
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: `Erro inesperado no servidor: ${message}` };
   }
 }

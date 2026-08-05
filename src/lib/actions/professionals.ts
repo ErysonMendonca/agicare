@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ClienteServico } from "@/lib/supabase/service";
 import {
   withTenantService,
   TenantAuthError,
@@ -13,7 +13,7 @@ export type ActionState = {
   error?: string; 
   ok?: boolean; 
   fieldErrors?: Record<string, string[]>;
-  data?: any;
+  data?: Record<string, unknown>;
 } | undefined;
 
 /** Texto opcional ("" é aceito e tratado como ausente na persistência). Limite
@@ -202,7 +202,7 @@ const normalizado = (v?: string | null) => (v ?? "").trim().toLowerCase();
  * `excluirId` é o próprio profissional, ao editar — senão ele colidiria consigo.
  */
 async function checarDuplicidade(
-  svc: SupabaseClient,
+  svc: ClienteServico,
   clinicId: string,
   d: { document?: string; council_name?: string; council_uf?: string; council_number?: string; email?: string },
   excluirId?: string,
@@ -287,7 +287,7 @@ function credencialPreenchida(c: CredencialConvenio): boolean {
  * Usa o cliente service-role (svc) — a tabela é RLS admin-only. Escopa clinic_id.
  */
 async function replaceCredentials(
-  svc: SupabaseClient,
+  svc: ClienteServico,
   clinicId: string,
   professionalId: string,
   creds: CredencialConvenio[],

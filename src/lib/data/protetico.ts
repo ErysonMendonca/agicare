@@ -15,12 +15,10 @@ export type {
 } from "@/lib/clinico/protetico-shared";
 
 import type { PedidoProtetico } from "@/lib/clinico/protetico-shared";
+import { dataBR } from "@/lib/format/data-br";
 
 function fmtData(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("pt-BR");
+  return dataBR(iso);
 }
 
 function fmtDataHora(iso: string | null): string {
@@ -32,71 +30,6 @@ function fmtDataHora(iso: string | null): string {
     minute: "2-digit",
   })}`;
 }
-
-const DEMO_PEDIDOS: PedidoProtetico[] = [
-  {
-    id: "demo-prot-1",
-    teeth: "11, 21",
-    workType: "Faceta",
-    urgent: false,
-    dueDate: "25/06/2026",
-    material: "Dissilicato de lítio (e.max)",
-    color: "A2",
-    finishLine: "Chanfro supragengival",
-    occlusion: "Guia incisal preservada; sem contatos em protrusão",
-    clinicalNotes:
-      "Preservar mamelões incisais. Mock-up aprovado pelo paciente.",
-    status: "aberto",
-    profissional: "Dra. Ana Beatriz Costa",
-    criadoEm: "15/06/2026 09:10",
-    atendimentoCodigo: "0001",
-    arquivos: [
-      {
-        id: "demo-file-1",
-        fileName: "scan-arcada-superior.stl",
-        storagePath: "demo/scan-arcada-superior.stl",
-        kind: "scan",
-        sizeBytes: 4_812_344,
-      },
-      {
-        id: "demo-file-2",
-        fileName: "foto-sorriso.jpg",
-        storagePath: "demo/foto-sorriso.jpg",
-        kind: "foto",
-        sizeBytes: 1_204_553,
-      },
-    ],
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "demo-prot-2",
-    teeth: "36",
-    workType: "Coroa",
-    urgent: true,
-    dueDate: "20/06/2026",
-    material: "Zircônia monolítica",
-    color: "A3",
-    finishLine: "Ombro arredondado",
-    occlusion: "Pré-molarizar oclusão; contato proximal mesial leve",
-    clinicalNotes: "",
-    status: "aberto",
-    profissional: "Dr. João Silva",
-    criadoEm: "14/06/2026 16:42",
-    atendimentoCodigo: "0002",
-    arquivos: [
-      {
-        id: "demo-file-3",
-        fileName: "radiografia-periapical.png",
-        storagePath: "demo/radiografia-periapical.png",
-        kind: "radiografia",
-        sizeBytes: 856_201,
-      },
-    ],
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
 
 /**
  * Lista os pedidos protéticos do paciente com seus anexos (join prosthetic_files).

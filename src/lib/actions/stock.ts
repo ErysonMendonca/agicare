@@ -244,9 +244,10 @@ export async function createStockProduct(
       entityId: created?.id as string | undefined,
     });
     return { ok: true, id: created?.id as string | undefined };
-  } catch (err: any) {
+  } catch (err) {
     console.error("Unhandled exception in createStockProduct:", err);
-    return { error: `Erro inesperado no servidor: ${err.message || String(err)}` };
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: `Erro inesperado no servidor: ${message}` };
   }
 }
 
@@ -375,9 +376,10 @@ export async function updateStockProduct(
       entityId: d.id,
     });
     return { ok: true };
-  } catch (err: any) {
+  } catch (err) {
     console.error("Unhandled exception in updateStockProduct:", err);
-    return { error: `Erro inesperado no servidor: ${err.message || String(err)}` };
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: `Erro inesperado no servidor: ${message}` };
   }
 }
 

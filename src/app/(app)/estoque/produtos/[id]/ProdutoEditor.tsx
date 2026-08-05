@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useRef, useTransition, useEffect, Component, ReactNode } from "react";
+import { useState, useRef, useTransition, Component, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { toast } from "sonner";
-import { Save, AlertTriangle, Trash2, ShieldAlert } from "lucide-react";
+import { Save, Trash2, ShieldAlert } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import {
   createStockProduct,
   updateStockProduct,
   deleteStockProduct,
-  type ActionState,
 } from "@/lib/actions/stock";
 import {
   setProdutoSelecoes,
@@ -59,7 +58,6 @@ class LocalErrorBoundary extends Component<
 
 export function ProdutoEditor({
   novo,
-  empresa,
   produto,
   childrenData,
   options,
@@ -89,28 +87,28 @@ export function ProdutoEditor({
 
   // Multi-seleções
   const [selUnidades, setSelUnidades] = useState<string[]>(
-    () => (childrenData?.units ?? []).map((u: any) => u.unitLabel)
+    () => (childrenData?.units ?? []).map((u) => u.unitLabel)
   );
   const [selVias, setSelVias] = useState<string[]>(
-    () => (childrenData?.routes ?? []).map((r: any) => r.routeLabel)
+    () => (childrenData?.routes ?? []).map((r) => r.routeLabel)
   );
   const [selPrincipios, setSelPrincipios] = useState<string[]>(
-    () => (childrenData?.ingredients ?? []).map((i: any) => i.ingredientLabel)
+    () => (childrenData?.ingredients ?? []).map((i) => i.ingredientLabel)
   );
   const [selMarcas, setSelMarcas] = useState<string[]>(
-    () => (childrenData?.brands ?? []).map((b: any) => b.brandLabel)
+    () => (childrenData?.brands ?? []).map((b) => b.brandLabel)
   );
   const [selLocais, setSelLocais] = useState<string[]>(
-    () => (childrenData?.locations ?? []).map((l: any) => l.locationLabel)
+    () => (childrenData?.locations ?? []).map((l) => l.locationLabel)
   );
 
   const xyzInicial =
-    (childrenData?.xyz ?? []).find((x: any) => x.active)?.xyzClass ??
+    (childrenData?.xyz ?? []).find((x) => x.active)?.xyzClass ??
     (childrenData?.xyz ?? [])[0]?.xyzClass ??
     "";
   const [selXyz, setSelXyz] = useState<ProductXyzClass | "">(xyzInicial);
 
-  const [savingSel, startSaveSel] = useTransition();
+  const [savingSel, _startSaveSel] = useTransition();
 
   async function persistSelecoes(id: string): Promise<boolean> {
     const res = await setProdutoSelecoes(id, {
@@ -176,10 +174,11 @@ export function ProdutoEditor({
       } else {
         router.refresh();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      toast.error(err.message || "Ocorreu um erro ao salvar o produto.");
-      setState({ error: err.message || "Ocorreu um erro inesperado." });
+      const message = err instanceof Error ? err.message : undefined;
+      toast.error(message || "Ocorreu um erro ao salvar o produto.");
+      setState({ error: message || "Ocorreu um erro inesperado." });
     } finally {
       setPending(false);
     }

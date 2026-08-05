@@ -6,7 +6,7 @@ import { z } from 'zod'
  * Mora num módulo isolado de propósito: tanto a borda de SERVIDOR (action de
  * troca de senha) quanto o CLIENT (formulário com react-hook-form) precisam do
  * MESMO schema. Se isto vivesse em `integrations/session.ts` (que importa
- * `next/server` e `@supabase/ssr`), importá-lo no client arrastaria código
+ * `next/server`), importá-lo no client arrastaria código
  * server-only para o bundle do browser. Aqui não há esse risco.
  *
  * `integrations/session.ts` re-exporta tudo daqui (compat com importadores

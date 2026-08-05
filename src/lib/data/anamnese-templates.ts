@@ -11,7 +11,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { ESPECIALIDADES_ANAMNESE } from "@/lib/clinico/anamnese-config";
+import { listEspecialidades } from "@/lib/data/especialidades";
 import {
   type AnamneseField,
   type AnamneseTemplate,
@@ -75,8 +75,8 @@ export async function getAnamneseTemplate(
  * garantindo que o builder sempre tenha um ponto de partida editável.
  */
 export async function listAnamneseTemplates(): Promise<AnamneseTemplate[]> {
-  const especialidades = ESPECIALIDADES_ANAMNESE.map((e) => e.value);
-
+  const especialidadesRaw = await listEspecialidades();
+  const especialidades = especialidadesRaw.filter(e => e.active).map(e => e.label);
 
   const supabase = await createClient();
   const { data, error } = await supabase

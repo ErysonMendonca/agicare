@@ -47,12 +47,6 @@ export type AtendimentoAtivo = {
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const MOCK_CATALOGO: ProcedimentoCatalogo[] = [
-  { id: "p1", nome: "Consulta Cardiológica", preco: 350, instrumentos: [], materiais: [] },
-  { id: "p2", nome: "Eletrocardiograma", preco: 120, instrumentos: [], materiais: [] },
-  { id: "p3", nome: "Teste Ergométrico", preco: 280, instrumentos: [], materiais: [] },
-];
-
 /**
  * Catálogo de procedimentos ativos (id + nome + preço), já com os
  * instrumentais (0121: esterilização/validade/lote) e materiais vinculados a

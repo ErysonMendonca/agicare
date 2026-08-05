@@ -209,18 +209,6 @@ export type OrigemPacientesBI = {
   fatias: OrigemFatia[];
 };
 
-const DEMO_ORIGEM: OrigemPacientesBI = {
-  hasData: true,
-  total: 240,
-  fatias: [
-    { origem: "Indicação", total: 86, pct: 36 },
-    { origem: "Instagram", total: 58, pct: 24 },
-    { origem: "Google", total: 41, pct: 17 },
-    { origem: "Convênio", total: 31, pct: 13 },
-    { origem: "Passante", total: 24, pct: 10 },
-  ],
-};
-
 export async function getOrigemPacientesBI(
   filtros: RelatoriosFiltros = {},
 ): Promise<OrigemPacientesBI> {
@@ -375,31 +363,6 @@ export type EpidemiologicoBI = {
   altoRisco: AltoRiscoPaciente[];
   alertasAlergia: AlertaAlergia[];
   patologias: PatologiaStat[];
-};
-
-const DEMO_EPIDEMIO: EpidemiologicoBI = {
-  altoRisco: [
-    {
-      paciente: "Maria Silva Santos",
-      condicoes: ["Diabetes", "Pré-diabético (risco podológico)"],
-      especialidade: "Podológico",
-    },
-    {
-      paciente: "João Pedro Oliveira",
-      condicoes: ["Hipertensão"],
-      especialidade: "Clínica Geral",
-    },
-  ],
-  alertasAlergia: [
-    { paciente: "Ana Beatriz Costa", alergia: "Penicilina", especialidade: "Clínica Geral" },
-    { paciente: "Carlos Eduardo Lima", alergia: "Dipirona", especialidade: "Odontológico" },
-  ],
-  patologias: [
-    { patologia: "Hipertensão", total: 14 },
-    { patologia: "Diabetes", total: 9 },
-    { patologia: "Dislipidemia", total: 6 },
-    { patologia: "Asma", total: 4 },
-  ],
 };
 
 /** Palavras que marcam paciente crônico / alto risco em campos da anamnese. */
@@ -571,29 +534,6 @@ export type FinanceiroBI = {
   convenios: ConvenioDesempenho[];
   conversao: ConversaoOrcamento;
   ticketPorEspecialidade: TicketEspecialidade[];
-};
-
-const DEMO_FINANCEIRO: FinanceiroBI = {
-  convenios: [
-    { convenio: "Unimed", guias: 42, glosadas: 3, glosaPct: 7, valorTotal: 86400, valorGlosado: 4200, tempoMedioRecebimentoDias: 28 },
-    { convenio: "Bradesco Saúde", guias: 31, glosadas: 2, glosaPct: 6, valorTotal: 62100, valorGlosado: 2900, tempoMedioRecebimentoDias: 35 },
-    { convenio: "SulAmérica", guias: 18, glosadas: 4, glosaPct: 22, valorTotal: 33800, valorGlosado: 7100, tempoMedioRecebimentoDias: 41 },
-  ],
-  conversao: {
-    total: 64,
-    proposto: 18,
-    aprovado: 34,
-    recusado: 12,
-    valorTotal: 412000,
-    valorAprovado: 248000,
-    taxaConversaoPct: 53,
-  },
-  ticketPorEspecialidade: [
-    { especialidade: "Clínica Geral", eventos: 86, valorTotal: 36120, ticketMedio: 420 },
-    { especialidade: "Cardiologia", eventos: 42, valorTotal: 25200, ticketMedio: 600 },
-    { especialidade: "Odontológico", eventos: 31, valorTotal: 17050, ticketMedio: 550 },
-    { especialidade: "Podológico", eventos: 24, valorTotal: 8400, ticketMedio: 350 },
-  ],
 };
 
 /**

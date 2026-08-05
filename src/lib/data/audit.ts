@@ -55,57 +55,6 @@ const ACAO_LABEL: Record<string, string> = {
   export: "Exportação",
 };
 
-const DEMO_ACCESS: AccessLogRow[] = [
-  {
-    id: "demo-1",
-    quando: "12/06/2026 08:31",
-    usuario: "Dra. Ana Beatriz Costa",
-    papel: "Médico",
-    paciente: "Maria Silva Santos",
-    modulo: "prontuario",
-    acao: "Visualização",
-  },
-  {
-    id: "demo-2",
-    quando: "12/06/2026 08:05",
-    usuario: "Carlos Mendes",
-    papel: "Recepção",
-    paciente: "João Pereira Lima",
-    modulo: "prontuario",
-    acao: "Visualização",
-  },
-  {
-    id: "demo-3",
-    quando: "11/06/2026 17:48",
-    usuario: "Dr. João Silva",
-    papel: "Médico",
-    paciente: "Maria Silva Santos",
-    modulo: "prescricao",
-    acao: "Criação",
-  },
-];
-
-const DEMO_CONSENT: ConsentLogRow[] = [
-  {
-    id: "demo-c1",
-    paciente: "Maria Silva Santos",
-    contexto: "anamnese",
-    aceito: "Sim",
-    assinatura: "Assinado digitalmente",
-    registradoPor: "Dra. Ana Beatriz Costa",
-    quando: "12/06/2026 08:30",
-  },
-  {
-    id: "demo-c2",
-    paciente: "João Pereira Lima",
-    contexto: "compartilhamento_dados",
-    aceito: "Sim",
-    assinatura: "Assinado digitalmente",
-    registradoPor: "Carlos Mendes",
-    quando: "10/06/2026 14:12",
-  },
-];
-
 /**
  * Log de acessos a prontuários (mais recentes primeiro).
  * Admin-only; vazio para quem não é gestor. Resiliente a erro de query.

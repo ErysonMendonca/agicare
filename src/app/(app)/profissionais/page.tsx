@@ -2,8 +2,6 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { listProfessionals, isClinico } from "@/lib/data/professionals";
 import { listAttendanceOptions } from "@/lib/data/attendance-options";
 import { requireView } from "@/lib/permissions";
-import Link from "next/link";
-import { Plus } from "lucide-react";
 import { ProfissionaisLista } from "./ProfissionaisLista";
 
 export default async function ProfissionaisPage() {

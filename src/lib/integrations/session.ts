@@ -1,6 +1,6 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { isSupabaseConfigured } from '@/lib/supabase/config'
+import { consultar } from '@/lib/db/mysql'
+import { COOKIE_SESSAO } from '@/lib/db/session'
 
 /**
  * Política de SESSÃO e de SENHA — helpers de segurança (escopo: hardening).
@@ -8,9 +8,9 @@ import { isSupabaseConfigured } from '@/lib/supabase/config'
  * 1) TIMEOUT DE SESSÃO POR INATIVIDADE:
  *    rastreado por um cookie de "última atividade". O proxy (src/proxy.ts)
  *    carimba o cookie a cada request autenticado e, ao exceder o limite,
- *    encerra a sessão (limpa os cookies de auth do Supabase) e redireciona.
- *    Observação: isto é uma camada de APLICAÇÃO. O JWT do Supabase continua
- *    válido até expirar/rotacionar; aqui forçamos o re-login por inatividade.
+ *    encerra a sessão (limpa o cookie de sessão) e redireciona.
+ *    Observação: isto é uma camada de APLICAÇÃO — o cookie assinado continua
+ *    tecnicamente válido até seu `exp`; aqui forçamos o re-login antes disso.
  *
  *    O limite vem de `clinic_settings.security.sessionTimeoutMin` (configurável
  *    pelo gestor na tela 15.1); o proxy lê esse valor e o repassa às funções
@@ -19,7 +19,7 @@ import { isSupabaseConfigured } from '@/lib/supabase/config'
  * 2) POLÍTICA DE SENHA: validador puro (Zod) para usar na action de troca/
  *    definição de senha. Hoje NÃO há action de troca de senha no projeto —
  *    quando existir, importe `buildSenhaSchema`/`validarPoliticaSenha` na borda
- *    (antes de `supabase.auth.updateUser({ password })`), preferencialmente
+ *    (antes de `auth.updateUser({ password })`), preferencialmente
  *    com a política vigente em clinic_settings.security.passwordPolicy.
  */
 
@@ -93,33 +93,23 @@ export function stampActivity(
  * refresh de sessão é responsabilidade exclusiva do `updateSession`.
  */
 export async function fetchSessionTimeoutMinutes(
-  request: NextRequest,
+  _request: NextRequest,
 ): Promise<number | null> {
-  if (!isSupabaseConfigured()) return null
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => request.cookies.getAll(),
-          setAll: () => {},
-        },
-      },
+    const rows = await consultar<{ security: unknown }>(
+      'SELECT security FROM clinic_settings LIMIT 1',
     )
-    const { data } = await supabase
-      .from('clinic_settings')
-      .select('security')
-      .limit(1)
-      .maybeSingle()
-
-    const sec = data?.security
+    let sec = rows[0]?.security
+    if (typeof sec === 'string') {
+      try { sec = JSON.parse(sec) } catch { return null }
+    }
     if (sec && typeof sec === 'object' && !Array.isArray(sec)) {
       const min = Number((sec as Record<string, unknown>).sessionTimeoutMin)
       if (Number.isFinite(min) && min > 0) return min
     }
     return null
   } catch {
+    // Best-effort: banco fora do ar não deve derrubar o middleware.
     return null
   }
 }
@@ -132,7 +122,10 @@ export function clearSessionCookies(
   request: NextRequest,
   response: NextResponse,
 ): NextResponse {
+  // Cookie de sessão próprio (antes eram os sb-*-auth-token do Supabase).
+  response.cookies.set(COOKIE_SESSAO, '', { path: '/', maxAge: 0 })
   for (const c of request.cookies.getAll()) {
+    // Limpa também resíduo de sessão antiga do Supabase, se houver.
     if (/^sb-.*-auth-token(\.\d+)?$/.test(c.name)) {
       response.cookies.set(c.name, '', { path: '/', maxAge: 0 })
     }
@@ -158,7 +151,7 @@ export function buildExpiredRedirect(request: NextRequest): NextResponse {
 /**
  * Os validadores de senha foram extraídos para `@/lib/validation/password`
  * (módulo PURO, sem imports de servidor) para poderem ser reusados também no
- * CLIENT (formulário de troca de senha) sem arrastar `next/server`/`@supabase/ssr`
+ * CLIENT (formulário de troca de senha) sem arrastar `next/server`
  * para o bundle do browser. Re-exportados aqui por compatibilidade.
  */
 export {

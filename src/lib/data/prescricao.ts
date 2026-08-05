@@ -53,39 +53,6 @@ function fmtDataHora(iso: string | null): string {
   })}`;
 }
 
-const DEMO_PRESCRICOES: Prescricao[] = [
-  {
-    id: "demo-presc-1",
-    dataHora: "12/06/2026 08:40",
-    profissional: "Dra. Ana Beatriz Costa",
-    conselho: "CRM-SP 123456",
-    observacoes: "Reavaliar em 48h.",
-    medicamentos: [
-      {
-        id: "m1",
-        nome: "Dipirona 500mg (ampola)",
-        concentracao: "500mg",
-        posologia: "1 ampola",
-        via: "Endovenosa (EV)",
-        duracao: "3 dias",
-        frequencia: "6/6h",
-        observacoes: "Se dor ou febre.",
-      },
-    ],
-    cuidados: [
-      {
-        id: "c1",
-        nome: "Aferição de sinais vitais",
-        frequencia: "6/6h",
-        duracao: "3 dias",
-        observacoes: "",
-      },
-    ],
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
-
 /** Lista prescrições do paciente com seus medicamentos e cuidados. */
 export async function listPrescricoes(patientId: string): Promise<Prescricao[]> {
 
@@ -140,27 +107,6 @@ export async function listPrescricoes(patientId: string): Promise<Prescricao[]> 
     };
   });
 }
-
-const DEMO_CHECAGENS: Checagem[] = [
-  {
-    id: "demo-chk-1",
-    tipo: "medicamento",
-    rotulo: "Dipirona 500mg",
-    frequencia: "6/6h",
-    horario: "12/06/2026 12:00",
-    status: "pendente",
-    checadoEm: null,
-  },
-  {
-    id: "demo-chk-2",
-    tipo: "cuidado",
-    rotulo: "Aferição de sinais vitais",
-    frequencia: "6/6h",
-    horario: "12/06/2026 12:00",
-    status: "checado",
-    checadoEm: "12/06/2026 12:05",
-  },
-];
 
 /** Lista a fila de checagem (aprazamentos) do paciente, por horário. */
 export async function listChecagens(patientId: string): Promise<Checagem[]> {

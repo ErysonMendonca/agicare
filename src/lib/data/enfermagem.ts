@@ -57,37 +57,6 @@ export type SinalVital = {
   extras: SinalExtra[];
 };
 
-const MOCK_VITAIS: SinalVital[] = [
-  {
-    id: "v1",
-    paciente: "Maria Silva Santos",
-    registradoEm: "12/06/2026 08:10",
-    pa: "120/80 mmHg",
-    fc: "72 bpm",
-    fr: "16 irpm",
-    temp: "36.5 °C",
-    spo2: "98 %",
-    hgt: "92 mg/dL",
-    profissional: "Enf. Mariana Souza Lima",
-    observacoes: "Paciente estável, sem queixas.",
-    extras: [{ label: "Perímetro cefálico", value: "34 cm" }],
-  },
-  {
-    id: "v2",
-    paciente: "João Pedro Oliveira",
-    registradoEm: "12/06/2026 07:40",
-    pa: "150/95 mmHg",
-    fc: "98 bpm",
-    fr: "20 irpm",
-    temp: "38.2 °C",
-    spo2: "94 %",
-    hgt: "168 mg/dL",
-    profissional: "Enf. Mariana Souza Lima",
-    observacoes: "Hipertenso, febril. Comunicado médico assistente.",
-    extras: [],
-  },
-];
-
 export async function listSinaisVitais(
   patientId: string,
 ): Promise<SinalVital[]> {
@@ -142,33 +111,6 @@ export type AnotacaoEnfermagem = {
   cancelledAt: string | null;
   cancelReason: string | null;
 };
-
-const MOCK_ANOTACOES: AnotacaoEnfermagem[] = [
-  {
-    id: "a1",
-    codigo: "ANO-002",
-    paciente: "Maria Silva Santos",
-    profissional: "Enf. Mariana Souza Lima",
-    data: "12/06/2026 09:15",
-    conteudo:
-      "Paciente deambulando sem auxílio, aceitou dieta via oral integralmente. Acesso venoso periférico em MSE pérvio, sem sinais flogísticos.",
-    atendimentoCodigo: "0001",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "a2",
-    codigo: "ANO-001",
-    paciente: "João Pedro Oliveira",
-    profissional: "Enf. Mariana Souza Lima",
-    data: "12/06/2026 07:50",
-    conteudo:
-      "Paciente febril (38,2°C), administrado antitérmico conforme prescrição. Mantida hidratação venosa. Reavaliar em 1h.",
-    atendimentoCodigo: "0002",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
 
 export async function listAnotacoes(
   patientId: string,
@@ -238,51 +180,6 @@ const CUIDADO_STATUS: Record<CuidadoStatus, { label: string; tone: Status }> = {
   aprazado: { label: "Aprazado", tone: "warn" },
 };
 
-const MOCK_CUIDADOS: Cuidado[] = [
-  {
-    id: "c1",
-    paciente: "Maria Silva Santos",
-    descricao: "Mudança de decúbito",
-    horario: "08:00",
-    horarioIso: "2026-06-12T08:00",
-    status: CUIDADO_STATUS.administrado,
-    statusRaw: "administrado",
-    justificativa: "—",
-    profissional: "Enf. Mariana Souza Lima",
-    atendimentoCodigo: "0001",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "c2",
-    paciente: "Maria Silva Santos",
-    descricao: "Mudança de decúbito",
-    horario: "10:00",
-    horarioIso: "2026-06-12T10:00",
-    status: CUIDADO_STATUS.pendente,
-    statusRaw: "pendente",
-    justificativa: "—",
-    profissional: "—",
-    atendimentoCodigo: "0001",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "c3",
-    paciente: "João Pedro Oliveira",
-    descricao: "Verificar curativo de MID",
-    horario: "09:00",
-    horarioIso: "2026-06-12T09:00",
-    status: CUIDADO_STATUS.aprazado,
-    statusRaw: "aprazado",
-    justificativa: "Paciente em exame de imagem no horário.",
-    profissional: "Enf. Mariana Souza Lima",
-    atendimentoCodigo: "0002",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
-
 export async function listCuidados(patientId: string): Promise<Cuidado[]> {
 
   const supabase = await createClient();
@@ -338,22 +235,6 @@ export type BalancoHidrico = {
   totalGanhos: number;
   totalPerdas: number;
   saldo: number;
-};
-
-const MOCK_BALANCO: BalancoHidrico = {
-  id: "b1",
-  paciente: "Maria Silva Santos",
-  inicioCiclo: "12/06/2026 07:00",
-  fechado: false,
-  lancamentos: [
-    { id: "l1", tipo: "ganho", descricao: "Soro fisiológico 0,9%", volume: 500, hora: "08:00", horaIso: "2026-06-12T08:00", profissional: "Enf. Mariana Souza Lima" },
-    { id: "l2", tipo: "ganho", descricao: "Dieta enteral", volume: 300, hora: "10:00", horaIso: "2026-06-12T10:00", profissional: "Enf. Mariana Souza Lima" },
-    { id: "l3", tipo: "perda", descricao: "Diurese", volume: 450, hora: "09:00", horaIso: "2026-06-12T09:00", profissional: "Enf. Mariana Souza Lima" },
-    { id: "l4", tipo: "perda", descricao: "Drenagem", volume: 120, hora: "11:00", horaIso: "2026-06-12T11:00", profissional: "Enf. Mariana Souza Lima" },
-  ],
-  totalGanhos: 800,
-  totalPerdas: 570,
-  saldo: 230,
 };
 
 export async function getBalancoHidrico(
@@ -425,25 +306,6 @@ export type EvolucaoEnfermagem = {
   cancelReason: string | null;
 };
 
-const MOCK_EVOLUCOES: EvolucaoEnfermagem[] = [
-  {
-    id: "e1",
-    paciente: "Maria Silva Santos",
-    profissional: "Enf. Mariana Souza Lima",
-    coren: "COREN/SP 456789",
-    data: "12/06/2026 09:30",
-    avaliacao:
-      "Paciente consciente, orientada, eupneica em ar ambiente. Pele íntegra e corada.",
-    reavaliacao:
-      "Mantém-se estável após período de observação. Sinais vitais dentro da normalidade.",
-    conduta:
-      "Mantidos cuidados de enfermagem. Estimulada deambulação precoce e hidratação oral.",
-    atendimentoCodigo: "0001",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
-
 export async function listEvolucoes(
   patientId: string,
 ): Promise<EvolucaoEnfermagem[]> {
@@ -496,27 +358,6 @@ const ESCALA_LABEL: Record<string, string> = {
   braden: "Braden",
 };
 
-const MOCK_ESCALAS: EscalaRegistro[] = [
-  {
-    id: "s1",
-    escala: "Glasgow",
-    paciente: "João Pedro Oliveira",
-    profissional: "Enf. Mariana Souza Lima",
-    data: "12/06/2026 08:00",
-    pontuacao: 15,
-    classificacao: "Sem alteração de consciência",
-  },
-  {
-    id: "s2",
-    escala: "Braden",
-    paciente: "Maria Silva Santos",
-    profissional: "Enf. Mariana Souza Lima",
-    data: "12/06/2026 07:30",
-    pontuacao: 18,
-    classificacao: "Risco baixo",
-  },
-];
-
 export async function listEscalas(
   patientId: string,
 ): Promise<EscalaRegistro[]> {
@@ -563,35 +404,6 @@ export type ProcedimentoEnfermagem = {
   cancelledAt: string | null;
   cancelReason: string | null;
 };
-
-const MOCK_PROCEDIMENTOS: ProcedimentoEnfermagem[] = [
-  {
-    id: "p1",
-    tuss: "40301630",
-    nome: "Curativo grau II com debridamento",
-    paciente: "João Pedro Oliveira",
-    materiais: "Gaze estéril, SF 0,9%, cobertura com hidrofibra",
-    local: "Membro inferior direito",
-    profissional: "Enf. Mariana Souza Lima",
-    data: "12/06/2026 08:45",
-    atendimentoCodigo: "0002",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "p2",
-    tuss: "40301479",
-    nome: "Punção venosa periférica",
-    paciente: "Maria Silva Santos",
-    materiais: "Cateter 20G, equipo, fixador transparente",
-    local: "Membro superior esquerdo",
-    profissional: "Enf. Mariana Souza Lima",
-    data: "12/06/2026 07:20",
-    atendimentoCodigo: "0001",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
 
 export async function listProcedimentosEnfermagem(
   patientId: string,
@@ -644,23 +456,6 @@ export type RegistroSae = {
   cancelledAt: string | null;
   cancelReason: string | null;
 };
-
-const MOCK_SAE: RegistroSae[] = [
-  {
-    id: "sae1",
-    paciente: "Maria Silva Santos",
-    profissional: "Enf. Mariana Souza Lima",
-    coren: "COREN/SP 456789",
-    diagnostico: "Risco de integridade da pele prejudicada",
-    fatorRelacionado: "Mobilidade física prejudicada / restrição ao leito",
-    prescricao: "Realizar mudança de decúbito a cada 2 horas e hidratar a pele.",
-    frequencia: 2,
-    data: "12/06/2026 07:10",
-    atendimentoCodigo: "0001",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
 
 export async function listSae(patientId: string): Promise<RegistroSae[]> {
 

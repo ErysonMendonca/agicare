@@ -247,6 +247,23 @@ export function AnamneseBuilder({ templates }: { templates: AnamneseTemplate[] }
                       onChange={(e) => patch(i, { placeholder: e.target.value })}
                     />
                   )}
+                  {fields.some((sf) => sf.tipo === "sim_nao" && sf.id !== f.id) && (
+                    <Select
+                      id={`dep-${f.id}`}
+                      label="Exibir apenas se responder Sim em:"
+                      value={f.dependeDe ?? ""}
+                      onChange={(e) => patch(i, { dependeDe: e.target.value || undefined })}
+                    >
+                      <option value="">(Sempre exibir)</option>
+                      {fields
+                        .filter((sf) => sf.tipo === "sim_nao" && sf.id !== f.id)
+                        .map((sf) => (
+                          <option key={sf.id} value={sf.id}>
+                            {sf.label || "(Sem rótulo)"}
+                          </option>
+                        ))}
+                    </Select>
+                  )}
                 </div>
                 <button
                   type="button"

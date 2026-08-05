@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export async function GET(request: Request) {
   // Verificação de segurança: apenas o Vercel Cron deve conseguir chamar esta rota.
@@ -12,19 +12,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Cria o cliente Supabase com a Service Role Key para ignorar o RLS,
-  // já que o Cron roda sem contexto de usuário logado.
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return NextResponse.json(
-      { error: "Supabase credentials missing" },
-      { status: 500 },
-    );
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  // Cliente sem escopo de clínica: o cron roda sem usuário logado, então
+  // precisa varrer todas as clínicas (antes isso era "ignorar a RLS" com a
+  // service-role key).
+  const supabase = createServiceClient();
 
   // Define o limite de tempo: agendamentos que já passaram há mais de 2 horas.
   const threshold = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();

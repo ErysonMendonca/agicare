@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireClinic } from "@/lib/tenant";
+import { dataBR, idadeAnos } from "@/lib/format/data-br";
 
 export type Paciente = {
   id: string;
@@ -21,11 +22,6 @@ export type Paciente = {
 };
 
 /** Mock usado no modo demo (espelha o Figma). */
-const MOCK: Paciente[] = [
-  { id: "1", numeroProntuario: "000001", nome: "João Pedro Oliveira", cpf: "111.222.333-44", telefone: "(11) 91234-5678", email: "joao.oliveira@email.com", convenio: "Unimed", tipoSanguineo: "O+", alergia: true, emTratamento: true, cardiaco: true, ativo: true, obito: false },
-  { id: "2", numeroProntuario: "000002", nome: "Maria Clara Santos", cpf: "222.333.444-55", telefone: "(11) 92345-6789", email: "maria.santos@email.com", convenio: "Particular", tipoSanguineo: "A+", alergia: false, emTratamento: false, cardiaco: false, ativo: true, obito: false },
-  { id: "3", numeroProntuario: "000003", nome: "Pedro Henrique Lima", cpf: "333.444.555-66", telefone: "(11) 93456-7890", email: "responsavel@email.com", convenio: "Amil", tipoSanguineo: "B+", alergia: true, emTratamento: true, cardiaco: false, ativo: false, obito: false },
-];
 
 /** Lista pacientes: do banco quando configurado, mock no modo demo. */
 export async function listPatients(): Promise<Paciente[]> {
@@ -112,44 +108,6 @@ export type PacienteEditavel = {
    * detectar edição concorrente. Vazio quando ausente (cadastros pré-0044).
    */
   updated_at: string;
-};
-
-const DEMO_EDITAVEL: PacienteEditavel = {
-  id: "1",
-  full_name: "João Pedro Oliveira",
-  social_name: "",
-  cpf: "111.222.333-44",
-  cns: "700 0000 0000 0000",
-  birth_date: "1985-03-15",
-  gender: "masculino",
-  mother_name: "Ana Oliveira",
-  naturality: "São Paulo",
-  nationality: "Brasileira",
-  race: "Parda",
-  ethnicity: "",
-  marital_status: "Casado(a)",
-  legal_guardian: "",
-  blood_type: "O+",
-  convenio: "Unimed",
-  plan: "Premium",
-  convenio_carteirinha: "",
-  convenio_validade: "",
-  convenio_titular: "",
-  convenio_acomodacao: "",
-  responsavel_cpf: "",
-  responsavel_parentesco: "",
-  responsavel_telefone: "",
-  origin: "",
-  phone: "(11) 91234-5678",
-  email: "joao.oliveira@email.com",
-  cep: "01310-100",
-  address: "Av. Paulista, 1000",
-  district: "Bela Vista",
-  city: "São Paulo",
-  uf: "SP",
-  death_date: "",
-  death_cause: "",
-  updated_at: "",
 };
 
 /**
@@ -317,18 +275,16 @@ const GENERO: Record<string, string> = {
   outro: "Outro",
 };
 
+// Idade via idadeAnos: além do desvio de fuso da data pura, a conta
+// antiga dividia por 365,25 dias, o que errava a idade de quem faz
+// aniversário perto de hoje.
 function calcIdade(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  const anos = Math.floor((Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000));
-  return `${anos} anos`;
+  const anos = idadeAnos(iso);
+  return anos === null ? "—" : `${anos} anos`;
 }
 
 function fmtData(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
+  return dataBR(iso) ?? "—";
 }
 
 function fmtDataHora(iso: string | null): string {
@@ -357,52 +313,6 @@ function profNome(rel: unknown): string {
   const profile = Array.isArray(profiles) ? profiles[0] : profiles;
   return (profile as { full_name?: string } | null)?.full_name ?? "—";
 }
-
-const DEMO_FICHA: FichaPaciente = {
-  id: "1",
-  ativo: true,
-  obito: null,
-  pessoais: {
-    nome: "João Pedro Oliveira",
-    nomeSocial: null,
-    cpf: "111.222.333-44",
-    cns: "700 0000 0000 0000",
-    nascimento: "15/03/1985",
-    idade: "41 anos",
-    genero: "Masculino",
-    nomeMae: "Ana Oliveira",
-    naturalidade: "São Paulo",
-    nacionalidade: "Brasileira",
-    raca: "Parda",
-    etnia: "—",
-    estadoCivil: "Casado(a)",
-    responsavel: "—",
-    tipoSanguineo: "O+",
-    convenio: "Unimed",
-    plano: "Premium",
-  },
-  contato: {
-    telefone: "(11) 91234-5678",
-    email: "joao.oliveira@email.com",
-    cep: "01310-100",
-    endereco: "Av. Paulista, 1000",
-    bairro: "Bela Vista",
-    cidade: "São Paulo",
-    uf: "SP",
-  },
-  alertas: { alergia: true, emTratamento: true, cardiaco: true },
-  manualRecord:
-    "Prontuário manual anexado no cadastro (digitalização das fichas físicas anteriores).",
-  manualRecordPath: null,
-  manualRecordName: null,
-  notas: null,
-  passagens: [
-    { id: "p1", tipo: "consulta", titulo: "Consulta — Cardiologia", detalhe: "Concluído", profissional: "Dra. Ana Beatriz Costa", iso: "2026-06-12T08:30:00Z", data: "12/06/2026 08:30" },
-    { id: "p2", tipo: "exame", titulo: "Hemograma completo", detalhe: "Laboratorial · Concluído", profissional: "Dra. Ana Beatriz Costa", iso: "2026-06-10T10:00:00Z", data: "10/06/2026 10:00" },
-    { id: "p3", tipo: "procedimento", titulo: "Curativo simples", detalhe: "Membro inferior direito", profissional: "Enf. Carla Menezes", iso: "2026-05-22T14:15:00Z", data: "22/05/2026 14:15" },
-    { id: "p4", tipo: "evolucao", titulo: "Evolução clínica", detalhe: "Retorno. Exames dentro da normalidade.", profissional: "Dra. Ana Beatriz Costa", iso: "2026-05-01T14:00:00Z", data: "01/05/2026 14:00" },
-  ],
-};
 
 /**
  * Ficha completa de um paciente: dados pessoais + contato/endereço + alertas

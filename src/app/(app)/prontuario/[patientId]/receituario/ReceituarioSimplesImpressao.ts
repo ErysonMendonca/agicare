@@ -1,6 +1,5 @@
 import {
   abrirImpressao,
-  camposIdentPadrao,
   corpoTexto,
   esc,
   hojeBR,
@@ -46,19 +45,13 @@ function montarDocumento(
   profissional: ProfissionalImpressao,
   cid: string,
 ): string {
+  // A pedido: receituário simples fica só com CPF + Nascimento/Idade — sem
+  // Atendimento, Prontuário, Convênio, Plano, Sexo, Nome da Mãe e Data de
+  // Admissão (removidos deste relatório específico).
   const ident = identPacienteHTML(limpo(paciente.nome) || "—", [
     { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
-    ...camposIdentPadrao({
-      registro: limpo(paciente.registro) || "—",
-      atendimento: paciente.atendimentoCodigo,
-      convenio: limpo(paciente.convenio) || "—",
-      plano: limpo(paciente.plano) || "—",
-      dataAdmissao: limpo(paciente.dataAdmissao) || "—",
-      nascimento: limpo(paciente.nascimento) || "—",
-      idade: limpo(paciente.idade) || "—",
-      sexo: limpo(paciente.sexo) || "—",
-      nomeMae: limpo(paciente.nomeMae) || "—",
-    }),
+    { lbl: "Data de Nascimento", val: limpo(paciente.nascimento) || "—" },
+    { lbl: "Idade", val: limpo(paciente.idade) || "—" },
     { lbl: "Data", val: hojeBR(), span: 3 },
   ]);
 

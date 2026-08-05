@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireClinico } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
 import { getMyProfessionalId } from "@/lib/clinico/professional";
-import { getActiveClinicId, requireClinic, DEMO_CLINIC_ID } from "@/lib/tenant";
+import { getActiveClinicId, requireClinic } from "@/lib/tenant";
 import { getAtendimentoAtivo } from "@/lib/data/atendimento";
 
 export type ActionState = { error?: string; ok?: boolean } | undefined;

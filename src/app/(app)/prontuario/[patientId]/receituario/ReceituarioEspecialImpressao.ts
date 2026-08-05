@@ -1,7 +1,6 @@
 import {
   abrirImpressao,
   cabecalhoHTML,
-  camposIdentPadrao,
   corpoTexto,
   esc,
   hojeBR,
@@ -53,19 +52,13 @@ function montarVia(
   cid: string,
 ): string {
   const cidade = [limpo(paciente.cidade), limpo(paciente.uf)].filter(Boolean).join(" / ");
+  // A pedido: receituário especial fica só com CPF + Nascimento/Idade (+
+  // endereço/cidade/CEP, exigidos pela Portaria 344/98) — sem Atendimento,
+  // Prontuário, Convênio, Plano, Sexo, Nome da Mãe e Data de Admissão.
   const ident = identPacienteHTML(limpo(paciente.nome) || "", [
     { lbl: "CPF", val: limpo(paciente.cpf) || "—" },
-    ...camposIdentPadrao({
-      registro: limpo(paciente.registro) || "—",
-      atendimento: paciente.atendimentoCodigo,
-      convenio: limpo(paciente.convenio) || "—",
-      plano: limpo(paciente.plano) || "—",
-      dataAdmissao: limpo(paciente.dataAdmissao) || "—",
-      nascimento: limpo(paciente.nascimento) || "—",
-      idade: limpo(paciente.idade) || "—",
-      sexo: limpo(paciente.sexo) || "—",
-      nomeMae: limpo(paciente.nomeMae) || "—",
-    }),
+    { lbl: "Data de Nascimento", val: limpo(paciente.nascimento) || "—" },
+    { lbl: "Idade", val: limpo(paciente.idade) || "—" },
     { lbl: "Endereço", val: limpo(paciente.endereco), span: 3 },
     { lbl: "Cidade", val: cidade },
     { lbl: "CEP", val: limpo(paciente.cep) },

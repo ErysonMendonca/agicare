@@ -50,26 +50,6 @@ function fmtDataHora(iso: string | null): string {
   })}`;
 }
 
-const DEMO_EVOLUCOES: EvolucaoCard[] = [
-  {
-    id: "demo-evo-1",
-    dataHora: "12/06/2026 08:30",
-    profissional: "Dra. Ana Beatriz Costa",
-    conselho: "CRM-SP 123456",
-    atendimentoCodigo: "0001",
-    resumo: "Dor torácica leve há 2 dias.",
-    conteudo:
-      "Queixa Principal: Dor torácica leve há 2 dias.\n\n" +
-      "História da Doença Atual (HDA): Paciente refere desconforto retroesternal, sem irradiação, de leve intensidade.\n\n" +
-      "Exame Físico: BEG, corado, hidratado. AC: RCR 2T BNF sem sopros. AR: MV+ sem ruídos adventícios.\n\n" +
-      "Hipótese Diagnóstica: Dor torácica atípica a esclarecer.\n\n" +
-      "Conduta / Plano: Solicitar ECG e enzimas. Reavaliar em 48h.",
-    extras: [{ label: "Perímetro cefálico", value: "34 cm" }],
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
-
 /**
  * Lista as evoluções clínicas do paciente (medical_records).
  * O conteúdo estruturado é gravado com rótulos pelo registrarEvolucao.

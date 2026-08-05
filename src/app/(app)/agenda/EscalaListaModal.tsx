@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { CalendarRange, Pencil, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -131,9 +131,15 @@ export function EscalaListaModal({
   const inicio = (paginaSegura - 1) * POR_PAGINA;
   const visiveis = filtradas.slice(inicio, inicio + POR_PAGINA);
 
-  useEffect(() => {
+  // Volta para a página 1 quando os filtros mudam. Ajuste feito DURANTE o
+  // render (padrão React p/ "resetar estado quando uma prop muda"), em vez
+  // de useEffect — evita o render em cascata que o effect causaria.
+  const filtrosKey = `${busca}|${especialidade}|${data}`;
+  const [filtrosKeyAnterior, setFiltrosKeyAnterior] = useState(filtrosKey);
+  if (filtrosKey !== filtrosKeyAnterior) {
+    setFiltrosKeyAnterior(filtrosKey);
     setPagina(1);
-  }, [busca, especialidade, data]);
+  }
 
   return (
     <Modal
