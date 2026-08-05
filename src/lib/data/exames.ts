@@ -91,7 +91,15 @@ export async function listExamOrders(patientId: string): Promise<ExamOrder[]> {
   const { data, error } = await supabase
     .from("exam_orders")
     .select(
-      "id, exam_name, tuss_code, category, status, notes, laterality, created_at, cancelled_at, cancel_reason, profiles:created_by(full_name), queue_entries(attendance_code)",
+      // "profiles!created_by(...)" — hint via "!" (sintaxe suportada pelo
+      // query-builder MySQL). O select original usava "profiles:created_by(...)"
+      // (sintaxe de alias do PostgREST/Supabase), que o resolvedor de embeds
+      // daqui não reconhece — a coluna via "!" some literalmente do nome da
+      // tabela buscada no grafo de FKs, o embed nunca casa, a query falha com
+      // "não tem relação com exam_orders no schema" e, como o erro só faz
+      // `listExamOrders` cair no `if (error || !data) return []`, TODO pedido
+      // de exame ficava invisível nesta aba (embora gravado no banco).
+      "id, exam_name, tuss_code, category, status, notes, laterality, created_at, cancelled_at, cancel_reason, profiles!created_by(full_name), queue_entries(attendance_code)",
     )
     .eq("patient_id", patientId)
     .order("created_at", { ascending: false });

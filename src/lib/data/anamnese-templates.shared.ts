@@ -38,6 +38,8 @@ export type AnamneseField = {
   destaque?: "amarelo";
   /** Quando "sim", dispara alerta (ex.: risco pré-diabético). */
   alertaSim?: "vermelho";
+  /** ID do campo sim_nao do qual este campo depende para ser exibido. */
+  dependeDe?: string;
 };
 
 export type AnamneseTemplate = {

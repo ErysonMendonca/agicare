@@ -20,7 +20,6 @@ import { DocumentActions } from "@/components/clinico/DocumentActions";
 import { CancelarDocumentoModal } from "@/components/clinico/CancelarDocumentoModal";
 import {
   chaveEspecialidade,
-  ESPECIALIDADES_ANAMNESE,
 } from "@/lib/clinico/anamnese-config";
 import {
   type AnamneseField,
@@ -81,6 +80,7 @@ export function AnamneseClient({
   anamneses,
   minhaEspecialidade,
   templates,
+  especialidades,
 }: {
   patientId: string;
   clinica: ClinicaImpressao;
@@ -88,18 +88,18 @@ export function AnamneseClient({
   anamneses: AnamneseRegistro[];
   minhaEspecialidade: string | null;
   templates: AnamneseTemplate[];
+  especialidades: string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [ver, setVer] = useState<AnamneseRegistro | null>(null);
 
   const especialidadeInicial = useMemo(() => {
-    const chave = chaveEspecialidade(minhaEspecialidade);
-    const match = ESPECIALIDADES_ANAMNESE.find(
-      (e) => chaveEspecialidade(e.value) === chave,
-    );
-    return match?.value ?? "Geral";
-  }, [minhaEspecialidade]);
+    const match = especialidades.find(
+      (e) => e === minhaEspecialidade,
+    ) || especialidades.find((e) => chaveEspecialidade(e) === chaveEspecialidade(minhaEspecialidade));
+    return match ?? especialidades[0] ?? "Geral";
+  }, [minhaEspecialidade, especialidades]);
 
   const [specialty, setSpecialty] = useState<string>(especialidadeInicial);
   const [values, setValues] = useState<Record<string, unknown>>({});
@@ -210,10 +210,17 @@ export function AnamneseClient({
 
   function gerar() {
     startTransition(async () => {
+      // Filtrar apenas campos visíveis
+      const camposVisiveis = fieldsBySpecialty.get(specialty)?.filter(c => !c.dependeDe || getBool(c.dependeDe)) ?? [];
+      const keysVisiveis = new Set(camposVisiveis.map(c => c.id));
+      const valuesFiltrados = Object.fromEntries(
+        Object.entries(values).filter(([k]) => keysVisiveis.has(k))
+      );
+
       const res = await gerarAnamnese({
         patientId,
         specialty,
-        fields: values,
+        fields: valuesFiltrados,
       });
       if (res?.ok) {
         toast.success("Anamnese gerada.");
@@ -248,9 +255,9 @@ export function AnamneseClient({
                 setValues({});
               }}
             >
-              {ESPECIALIDADES_ANAMNESE.map((e) => (
-                <option key={e.value} value={e.value}>
-                  {e.label}
+              {especialidades.map((e) => (
+                <option key={e} value={e}>
+                  {e}
                 </option>
               ))}
             </Select>
@@ -272,18 +279,23 @@ export function AnamneseClient({
                 {bloco.titulo}
               </legend>
               <div className="space-y-4">
-                {bloco.campos.map((campo) => (
-                  <CampoView
-                    key={campo.id}
-                    campo={campo}
-                    valorTexto={getStr(campo.id)}
-                    valorArray={getArr(campo.id)}
-                    valorBool={getBool(campo.id)}
-                    onTexto={(v) => setValue(campo.id, v)}
-                    onToggle={(opt) => toggleOpcao(campo.id, opt)}
-                    onBool={(v) => setValue(campo.id, v)}
-                  />
-                ))}
+                {bloco.campos.map((campo) => {
+                  const campoVisivel = !campo.dependeDe || getBool(campo.dependeDe);
+                  if (!campoVisivel) return null;
+
+                  return (
+                    <CampoView
+                      key={campo.id}
+                      campo={campo}
+                      valorTexto={getStr(campo.id)}
+                      valorArray={getArr(campo.id)}
+                      valorBool={getBool(campo.id)}
+                      onTexto={(v) => setValue(campo.id, v)}
+                      onToggle={(opt) => toggleOpcao(campo.id, opt)}
+                      onBool={(v) => setValue(campo.id, v)}
+                    />
+                  );
+                })}
               </div>
             </fieldset>
           ))}

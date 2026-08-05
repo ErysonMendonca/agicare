@@ -28,7 +28,7 @@ import {
   type ExamOrder,
 } from "@/lib/clinico/exames-shared";
 import {
-  criarPedidoExame,
+  criarPedidosExames,
   atualizarStatusExame,
   editarExame,
   enviarResultadoExameEmail,
@@ -38,6 +38,7 @@ import {
   abrirImpressao,
   camposIdentPadrao,
   esc,
+  hojeBR,
   identPacienteHTML,
   limpo,
   montarDocumentoBase,
@@ -134,6 +135,88 @@ function imprimirExame(
   abrirImpressao(html, "Permita pop-ups para imprimir o pedido de exame.");
 }
 
+/** Item do lote recém-solicitado (fluxo "Solicitação de Exames"), antes de virar ExamOrder. */
+type ItemLote = {
+  tuss: string;
+  nome: string;
+  obs: string;
+  lateralidade: string;
+};
+
+/**
+ * Imprime o relatório DESMEMBRADO por categoria: um documento único listando
+ * TODOS os exames do lote recém-salvo (todos da mesma categoria, pois o
+ * fluxo escolhe a categoria antes de listar os exames) — nunca mistura
+ * Imagem e Laboratorial no mesmo relatório, conforme pedido do cliente.
+ */
+function imprimirRelatorioLote(
+  clinica: ClinicaImpressao,
+  paciente: PacienteIdent,
+  categoria: ExamCategoria,
+  itens: ItemLote[],
+  profissional: { nome: string; conselho: string },
+) {
+  const ident = identPacienteHTML(paciente.nome, [
+    ...camposIdentPadrao({
+      registro: limpo(paciente.registro) || "—",
+      atendimento: null,
+      convenio: limpo(paciente.convenio) || "—",
+      plano: limpo(paciente.plano) || "—",
+      dataAdmissao: limpo(paciente.dataAdmissao) || "—",
+      nascimento: limpo(paciente.nascimento) || "—",
+      idade: limpo(paciente.idade) || "—",
+      sexo: limpo(paciente.sexo) || "—",
+      nomeMae: limpo(paciente.nomeMae) || "—",
+    }),
+    { lbl: "Solicitado em", val: hojeBR() },
+  ]);
+
+  const mostraLateralidade = categoria === "imagem";
+  const linhas = itens
+    .map(
+      (it) => `
+      <tr>
+        <td>${esc(it.tuss || "—")}</td>
+        <td>${esc(it.nome)}</td>
+        ${mostraLateralidade ? `<td>${esc(limpo(it.lateralidade) || "—")}</td>` : ""}
+        <td>${esc(limpo(it.obs) || "—")}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const corpo = `
+    <div class="corpo-lbl">Exames solicitados (${CATEGORIA_LABEL[categoria]}):</div>
+    <table class="tab">
+      <tr>
+        <th style="width:100px">Código TUSS</th>
+        <th>Exame</th>
+        ${mostraLateralidade ? `<th style="width:90px">Lateralidade</th>` : ""}
+        <th style="width:180px">Observação</th>
+      </tr>
+      ${linhas}
+    </table>`;
+
+  const html = montarDocumentoBase({
+    titulo: `SOLICITAÇÃO DE EXAMES — ${CATEGORIA_LABEL[categoria].toUpperCase()}`,
+    clinica,
+    pacienteNome: paciente.nome,
+    identHTML: ident,
+    corpoHTML: corpo,
+    rodapeHTML: rodapeAssinaturaProfissional(
+      limpo(profissional.nome) || "Profissional responsável",
+      limpo(profissional.conselho) ? `Assinatura e carimbo — ${profissional.conselho}` : "Assinatura e carimbo",
+    ),
+    cssExtra: `
+      .corpo { min-height: 260px; }
+      .corpo .tab { width: 100%; border-collapse: collapse; margin: 4px 0 10px; }
+      .corpo .tab th, .corpo .tab td { border: 1px solid #aaa; padding: 5px 8px; font-size: 12px; text-align: left; }
+      .corpo .tab th { background: #f0f0f0; }
+      .corpo .meta { font-size: 12px; display: flex; gap: 24px; }`,
+  });
+
+  abrirImpressao(html, "Permita pop-ups para imprimir o relatório de exames.");
+}
+
 export function ExamesClient({
   patientId,
   clinica,
@@ -151,16 +234,21 @@ export function ExamesClient({
   const [pending, startTransition] = useTransition();
   const [updating, setUpdating] = useState<string | null>(null);
   const [enviando, setEnviando] = useState<string | null>(null);
-  const [form, setForm] = useState(false);
 
   // Modais de ações por item
   const [viewing, setViewing] = useState<ExamOrder | null>(null);
   const [editing, setEditing] = useState<ExamOrder | null>(null);
   const [cancelando, setCancelando] = useState<ExamOrder | null>(null);
 
-  const [tuss, setTuss] = useState(EXAMES_TUSS[0]?.tuss ?? "");
-  const [observacoes, setObservacoes] = useState("");
-  const [lateralidade, setLateralidade] = useState<string>(LATERALIDADES[0]);
+  // ── Wizard "Solicitação de Exames": categoria → seleção múltipla → detalhes ──
+  type WizardStep = "categoria" | "selecao" | "detalhes";
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [step, setStep] = useState<WizardStep>("categoria");
+  const [categoria, setCategoria] = useState<ExamCategoria | null>(null);
+  const [selecionados, setSelecionados] = useState<string[]>([]);
+  const [detalhes, setDetalhes] = useState<
+    Record<string, { obs: string; lateralidade: string }>
+  >({});
 
   // Estado do modal de edição
   const [editExame, setEditExame] = useState("");
@@ -170,15 +258,104 @@ export function ExamesClient({
   const [editObs, setEditObs] = useState("");
   const [editLat, setEditLat] = useState<string>(LATERALIDADES[0]);
 
-  const selecionado = useMemo(
-    () => EXAMES_TUSS.find((e) => e.tuss === tuss) ?? null,
-    [tuss],
+  const examesDaCategoria = useMemo(
+    () =>
+      categoria ? EXAMES_TUSS.filter((e) => e.categoria === categoria) : [],
+    [categoria],
   );
 
-  function reset() {
-    setTuss(EXAMES_TUSS[0]?.tuss ?? "");
-    setObservacoes("");
-    setLateralidade(LATERALIDADES[0]);
+  function abrirWizard() {
+    setStep("categoria");
+    setCategoria(null);
+    setSelecionados([]);
+    setDetalhes({});
+    setWizardOpen(true);
+  }
+
+  function escolherCategoria(cat: ExamCategoria) {
+    setCategoria(cat);
+    setSelecionados([]);
+    setStep("selecao");
+  }
+
+  function alternarSelecao(tussCode: string) {
+    setSelecionados((prev) =>
+      prev.includes(tussCode)
+        ? prev.filter((t) => t !== tussCode)
+        : [...prev, tussCode],
+    );
+  }
+
+  function avancarParaDetalhes() {
+    if (selecionados.length === 0) {
+      toast.error("Selecione ao menos um exame.");
+      return;
+    }
+    setDetalhes((prev) => {
+      const novo = { ...prev };
+      for (const tussCode of selecionados) {
+        if (!novo[tussCode]) {
+          novo[tussCode] = { obs: "", lateralidade: LATERALIDADES[0] };
+        }
+      }
+      return novo;
+    });
+    setStep("detalhes");
+  }
+
+  function atualizarDetalhe(
+    tussCode: string,
+    campo: "obs" | "lateralidade",
+    valor: string,
+  ) {
+    setDetalhes((prev) => ({
+      ...prev,
+      [tussCode]: { ...(prev[tussCode] ?? { obs: "", lateralidade: LATERALIDADES[0] }), [campo]: valor },
+    }));
+  }
+
+  function salvarLote() {
+    if (!categoria || selecionados.length === 0) return;
+    const itensParaSalvar = selecionados.map((tussCode) => {
+      const exame = EXAMES_TUSS.find((e) => e.tuss === tussCode);
+      const det = detalhes[tussCode] ?? { obs: "", lateralidade: LATERALIDADES[0] };
+      return {
+        tuss_code: tussCode,
+        exam_name: exame?.nome ?? "—",
+        notes: det.obs.trim() || undefined,
+        laterality: categoria === "imagem" ? det.lateralidade : undefined,
+      };
+    });
+    startTransition(async () => {
+      const res = await criarPedidosExames({
+        patientId,
+        category: categoria,
+        itens: itensParaSalvar,
+      });
+      if (res?.ok) {
+        toast.success(
+          itensParaSalvar.length === 1
+            ? "Exame solicitado."
+            : `${itensParaSalvar.length} exames solicitados.`,
+        );
+        imprimirRelatorioLote(
+          clinica,
+          paciente,
+          categoria,
+          itensParaSalvar.map((it) => ({
+            tuss: it.tuss_code,
+            nome: it.exam_name,
+            obs: it.notes ?? "",
+            lateralidade: it.laterality ?? "",
+          })),
+          profissional,
+        );
+        setWizardOpen(false);
+        router.refresh();
+      } else {
+        toast.error(res?.error ?? "Não foi possível solicitar os exames.");
+      }
+    });
   }
 
   function abrirEdicao(e: ExamOrder) {
@@ -188,31 +365,6 @@ export function ExamesClient({
     setEditObs(e.observacoes ?? "");
     setEditLat(e.lateralidade ?? LATERALIDADES[0]);
     setEditing(e);
-  }
-
-  function salvar() {
-    if (!selecionado) {
-      toast.error("Selecione um exame.");
-      return;
-    }
-    startTransition(async () => {
-      const res = await criarPedidoExame({
-        patientId,
-        exam_name: selecionado.nome,
-        tuss_code: selecionado.tuss,
-        category: selecionado.categoria,
-        notes: observacoes.trim() || undefined,
-        laterality: lateralidade,
-      });
-      if (res?.ok) {
-        toast.success("Exame solicitado.");
-        setForm(false);
-        reset();
-        router.refresh();
-      } else {
-        toast.error(res?.error ?? "Não foi possível solicitar o exame.");
-      }
-    });
   }
 
   function salvarEdicao() {
@@ -297,8 +449,8 @@ export function ExamesClient({
   return (
     <>
       <div className="mb-4 flex justify-end">
-        <Button onClick={() => setForm(true)}>
-          <Plus className="h-4 w-4" /> Solicitar Exame
+        <Button onClick={abrirWizard}>
+          <Plus className="h-4 w-4" /> Solicitação de Exames
         </Button>
       </div>
 
@@ -415,69 +567,135 @@ export function ExamesClient({
         </Stagger>
       )}
 
-      {/* Modal de solicitação */}
+      {/* Wizard "Solicitação de Exames": categoria → seleção múltipla → detalhes */}
       <Modal
-        open={form}
-        onClose={() => setForm(false)}
-        title="Solicitar Exame"
-        subtitle="Selecione o exame pelo código TUSS e adicione observações se necessário."
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        title="Solicitação de Exames"
+        subtitle={
+          step === "categoria"
+            ? "Escolha a categoria do exame."
+            : step === "selecao"
+              ? `Selecione os exames ${categoria === "imagem" ? "de imagem" : "laboratoriais"} desejados.`
+              : "Informe os detalhes de cada exame selecionado."
+        }
         className="max-w-xl"
         footer={
-          <>
-            <Button variant="outline" onClick={() => setForm(false)}>
+          step === "categoria" ? (
+            <Button variant="outline" onClick={() => setWizardOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={salvar} disabled={pending}>
-              {pending ? "Salvando…" : "Solicitar Exame"}
-            </Button>
-          </>
+          ) : step === "selecao" ? (
+            <>
+              <Button variant="outline" onClick={() => setStep("categoria")}>
+                Voltar
+              </Button>
+              <Button onClick={avancarParaDetalhes}>Continuar</Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setStep("selecao")}>
+                Voltar
+              </Button>
+              <Button onClick={salvarLote} disabled={pending}>
+                {pending ? "Salvando…" : "Salvar e Imprimir"}
+              </Button>
+            </>
+          )
         }
       >
-        <Select
-          label="Exame (código TUSS)"
-          value={tuss}
-          onChange={(ev) => setTuss(ev.target.value)}
-        >
-          {EXAMES_TUSS.map((e) => (
-            <option key={e.tuss} value={e.tuss}>
-              {e.tuss} · {e.nome}
-            </option>
-          ))}
-        </Select>
-
-        {selecionado && (
-          <div className="mt-3 flex items-center gap-2">
-            <span className="text-sm text-muted">Categoria:</span>
-            <CategoriaTag categoria={selecionado.categoria} />
+        {step === "categoria" && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => escolherCategoria("imagem")}
+              className="flex flex-col items-center gap-2 rounded-xl border border-line p-6 text-center transition-colors hover:border-brand-300 hover:bg-brand-50"
+            >
+              <Scan className="h-8 w-8 text-brand-600" />
+              <span className="font-medium text-ink">Exames de Imagens</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => escolherCategoria("laboratorial")}
+              className="flex flex-col items-center gap-2 rounded-xl border border-line p-6 text-center transition-colors hover:border-brand-300 hover:bg-brand-50"
+            >
+              <Microscope className="h-8 w-8 text-brand-600" />
+              <span className="font-medium text-ink">Exames Laboratoriais</span>
+            </button>
           </div>
         )}
 
-        <div className="mt-5">
-          <Select
-            label="Lateralidade"
-            value={lateralidade}
-            onChange={(ev) => setLateralidade(ev.target.value)}
-          >
-            {LATERALIDADES.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
+        {step === "selecao" && categoria && (
+          <div className="flex max-h-[50vh] flex-col gap-2 overflow-y-auto">
+            {examesDaCategoria.map((e) => (
+              <label
+                key={e.tuss}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-line p-3 text-sm hover:bg-muted-surface"
+              >
+                <input
+                  type="checkbox"
+                  checked={selecionados.includes(e.tuss)}
+                  onChange={() => alternarSelecao(e.tuss)}
+                  className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-400"
+                />
+                <span>
+                  <span className="font-medium text-ink">{e.nome}</span>
+                  <span className="ml-2 text-xs text-muted">
+                    TUSS {e.tuss}
+                  </span>
+                </span>
+              </label>
             ))}
-          </Select>
-        </div>
+          </div>
+        )}
 
-        <label className="mt-5 block">
-          <span className="mb-1.5 block text-sm font-medium text-ink">
-            Observações
-          </span>
-          <textarea
-            rows={3}
-            placeholder="Ex.: jejum de 8h, preparo, hipótese diagnóstica..."
-            value={observacoes}
-            onChange={(ev) => setObservacoes(ev.target.value)}
-            className="w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
-          />
-        </label>
+        {step === "detalhes" && categoria && (
+          <div className="flex max-h-[55vh] flex-col gap-4 overflow-y-auto">
+            {selecionados.map((tussCode) => {
+              const exame = EXAMES_TUSS.find((e) => e.tuss === tussCode);
+              const det = detalhes[tussCode] ?? {
+                obs: "",
+                lateralidade: LATERALIDADES[0],
+              };
+              return (
+                <div key={tussCode} className="rounded-lg border border-line p-3">
+                  <p className="mb-2 text-sm font-medium text-ink">
+                    {exame?.nome}
+                  </p>
+                  {categoria === "imagem" && (
+                    <Select
+                      label="Lateralidade"
+                      value={det.lateralidade}
+                      onChange={(ev) =>
+                        atualizarDetalhe(tussCode, "lateralidade", ev.target.value)
+                      }
+                    >
+                      {LATERALIDADES.map((l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                  <label className="mt-3 block">
+                    <span className="mb-1.5 block text-sm font-medium text-ink">
+                      Observações
+                    </span>
+                    <textarea
+                      rows={2}
+                      placeholder="Ex.: jejum de 8h, preparo, hipótese diagnóstica..."
+                      value={det.obs}
+                      onChange={(ev) =>
+                        atualizarDetalhe(tussCode, "obs", ev.target.value)
+                      }
+                      className="w-full resize-none rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                    />
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Modal>
 
       {/* Modal Visualizar (read-only) */}

@@ -62,6 +62,8 @@ const EDITABLE_CATEGORIES = ATTENDANCE_OPTION_CATEGORIES.filter(
     c !== "detalhe_alta" &&
     // Catálogos do produto geridos pela tela rica "Produto" (Configurações) —
     // evita gestão duplicada da mesma categoria em dois lugares.
+    c !== "tipo_produto" &&
+    c !== "grupo_produto" &&
     c !== "unidade_medida" &&
     c !== "via_administracao" &&
     c !== "principio_ativo" &&

@@ -231,7 +231,30 @@ export function criarAuth() {
         const rows = await consultar<LinhaAuthUser>(
           "SELECT id, email, encrypted_password, raw_user_meta_data FROM auth_users WHERE email = ?",
           [email]);
-        return { data: { user: rows[0] ? paraUsuario(rows[0], null) : null }, error: null };
+        const novo = rows[0];
+
+        // Substitui o trigger `on_auth_user_created`/`handle_new_user` do Postgres
+        // (migration 0001_init.sql), que criava a linha em `profiles` toda vez
+        // que uma linha era inserida em `auth.users`. Sem isso, todo fluxo que
+        // chama createUser (novo profissional, novo usuário administrativo)
+        // ficava com um auth_users órfão: o INSERT/UPDATE em `profiles` seguinte
+        // não encontrava a linha, e o INSERT em `clinic_members` falhava depois
+        // por violar a FK (user_id → profiles.id).
+        if (novo) {
+          const meta = (input.user_metadata ?? {}) as Record<string, unknown>;
+          const papeisValidos = ["admin", "medico", "recepcao", "paciente"];
+          const role = typeof meta.role === "string" && papeisValidos.includes(meta.role)
+            ? meta.role
+            : "paciente";
+          const fullName = typeof meta.full_name === "string" ? meta.full_name : null;
+          await executar(
+            "INSERT INTO profiles (id, full_name, role) VALUES (?, ?, ?) " +
+            "ON DUPLICATE KEY UPDATE id = id",
+            [novo.id, fullName, role],
+          );
+        }
+
+        return { data: { user: novo ? paraUsuario(novo, null) : null }, error: null };
       },
 
       async updateUserById(

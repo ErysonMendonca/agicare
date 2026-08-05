@@ -208,15 +208,40 @@ type Filtro =
   | { t: "is"; col: string; val: null | boolean }
   | { t: "like"; col: string; padrao: string; sensivel: boolean }
   | { t: "contains"; col: string; val: unknown }
-  | { t: "or"; sql: string; params: unknown[] }
+  | { t: "or"; expr: string; tabela: string }
   | { t: "not"; col: string; op: string; val: unknown };
 
 const OPS: Record<string, string> = {
   eq: "=", neq: "<>", gt: ">", gte: ">=", lt: "<", lte: "<=",
 };
 
-/** Traduz a sintaxe `.or("a.eq.1,b.is.null")` do PostgREST. */
-function parseOr(expr: string, tabela: string): { sql: string; params: unknown[] } {
+/**
+ * Remove aspas duplas de envolvimento (sintaxe PostgREST p/ valores com
+ * caractere especial, ex.: `JSON.stringify("Clínica Médica")` → `"Clínica
+ * Médica"`). Sem isso, o valor comparado no SQL fica literalmente com as
+ * aspas (`"Clínica Médica"`), que nunca bate com a coluna real — o filtro
+ * OR correspondente nunca casa e a linha inteira some do resultado.
+ */
+function semAspas(s: string): string {
+  if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+    return s.slice(1, -1).replace(/\\"/g, '"');
+  }
+  return s;
+}
+
+/**
+ * Traduz a sintaxe `.or("a.eq.1,b.is.null")` do PostgREST.
+ *
+ * `prefixo` é o alias da tabela-base na query (ex.: "t0"), o mesmo aplicado
+ * pelos demais filtros em `where()`. Sem prefixar as colunas aqui, um SELECT
+ * com JOIN para uma tabela que tenha coluna de mesmo nome (ex.: `specialty`
+ * existe tanto em `queue_entries` quanto em `professionals`) faz o MySQL
+ * recusar a query inteira com "Column '...' in where clause is ambiguous" —
+ * erro que ficava mascarado porque os chamadores tratam `error` devolvendo
+ * lista vazia, sem logar nada.
+ */
+function parseOr(expr: string, tabela: string, prefixo = ""): { sql: string; params: unknown[] } {
+  const p_ = prefixo ? `${prefixo}.` : "";
   const partes = dividirTopo(expr);
   const pedacos: string[] = [];
   const params: unknown[] = [];
@@ -230,25 +255,25 @@ function parseOr(expr: string, tabela: string): { sql: string; params: unknown[]
     const [, col, op, bruto] = m;
     const cat = catDe(tabela, col);
     if (op === "is") {
-      pedacos.push(bruto === "null" ? `${cerca(col)} IS NULL` : `${cerca(col)} = ?`);
+      pedacos.push(bruto === "null" ? `${p_}${cerca(col)} IS NULL` : `${p_}${cerca(col)} = ?`);
       if (bruto !== "null") params.push(bruto === "true" ? 1 : 0);
       continue;
     }
     if (op === "in") {
       const vals = bruto.replace(/^\(|\)$/g, "").split(",").map((x) => x.replace(/^"|"$/g, ""));
-      pedacos.push(`${cerca(col)} IN (${vals.map(() => "?").join(", ")})`);
+      pedacos.push(`${p_}${cerca(col)} IN (${vals.map(() => "?").join(", ")})`);
       vals.forEach((v) => params.push(paraBanco(v, cat)));
       continue;
     }
     if (op === "like" || op === "ilike") {
-      pedacos.push(`${cerca(col)} LIKE ?`);
-      params.push(bruto.replace(/\*/g, "%"));
+      pedacos.push(`${p_}${cerca(col)} LIKE ?`);
+      params.push(semAspas(bruto).replace(/\*/g, "%"));
       continue;
     }
     const sqlOp = OPS[op];
     if (!sqlOp) throw new Error(`Operador não suportado em .or(): "${op}"`);
-    pedacos.push(`${cerca(col)} ${sqlOp} ?`);
-    params.push(paraBanco(bruto, cat));
+    pedacos.push(`${p_}${cerca(col)} ${sqlOp} ?`);
+    params.push(paraBanco(semAspas(bruto), cat));
   }
   return { sql: `(${pedacos.join(" OR ")})`, params };
 }
@@ -348,8 +373,9 @@ class Consulta<T = Linha[]> implements PromiseLike<Resposta<T>> {
     this.filtros.push({ t: "contains", col, val }); return this;
   }
   or(expr: string): this {
-    const { sql, params } = parseOr(expr, this.tabela);
-    this.filtros.push({ t: "or", sql, params });
+    // Compilação adiada p/ where(prefixo): só ali sabemos o alias da tabela
+    // (t0), necessário p/ não gerar coluna ambígua quando a query tem JOINs.
+    this.filtros.push({ t: "or", expr, tabela: this.tabela });
     return this;
   }
   not(col: string, op: string, val: unknown): this {
@@ -431,10 +457,12 @@ class Consulta<T = Linha[]> implements PromiseLike<Resposta<T>> {
           params.push(JSON.stringify(f.val));
           break;
         }
-        case "or":
-          pedacos.push(prefixo ? f.sql.replace(/`/g, "`") : f.sql);
-          params.push(...f.params);
+        case "or": {
+          const { sql, params: pOr } = parseOr(f.expr, f.tabela, prefixo);
+          pedacos.push(sql);
+          params.push(...pOr);
           break;
+        }
         case "not": {
           const sqlOp = OPS[f.op];
           if (f.op === "is") {
@@ -786,6 +814,28 @@ class Consulta<T = Linha[]> implements PromiseLike<Resposta<T>> {
         `UPDATE em ${this.tabela} sem filtro — bloqueado para não reescrever a tabela inteira.`,
       );
     }
+
+    // Se for preciso devolver as linhas afetadas (.select() encadeado),
+    // captura a PK das linhas ANTES do UPDATE. Reaplicar o mesmo WHERE
+    // depois do UPDATE (como era feito antes) falha sempre que o patch
+    // muda uma coluna usada no próprio filtro — ex.: transição de estado
+    // `.update({status:"B"}).eq("status","A")`: depois do UPDATE nenhuma
+    // linha tem mais `status = "A"`, então a releitura via WHERE original
+    // sempre volta vazia, mesmo com o UPDATE tendo funcionado certinho.
+    const pk = meta(this.tabela).pk;
+    let pkRows: Linha[] = [];
+    if (this.devolverRepresentacao) {
+      if (pk.length === 0) {
+        throw new Error(
+          `UPDATE...select() em ${this.tabela} sem PK conhecida — não é possível reler as linhas afetadas.`,
+        );
+      }
+      pkRows = await consultar(
+        `SELECT ${pk.map((k) => cerca(k)).join(", ")} FROM ${cerca(this.tabela)}${onde}`,
+        pOnde,
+      );
+    }
+
     const sql =
       `UPDATE ${cerca(this.tabela)} SET ${cols.map((c) => `${cerca(c)} = ?`).join(", ")}${onde}`;
     const r = await executar(sql, [...params, ...pOnde]);
@@ -793,8 +843,19 @@ class Consulta<T = Linha[]> implements PromiseLike<Resposta<T>> {
     if (!this.devolverRepresentacao) {
       return { data: (this.umSo ? null : []) as T, error: null, count: r.affectedRows };
     }
-    // relê as linhas afetadas com os mesmos filtros
-    const lidas = await consultar(`SELECT * FROM ${cerca(this.tabela)}${onde}`, pOnde);
+    // relê as linhas afetadas pela PK capturada antes do UPDATE (não pelo
+    // WHERE original, que pode ter ficado obsoleto — ver comentário acima).
+    let lidas: Linha[] = [];
+    if (pkRows.length > 0) {
+      const condPk = pkRows
+        .map(() => `(${pk.map((k) => `${cerca(k)} = ?`).join(" AND ")})`)
+        .join(" OR ");
+      const paramsPk = pkRows.flatMap((linha) => pk.map((k) => linha[k]));
+      lidas = await consultar(
+        `SELECT * FROM ${cerca(this.tabela)} WHERE ${condPk}`,
+        paramsPk,
+      );
+    }
     const conv = lidas.map((x) => {
       const o: Linha = {};
       for (const [k, v] of Object.entries(x)) o[k] = daBanco(v, this.cat(k));

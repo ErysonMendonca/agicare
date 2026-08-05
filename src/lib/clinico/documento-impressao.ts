@@ -20,6 +20,7 @@ export type ClinicaImpressao = {
   cnpj: string;
   endereco: string;
   telefone: string;
+  logo?: string | null;
 };
 
 /** "—" (placeholder do data layer) → vazio, para não poluir o documento. */
@@ -52,9 +53,12 @@ export function cabecalhoHTML(clinica: ClinicaImpressao): string {
   return `
   <div class="topo">
     <div class="clinica-box">
-      <div class="clinica">${esc(clinica.nome)}</div>
-      ${sub ? `<div class="clinica-sub">${esc(sub)}</div>` : ""}
-      ${limpo(clinica.cnpj) ? `<div class="clinica-sub">CNPJ: ${esc(clinica.cnpj)}</div>` : ""}
+      ${clinica.logo ? `<div class="clinica-logo-wrap"><img src="${esc(clinica.logo)}" alt="Logo" /></div>` : ""}
+      <div class="clinica-info">
+        <div class="clinica">${esc(clinica.nome)}</div>
+        ${sub ? `<div class="clinica-sub">${esc(sub)}</div>` : ""}
+        ${limpo(clinica.cnpj) ? `<div class="clinica-sub">CNPJ: ${esc(clinica.cnpj)}</div>` : ""}
+      </div>
     </div>
   </div>`;
 }
@@ -173,7 +177,10 @@ const CSS = `
   .folha { display: flex; flex-direction: column; min-height: calc(297mm - 28mm); }
 
   .topo { display: flex; gap: 16px; align-items: stretch; }
-  .clinica-box { border: 1px solid #666; padding: 8px 12px; flex: 1; }
+  .clinica-box { border: 1px solid #666; padding: 8px 12px; flex: 1; display: flex; gap: 16px; align-items: center; }
+  .clinica-logo-wrap { height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .clinica-logo-wrap img { max-height: 100%; max-width: 140px; object-fit: contain; }
+  .clinica-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
   .clinica { font-size: 15px; font-weight: bold; }
   .clinica-sub { font-size: 11px; color: #555; margin-top: 2px; }
 

@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { requireClinic } from "@/lib/tenant";
 import { getCurrentUser, getRole } from "@/lib/auth";
 import { requireAction } from "@/lib/permissions";
@@ -17,6 +18,39 @@ function revalidar(patientId?: string) {
 }
 
 const uuid = z.string().uuid("Registro inválido.");
+
+/**
+ * Gera o código de negócio de `billable_events` (ex.: "EVT-2026-000123").
+ *
+ * No Postgres original (migration 0074) isso era feito por um trigger
+ * (`trg_set_billable_event_code` + `billable_events_code_seq`) que carimbava
+ * `code` sozinho quando vinha nulo/vazio — nunca reimplementado no MySQL, cujo
+ * `code` é só `VARCHAR NOT NULL` sem DEFAULT. Sem isso, todo INSERT falhava
+ * com "Field 'code' doesn't have a default value", e como o erro só era
+ * `console.error`ado (nunca propagado à UI), o atendimento finalizava
+ * normalmente mas NENHUM evento de faturamento era criado — o paciente nunca
+ * aparecia em `/faturamento` para o check-out.
+ *
+ * Usa o cliente de serviço (sem escopo de clínica) para calcular o próximo
+ * número: a coluna tem UNIQUE KEY global (todas as clínicas), igual à
+ * sequence do Postgres — escopar por clínica aqui colidiria entre clínicas
+ * diferentes gerando o mesmo código no mesmo ano.
+ */
+async function gerarCodigoEvento(): Promise<string> {
+  const ano = new Date().getFullYear();
+  const prefixo = `EVT-${ano}-`;
+  const svc = createServiceClient();
+  const { data } = await svc
+    .from("billable_events")
+    .select("code")
+    .like("code", `${prefixo}%`);
+  let max = 0;
+  for (const r of data ?? []) {
+    const n = Number(String(r.code ?? "").slice(prefixo.length));
+    if (Number.isFinite(n)) max = Math.max(max, n);
+  }
+  return `${prefixo}${String(max + 1).padStart(6, "0")}`;
+}
 
 /** Papel clínico (médico/admin) pode registrar procedimentos e finalizar. */
 async function guardMedico(): Promise<string | null> {
@@ -180,9 +214,11 @@ export async function finalizarAtendimento(
   // Apenas gera o evento faturável se for particular.
   // Para convênio, o fluxo será abordado depois, conforme solicitado.
   if (kind === "particular") {
+    const codigoEvento = await gerarCodigoEvento();
     const { data: evt, error: evtErr } = await supabase
       .from("billable_events")
       .insert({
+        code: codigoEvento,
         clinic_id: clinicId,
         patient_id: patientId,
         appointment_id: appointmentId,
@@ -195,8 +231,9 @@ export async function finalizarAtendimento(
       .select("id")
       .single();
     if (evtErr || !evt) {
+      // O atendimento finaliza mesmo se o evento de faturamento falhar — a
+      // recepção pode gerar manualmente depois; não bloqueia o médico.
       console.error("Erro ao gerar evento de faturamento:", evtErr);
-      // O atendimento finaliza, mas talvez a recepção precise adicionar manualmente se der erro?
     } else {
       // Vincula TODOS os procedimentos lançados no atendimento a este evento,
       // para o check-out itemizá-los e cobrá-los na saída (billable_event_id).
