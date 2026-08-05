@@ -19,6 +19,9 @@ type Clinica = {
   cnpj: string;
   endereco: string;
   telefone: string;
+  /** Logo da clínica (data URL/URL) — exibido no cabeçalho, igual aos
+   * demais documentos impressos (receituário, anamnese, etc.). */
+  logo?: string | null;
 };
 type Paciente = {
   nome: string;

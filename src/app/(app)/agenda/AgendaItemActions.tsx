@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { type Atendimento } from "@/lib/data/appointments";
+import { type Atendimento, type AppointmentStatus } from "@/lib/data/appointments";
 import { type Profissional } from "@/lib/data/professionals";
 import {
   remarcarAppointment,
@@ -206,7 +206,7 @@ export function AgendaItemActions({
           <Select
             label="Novo Status"
             value={novoStatus}
-            onChange={(e) => setNovoStatus(e.target.value as any)}
+            onChange={(e) => setNovoStatus(e.target.value as AppointmentStatus)}
           >
             <option value="agendado">Agendado</option>
             <option value="aguardando_recepcao">Aguardando atendimento recepcionista</option>

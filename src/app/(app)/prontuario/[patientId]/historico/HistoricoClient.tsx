@@ -84,8 +84,9 @@ export function HistoricoClient({
       } else {
         throw new Error(res?.error ?? "Erro ao salvar registro no banco.");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Erro ao fazer upload do arquivo.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao fazer upload do arquivo.";
+      toast.error(message);
     } finally {
       setUploading(false);
     }

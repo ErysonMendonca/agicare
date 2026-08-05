@@ -276,7 +276,7 @@ export async function registrarCheckout(
  * para o veredito ser interativo. Em modo real é ignorado: a validação lê os
  * dados autoritativos do banco (não confia no client).
  */
-const guiaSnapshotSchema = z
+const _guiaSnapshotSchema = z
   .object({
     temPaciente: z.boolean().default(true),
     insurance: z.string().nullable().default(null),
@@ -293,7 +293,7 @@ const guiaSnapshotSchema = z
  */
 export async function validarGuia(
   id: string,
-  snapshot?: z.input<typeof guiaSnapshotSchema>,
+  _snapshot?: z.input<typeof _guiaSnapshotSchema>,
 ): Promise<ValidarGuiaState> {
   const idParsed = idSchema.safeParse(id);
   if (!idParsed.success) return { error: idParsed.error.issues[0]?.message };

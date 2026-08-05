@@ -33,40 +33,6 @@ export type CatalogoItem = {
 
 export type ProdutoCatalogos = Record<ProdutoCatalogoCategory, CatalogoItem[]>;
 
-const DEMO_CATALOGOS: ProdutoCatalogos = {
-  unidade_medida: [
-    { id: "demo-um-0", label: "Ampola (AMP)", active: true, sortOrder: 0 },
-    { id: "demo-um-1", label: "Comprimido (COMP)", active: true, sortOrder: 1 },
-    { id: "demo-um-2", label: "Frasco (FR)", active: true, sortOrder: 2 },
-    { id: "demo-um-3", label: "Unidade (UN)", active: true, sortOrder: 3 },
-  ],
-  via_administracao: [
-    { id: "demo-va-0", label: "Intramuscular (IM)", active: true, sortOrder: 0 },
-    { id: "demo-va-1", label: "Subcutânea (SC)", active: true, sortOrder: 1 },
-    { id: "demo-va-2", label: "Intravenosa (IV)", active: true, sortOrder: 2 },
-    { id: "demo-va-3", label: "Oral (VO)", active: true, sortOrder: 3 },
-  ],
-  principio_ativo: [
-    { id: "demo-pa-0", label: "Atropina", active: true, sortOrder: 0 },
-    { id: "demo-pa-1", label: "Dipirona", active: true, sortOrder: 1 },
-    { id: "demo-pa-2", label: "Adrenalina", active: true, sortOrder: 2 },
-  ],
-  marca: [
-    { id: "demo-mc-0", label: "Cristália", active: true, sortOrder: 0 },
-    { id: "demo-mc-1", label: "EMS", active: true, sortOrder: 1 },
-  ],
-  localizacao: [
-    { id: "demo-lc-0", label: "Prateleira A1", active: true, sortOrder: 0 },
-    { id: "demo-lc-1", label: "Prateleira B2", active: true, sortOrder: 1 },
-    { id: "demo-lc-2", label: "Geladeira 1", active: true, sortOrder: 2 },
-  ],
-  classificacao_xyz: [
-    { id: "demo-xyz-0", label: "X", active: true, sortOrder: 0 },
-    { id: "demo-xyz-1", label: "Y", active: true, sortOrder: 1 },
-    { id: "demo-xyz-2", label: "Z", active: true, sortOrder: 2 },
-  ],
-};
-
 /**
  * Todos os catálogos do produto (ativos E inativos), agrupados por categoria e
  * ordenados por sort_order. Em modo demo devolve exemplos hardcoded. Escopo por

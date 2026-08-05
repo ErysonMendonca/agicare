@@ -59,38 +59,6 @@ function toProcedimento(p: {
 }
 
 /** Mock usado no modo demo (espelha o Figma). */
-const MOCK: Procedimento[] = [
-  {
-    code: "PROC001",
-    name: "Limpeza de Pele Profunda",
-    description: "Limpeza facial completa com peeling de diamante...",
-    category: "Facial",
-    duration_min: 85,
-    price: 250,
-    margin_pct: 32,
-    active: true,
-  },
-  {
-    code: "PROC002",
-    name: "Aplicação de Toxina Botulínica",
-    description: "Aplicação de toxina para suavização de...",
-    category: "Injetáveis",
-    duration_min: 55,
-    price: 1200,
-    margin_pct: 28,
-    active: true,
-  },
-  {
-    code: "PROC003",
-    name: "Drenagem Linfática",
-    description: "Sessão completa de drenagem linfática manual co...",
-    category: "Corporal",
-    duration_min: 60,
-    price: 180,
-    margin_pct: 38,
-    active: true,
-  },
-].map(toProcedimento);
 
 /** Lista procedimentos: do banco quando configurado, mock no modo demo. */
 export async function listProcedures(): Promise<Procedimento[]> {

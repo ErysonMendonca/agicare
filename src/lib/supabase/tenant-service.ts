@@ -1,7 +1,7 @@
 import type { ClienteServico } from './service'
 import { createServiceClient } from '@/lib/supabase/service'
 import { getCurrentUser } from '@/lib/auth'
-import { getActiveClinicId, DEMO_CLINIC_ID } from '@/lib/tenant'
+import { getActiveClinicId } from '@/lib/tenant'
 
 /**
  * withTenantService — uso de SERVICE-ROLE com isolamento MANUAL de tenant.

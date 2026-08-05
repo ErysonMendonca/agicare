@@ -112,125 +112,8 @@ export function isClinico(p: Profissional): boolean {
 }
 
 /** Endereço + observações vazios (campos opcionais) para entradas mock. */
-const ENDERECO_VAZIO = {
-  email: "",
-  cep: "",
-  address: "",
-  address_number: "",
-  complement: "",
-  neighborhood: "",
-  city: "",
-  state: "",
-  notes: "",
-};
 
 /** Mock usado no modo demo (espelha o Figma). */
-const MOCK: Profissional[] = [
-  {
-    id: "1",
-    nome: "Dr. João Pedro Oliveira",
-    especialidade: "Cardiologia",
-    crm: "CRM/SP 123456",
-    cargo: "Médico",
-    departamento: "",
-    email: "joao.oliveira@clinica.com",
-    telefone: "(11) 98765-4321",
-    ativo: true,
-    role: "medico",
-    consultasHoje: 8,
-    proximaConsulta: "Hoje 14:30",
-    edit: {
-      id: "1",
-      profileId: "1",
-      full_name: "Dr. João Pedro Oliveira",
-      specialty: "Cardiologia",
-      council_reg: "CRM/SP 123456",
-      phone: "(11) 98765-4321",
-      role: "medico",
-      active: true,
-      professional_type: "Médico",
-      ...ENDERECO_VAZIO,
-    },
-  },
-  {
-    id: "2",
-    nome: "Dra. Ana Paula Costa",
-    especialidade: "Ortopedia",
-    crm: "CRM/SP 234567",
-    cargo: "Médico",
-    departamento: "",
-    email: "ana.costa@clinica.com",
-    telefone: "(11) 98765-4322",
-    ativo: true,
-    role: "medico",
-    consultasHoje: 5,
-    proximaConsulta: "Hoje 16:00",
-    edit: {
-      id: "2",
-      profileId: "2",
-      full_name: "Dra. Ana Paula Costa",
-      specialty: "Ortopedia",
-      council_reg: "CRM/SP 234567",
-      phone: "(11) 98765-4322",
-      role: "medico",
-      active: true,
-      professional_type: "Médico",
-      ...ENDERECO_VAZIO,
-    },
-  },
-  {
-    id: "3",
-    nome: "Dr. Carlos Eduardo Mendes",
-    especialidade: "Dermatologia",
-    crm: "CRM/SP 345678",
-    cargo: "Médico",
-    departamento: "",
-    email: "carlos.mendes@clinica.com",
-    telefone: "(11) 98765-4323",
-    ativo: true,
-    role: "medico",
-    consultasHoje: 0,
-    proximaConsulta: "12/06 09:00",
-    edit: {
-      id: "3",
-      profileId: "3",
-      full_name: "Dr. Carlos Eduardo Mendes",
-      specialty: "Dermatologia",
-      council_reg: "CRM/SP 345678",
-      phone: "(11) 98765-4323",
-      role: "medico",
-      active: true,
-      professional_type: "Médico",
-      ...ENDERECO_VAZIO,
-    },
-  },
-  {
-    id: "4",
-    nome: "Enf. Mariana Souza Lima",
-    especialidade: "Enfermagem",
-    crm: "COREN/SP 456789",
-    cargo: "Enfermagem",
-    departamento: "",
-    email: "mariana.lima@clinica.com",
-    telefone: "(11) 98765-4324",
-    ativo: true,
-    role: "enfermeiro",
-    consultasHoje: 3,
-    proximaConsulta: null,
-    edit: {
-      id: "4",
-      profileId: "4",
-      full_name: "Enf. Mariana Souza Lima",
-      specialty: "Enfermagem",
-      council_reg: "COREN/SP 456789",
-      phone: "(11) 98765-4324",
-      role: "medico",
-      active: true,
-      professional_type: "Enfermeiro",
-      ...ENDERECO_VAZIO,
-    },
-  },
-];
 
 /** Indicador de agenda por profissional (consultas do dia + próxima consulta). */
 type AgendaIndicador = { consultasHoje: number; proxima: string | null };
@@ -491,11 +374,6 @@ export type ProfissionalVinculo = {
 };
 
 /** Mock coerente com o catálogo de especialidades (modo demo). */
-const MOCK_VINCULO: ProfissionalVinculo[] = [
-  { id: "1", nome: "Dr. João Pedro Oliveira", especialidade: "2 - CARDIOLOGIA", ativo: true },
-  { id: "2", nome: "Dra. Ana Paula Costa", especialidade: "3 - ORTOPEDIA", ativo: true },
-  { id: "3", nome: "Dr. Carlos Eduardo Mendes", especialidade: "4 - DERMATOLOGIA", ativo: true },
-];
 
 /**
  * Profissionais ATIVOS da clínica ativa, com nome e especialidade, ordenados

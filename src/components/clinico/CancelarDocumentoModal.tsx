@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -33,13 +33,18 @@ export function CancelarDocumentoModal({
   const [motivo, setMotivo] = useState("");
   const [tocado, setTocado] = useState(false);
 
-  // Limpa o estado ao (re)abrir para não vazar motivo de um cancelamento anterior.
-  useEffect(() => {
+  // Limpa o estado ao (re)abrir para não vazar motivo de um cancelamento
+  // anterior. Ajuste feito DURANTE o render (padrão React p/ "resetar estado
+  // quando uma prop muda"), em vez de useEffect — evita o render em cascata
+  // que o effect causaria.
+  const [openAnterior, setOpenAnterior] = useState(open);
+  if (open !== openAnterior) {
+    setOpenAnterior(open);
     if (open) {
       setMotivo("");
       setTocado(false);
     }
-  }, [open]);
+  }
 
   const motivoLimpo = motivo.trim();
   const invalido = motivoLimpo.length < MIN_LEN;

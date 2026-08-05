@@ -38,52 +38,6 @@ function formatarPrazo(due: string | null): string {
 }
 
 /** Mock usado no modo demo (espelha o estilo do Figma). */
-const MOCK: CasoLab[] = [
-  {
-    id: "1",
-    codigo: "LAB-0001",
-    paciente: "João Pedro Oliveira",
-    tipo: "Coroa",
-    status: "em_andamento",
-    urgente: true,
-    prazo: "20/06/2026",
-    prazoIso: "2026-06-20",
-    etapa: "refinamento",
-  },
-  {
-    id: "2",
-    codigo: "LAB-0002",
-    paciente: "Maria Clara Santos",
-    tipo: "Prótese Total",
-    status: "pendente",
-    urgente: false,
-    prazo: "25/06/2026",
-    prazoIso: "2026-06-25",
-    etapa: "entrada",
-  },
-  {
-    id: "3",
-    codigo: "LAB-0003",
-    paciente: "Pedro Henrique Lima",
-    tipo: "Ponte",
-    status: "finalizado",
-    urgente: false,
-    prazo: "10/06/2026",
-    prazoIso: "2026-06-10",
-    etapa: "conclusao",
-  },
-  {
-    id: "4",
-    codigo: "LAB-0004",
-    paciente: "Ana Beatriz Moura",
-    tipo: "Implante",
-    status: "em_andamento",
-    urgente: false,
-    prazo: "28/06/2026",
-    prazoIso: "2026-06-28",
-    etapa: "processamento",
-  },
-];
 
 /** Lista casos do laboratório: do banco quando configurado, mock no modo demo. */
 export async function listLabCases(): Promise<CasoLab[]> {
@@ -150,53 +104,6 @@ function formatBRL(value: number): string {
     currency: "BRL",
   }).format(value);
 }
-
-const MOCK_FINANCE: LabFinanceRow[] = [
-  {
-    id: "1",
-    codigo: "LAB-0001",
-    paciente: "João Pedro Oliveira",
-    tipo: "Coroa",
-    valorBase: 800,
-    adicionais: 120,
-    descontos: 0,
-    total: 920,
-    statusPagamento: "aprovado",
-  },
-  {
-    id: "2",
-    codigo: "LAB-0002",
-    paciente: "Maria Clara Santos",
-    tipo: "Prótese Total",
-    valorBase: 2400,
-    adicionais: 0,
-    descontos: 200,
-    total: 2200,
-    statusPagamento: "orcado",
-  },
-  {
-    id: "3",
-    codigo: "LAB-0003",
-    paciente: "Pedro Henrique Lima",
-    tipo: "Ponte",
-    valorBase: 1500,
-    adicionais: 90,
-    descontos: 0,
-    total: 1590,
-    statusPagamento: "pago",
-  },
-  {
-    id: "4",
-    codigo: "LAB-0004",
-    paciente: "Ana Beatriz Moura",
-    tipo: "Implante",
-    valorBase: 3200,
-    adicionais: 300,
-    descontos: 150,
-    total: 3350,
-    statusPagamento: "faturado",
-  },
-];
 
 /** Agrega o resumo financeiro a partir das linhas (por status de pagamento). */
 export function resumirFinanceiroLab(rows: LabFinanceRow[]): LabFinanceResumo {

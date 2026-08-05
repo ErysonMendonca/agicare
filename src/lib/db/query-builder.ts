@@ -588,7 +588,7 @@ class Consulta<T = Linha[]> implements PromiseLike<Resposta<T>> {
     const brutas = await consultar(sql, params);
 
     // Reconstrói o formato do PostgREST: embed N:1 vira objeto aninhado.
-    const linhas = brutas.map((r) => this.hidratar(r, base, aliasTabela));
+    const linhas = brutas.map((r) => this.hidratar(r, base));
 
     // Embeds 1:N: uma consulta por relação, agrupando pelos ids do lote.
     for (const e of umParaMuitos) {
@@ -654,7 +654,6 @@ class Consulta<T = Linha[]> implements PromiseLike<Resposta<T>> {
   private hidratar(
     bruta: Linha,
     base: string,
-    aliasTabela: Map<string, string>,
   ): Linha {
     const out: Linha = {};
     // tabela de cada caminho, para saber a categoria da coluna

@@ -242,73 +242,6 @@ function formatDataHoraAgendada(ts: string | null): string {
 }
 
 /** Mock usado no modo demo (espelha o Figma). */
-const MOCK: FilaItem[] = [
-  {
-    id: "mock-1",
-    patientId: "mock-p1",
-    codigo: "A001",
-    atendimentoCodigo: "100001",
-    paciente: "Maria Silva Santos",
-    hora: "08:00",
-    especialidade: "Cardiologia",
-    medico: "Dr. Carlos Eduardo",
-    convenio: "Unimed",
-    status: { label: "Aguardando", tone: "wait" },
-    statusRaw: "aguardando",
-    priorityRaw: "normal",
-    openedByName: "Recepção Demo",
-    openedByRole: "recepcao",
-    pacienteNomeMae: "Joana Silva Santos",
-    pacienteSexo: "Feminino",
-    pacienteRegistro: "000123",
-    pacienteIdade: "34 anos",
-    pacienteNascimento: "1990-05-20",
-  },
-  {
-    id: "mock-2",
-    patientId: "mock-p2",
-    codigo: "A002",
-    atendimentoCodigo: "100002",
-    paciente: "João Pedro Oliveira",
-    hora: "08:15",
-    especialidade: "Cardiologia",
-    medico: "Dr. Carlos Eduardo",
-    convenio: "Particular",
-    status: { label: "Aguardando", tone: "wait" },
-    statusRaw: "aguardando",
-    priorityRaw: "urgente",
-    tags: [{ label: "Urgente", status: "danger" }],
-  },
-  {
-    id: "mock-3",
-    patientId: "mock-p3",
-    codigo: "P001",
-    atendimentoCodigo: "100003",
-    paciente: "Ana Paula Costa",
-    hora: "08:20",
-    especialidade: "Cardiologia",
-    medico: "Dr. Carlos Eduardo",
-    convenio: "Bradesco Saúde",
-    status: { label: "Aguardando", tone: "wait" },
-    statusRaw: "aguardando",
-    priorityRaw: "preferencial",
-    tags: [{ label: "Preferencial", status: "warn" }],
-  },
-  {
-    id: "mock-4",
-    patientId: "mock-p4",
-    codigo: "A003",
-    atendimentoCodigo: "100004",
-    paciente: "Roberto Carlos Lima",
-    hora: "08:30",
-    especialidade: "Cardiologia",
-    medico: "Dr. Carlos Eduardo",
-    convenio: "Unimed",
-    status: { label: "Chamado", tone: "active" },
-    statusRaw: "chamado",
-    priorityRaw: "normal",
-  },
-];
 
 /**
  * Lista a fila de atendimento: do banco quando configurado, mock no modo demo.
@@ -537,58 +470,6 @@ export async function getQueueItem(id: string): Promise<FilaItem | null> {
 
 
 /** Mocks de agendados (modo demo): pacientes da agenda ainda sem check-in. */
-const MOCK_AGENDADOS: FilaItem[] = [
-  {
-    id: "mock-ag-1",
-    patientId: "mock-ag-p1",
-    codigo: "—",
-    atendimentoCodigo: null,
-    paciente: "Beatriz Nogueira Reis",
-    hora: "09:00",
-    especialidade: "Cardiologia",
-    medico: "Dr. Carlos Eduardo",
-    convenio: "—",
-    status: mapStatus("agendado"),
-    statusRaw: "agendado",
-    priorityRaw: "normal",
-    appointmentId: "mock-ag-1",
-    agendado: true,
-    // Demo: paciente avulso (cadastro mínimo) p/ exercitar o complemento no check-in.
-    registrationComplete: false,
-  },
-  {
-    id: "mock-ag-2",
-    patientId: "mock-ag-p2",
-    codigo: "—",
-    atendimentoCodigo: null,
-    paciente: "Marcos Vinícius Teixeira",
-    hora: "09:30",
-    especialidade: "Cardiologia",
-    medico: "Dr. Carlos Eduardo",
-    convenio: "—",
-    status: mapStatus("agendado"),
-    statusRaw: "agendado",
-    priorityRaw: "normal",
-    appointmentId: "mock-ag-2",
-    agendado: true,
-  },
-  {
-    id: "mock-ag-3",
-    patientId: "mock-ag-p3",
-    codigo: "—",
-    atendimentoCodigo: null,
-    paciente: "Helena Castro Dias",
-    hora: "10:15",
-    especialidade: "Clínica Geral",
-    medico: "Dra. Ana Beatriz Costa",
-    convenio: "—",
-    status: mapStatus("agendado"),
-    statusRaw: "agendado",
-    priorityRaw: "normal",
-    appointmentId: "mock-ag-3",
-    agendado: true,
-  },
-];
 
 /**
  * Lista os pacientes AGENDADOS para hoje que ainda NÃO fizeram check-in no totem

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, type DragEvent } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -8,7 +8,6 @@ import {
   Trash2,
   Stethoscope,
   Search,
-  GripVertical,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -74,10 +73,6 @@ export function EspecialidadesConfig({
   const [modalAberto, setModalAberto] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(draftVazio(0));
-
-  // Drag-and-drop.
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -243,10 +238,7 @@ export function EspecialidadesConfig({
             </thead>
             <tbody>
               <AnimatePresence initial={false}>
-                {visiveis.map((e, i) => {
-                  const posicao = inicio + i + 1;
-                  const arrastando = dragId === e.id;
-                  const alvo = overId === e.id && dragId !== e.id;
+                {visiveis.map((e) => {
                   return (
                     <motion.tr
                       key={e.id}

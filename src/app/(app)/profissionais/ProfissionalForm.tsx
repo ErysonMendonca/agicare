@@ -622,12 +622,15 @@ export function ProfissionalForm({
 }) {
   const router = useRouter();
   
+  // Evita `.bind()`: a tipagem de Function.prototype.bind do TS perde a
+  // assinatura exata com 3+ parâmetros, o que exigia um cast para `any` aqui.
   const action = profissional
-    ? updateProfessional.bind(null, profissional.id)
+    ? (prev: ActionState, formData: FormData) =>
+        updateProfessional(profissional.id, prev, formData)
     : createProfessional;
 
   const [state, formAction, pending] = useActionState<ActionState, FormData>(
-    action as any,
+    action,
     undefined,
   );
 

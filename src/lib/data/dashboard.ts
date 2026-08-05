@@ -28,25 +28,6 @@ export type DashboardKpis = {
   };
 };
 
-const DEMO: DashboardKpis = {
-  pacientesAtivos: "2.847",
-  consultasHoje: "24",
-  receitaMensal: "R$ 182.4K",
-  taxaOcupacao: "87.5%",
-  changes: {
-    pacientesAtivos: { value: "12.5%", positive: true },
-    consultasHoje: { value: "8.2%", positive: true },
-    receitaMensal: { value: "15.3%", positive: true },
-    taxaOcupacao: { value: "2.4%", positive: false },
-  },
-  series: {
-    pacientesAtivos: [2480, 2535, 2590, 2640, 2705, 2760, 2810, 2847],
-    consultasHoje: [16, 19, 17, 22, 20, 25, 21, 24],
-    receitaMensal: [142, 150, 138, 159, 165, 172, 176, 182],
-    taxaOcupacao: [82, 84, 85, 88, 90, 89, 86, 87.5],
-  },
-};
-
 /** % de variação atual vs. anterior, formatado "X.Y%" + sinal. */
 function pctChange(current: number, previous: number): KpiChange {
   if (previous <= 0) {
@@ -154,11 +135,6 @@ const MESES_ABBR = [
 ];
 
 /** Fallback demo — espelha o Figma (Abr 356/118, Mai 398/145). */
-const DEMO_SERIES: ConsultasRetornos = {
-  labels: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"],
-  consultas: [245, 310, 295, 356, 398, 420],
-  retornos: [95, 105, 100, 118, 145, 160],
-};
 
 /** Buckets a partir de uma DateWindow (quebra em meses). Com ano no label para evitar duplicatas. */
 function buildBucketsFromWindow(window: DateWindow) {
@@ -372,11 +348,6 @@ export async function getDashboardKpis(
 /** Série de Receita REAL por mês (últimos 6 meses, em R$) — gráfico de barras. */
 export type ReceitaMensal = { labels: string[]; valores: number[] };
 
-const DEMO_RECEITA: ReceitaMensal = {
-  labels: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"],
-  valores: [142000, 150000, 138000, 165000, 172000, 182000],
-};
-
 /**
  * Receita mensal real a partir de billable_events agregado por mês (últimos 6).
  * GESTOR-ONLY (a página já restringe o render); aqui apenas agregamos valores.
@@ -429,14 +400,6 @@ export type MenuCounters = {
   checkinPendentes: number;
   /** Procedimentos individuais (não atendimentos) com check-out ainda pendente. */
   procedimentosPendentesCheckout: number;
-};
-
-const DEMO_COUNTERS: MenuCounters = {
-  filaAguardando: 3,
-  aguardandoPagamento: 1,
-  estoqueCriticos: 2,
-  checkinPendentes: 2,
-  procedimentosPendentesCheckout: 4,
 };
 
 export async function getMenuCounters(): Promise<MenuCounters> {
@@ -524,45 +487,6 @@ export type Notificacao = {
   href: string;
   severity: "danger" | "warn" | "info";
 };
-
-const DEMO_NOTIFICACOES: Notificacao[] = [
-  {
-    id: "demo-fila",
-    tipo: "fila",
-    module: "fila",
-    titulo: "3 pacientes aguardando atendimento",
-    descricao: "Fila de atendimento com pacientes na espera.",
-    href: "/fila",
-    severity: "info",
-  },
-  {
-    id: "demo-estoque-1",
-    tipo: "estoque",
-    module: "estoque",
-    titulo: "Dipirona 500mg — estoque crítico",
-    descricao: "Saldo 4 un · mínimo 20 un.",
-    href: "/estoque",
-    severity: "danger",
-  },
-  {
-    id: "demo-estoque-2",
-    tipo: "estoque",
-    module: "estoque",
-    titulo: "Luva de procedimento M — estoque baixo",
-    descricao: "Saldo 35 un · mínimo 50 un.",
-    href: "/estoque",
-    severity: "warn",
-  },
-  {
-    id: "demo-fatura",
-    tipo: "fatura",
-    module: "faturamento",
-    titulo: "Fatura NF-2026-014 vencendo",
-    descricao: "Vence em 18/06/2026 · Convênio Unimed.",
-    href: "/faturamento",
-    severity: "warn",
-  },
-];
 
 /** dd/mm/aaaa a partir de uma date (yyyy-mm-dd) sem fuso. */
 function fmtDateBR(d: string): string {

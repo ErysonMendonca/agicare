@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, type Cliente } from "@/lib/supabase/server";
 import type { Linha } from "@/lib/db/mysql";
 import { requireClinic } from "@/lib/tenant";
 import { enviarNotificacao } from "@/lib/integrations/notifications";
@@ -103,8 +103,24 @@ export type CreateAppointmentInput = z.input<typeof createSchema>;
 /**
  * Valida se um dia/horário está disponível na escala e desocupado.
  */
+/** Linha de `schedules` no formato selecionado por `validarDisponibilidadeHorario`. */
+type EscalaRow = {
+  professional_id: string | null;
+  specialty: string | null;
+  slot_minutes: number | null;
+  overbook_limit: number | null;
+  weekdays: number[] | null;
+  start_time: string;
+  end_time: string;
+  week_hours: unknown;
+  active: boolean;
+  start_date: string | null;
+  end_date: string | null;
+  recurring_blocks: unknown;
+};
+
 async function validarDisponibilidadeHorario(
-  supabase: any,
+  supabase: Cliente,
   dateISO: string,
   timeHHMM: string,
   professionalId: string | null,
@@ -133,8 +149,8 @@ async function validarDisponibilidadeHorario(
     .eq("active", true);
 
   // Encontra a escala que cobre o profissional ou a especialidade neste dia da semana e período
-  const escala = (escalas ?? []).find(
-    (e: any) =>
+  const escala = ((escalas ?? []) as EscalaRow[]).find(
+    (e) =>
       ((professionalId && e.professional_id === professionalId) ||
         (especialidade && e.specialty === especialidade)) &&
       (Array.isArray(e.weekdays) ? e.weekdays.includes(weekday) : false) &&
@@ -1121,11 +1137,6 @@ function gerarHorarios(start: string, end: string, stepMin: number): string[] {
     );
   }
   return out;
-}
-
-/** Grade padrão (fallback): 08:00–18:00 a cada 30 min. */
-function gradePadrao(): string[] {
-  return gerarHorarios("08:00", "18:00", 30);
 }
 
 /** "HH:mm" → minutos desde meia-noite. */

@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { EmBreve } from "@/components/ui/EmBreve";
 import { qrToSvg } from "@/lib/integrations/qrcode";
 import { type Evento, type ItemCheckout } from "@/lib/data/billing";
+import { type Procedimento } from "@/lib/data/procedures";
 import { type ClinicaImpressao } from "@/lib/clinico/documento-impressao";
 import { imprimirRecibo as imprimirReciboDoc } from "./ReciboImpressao";
 import {
@@ -62,7 +63,7 @@ export function ConferenciaModal({
 }: {
   evento: Evento;
   podeAjustar: boolean;
-  procedimentos: any[];
+  procedimentos: Procedimento[];
   /** conferir (pendente) | editar (regrava) | visualizar/imprimir (recibo read-only). */
   modo?: "conferir" | "editar" | "visualizar" | "imprimir";
   /** Dados da clínica para o cabeçalho do recibo impresso. */

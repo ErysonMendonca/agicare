@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireClinic, getActiveClinicId, DEMO_CLINIC_ID } from "@/lib/tenant";
+import { requireClinic, getActiveClinicId } from "@/lib/tenant";
 import { getCurrentUser, requireClinico } from "@/lib/auth";
 import { canView, requireAction } from "@/lib/permissions";
 import { isValidCPF } from "@/lib/cpf";

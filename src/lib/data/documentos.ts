@@ -44,53 +44,6 @@ function fmtDataHora(iso: string | null): string {
   })}`;
 }
 
-const DEMO_DOCUMENTOS: Documento[] = [
-  {
-    id: "demo-doc-1",
-    tipo: "atestado",
-    dataHora: "12/06/2026 09:00",
-    profissional: "Dra. Ana Beatriz Costa",
-    conselho: "CRM-SP 123456",
-    atendimentoCodigo: "0001",
-    dias: 3,
-    dataAtestado: "12/06/2026",
-    inicio: "12/06/2026",
-    fim: "14/06/2026",
-    diagnostico: "Síndrome gripal.",
-    cid10: null,
-    observacao: null,
-    exibirCid: true,
-    motivo: null,
-    orientacoes: null,
-    dataAlta: null,
-    detalhe: null,
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "demo-doc-2",
-    tipo: "alta",
-    dataHora: "11/06/2026 16:30",
-    profissional: "Dr. Carlos Eduardo",
-    conselho: "CRM-SP 654321",
-    atendimentoCodigo: "0002",
-    dias: null,
-    dataAtestado: null,
-    inicio: null,
-    fim: null,
-    diagnostico: "Quadro estável.",
-    cid10: null,
-    observacao: null,
-    exibirCid: true,
-    motivo: "Melhora clínica.",
-    orientacoes: "Retornar em caso de febre ou piora da dor. Hidratação oral.",
-    dataAlta: "11/06/2026 16:30",
-    detalhe: "Sintomas resolvidos",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
-
 /** Lista atestados e altas emitidos para o paciente. */
 export async function listDocumentos(patientId: string): Promise<Documento[]> {
 

@@ -32,44 +32,6 @@ function fmtDataHora(iso: string | null): string {
   });
 }
 
-const MOCK: SolicitacaoProduto[] = [
-  {
-    id: "sol-1",
-    codigo: "SOL-2026-0001",
-    setor: "Recepção",
-    status: STATUS_MAP.pendente,
-    statusRaw: "pendente",
-    setorFornecedor: "Farmácia Satélite",
-    urgente: true,
-    observacoes: "Reposição semanal.",
-    solicitante: "Recepção",
-    criadaEm: "02/07/2026 09:15",
-    atendidaPor: null,
-    atendidaEm: null,
-    itens: [
-      { id: "sol-1-item-1", productId: null, nome: "Papel A4 (resma)", unidade: "resma", quantidade: 5, quantidadeAtendida: 0 },
-      { id: "sol-1-item-2", productId: null, nome: "Álcool gel 500ml", unidade: "unidade", quantidade: 3, quantidadeAtendida: 0 },
-    ],
-  },
-  {
-    id: "sol-2",
-    codigo: "SOL-2026-0002",
-    setor: "Médico",
-    status: STATUS_MAP.atendida,
-    statusRaw: "atendida",
-    setorFornecedor: "Almoxarifado",
-    urgente: false,
-    observacoes: null,
-    solicitante: "Dr. Carlos Eduardo",
-    criadaEm: "01/07/2026 14:40",
-    atendidaPor: "Farmácia",
-    atendidaEm: "01/07/2026 16:10",
-    itens: [
-      { id: "sol-2-item-1", productId: null, nome: "Luva Cirúrgica nº 7,5", unidade: "caixa", quantidade: 2, quantidadeAtendida: 2 },
-    ],
-  },
-];
-
 /**
  * Lista as solicitações de produtos da clínica ativa (mais recentes primeiro).
  * RLS escopa por clínica; qualquer staff enxerga. Em demo, retorna o MOCK.
@@ -217,12 +179,13 @@ export async function listAtendimentosSolicitacao(
       id: d.id as string,
       codigo: (d.code as string | null) ?? "—",
       criadoEm: fmtDataHora((d.created_at as string | null) ?? null),
-      itens: itens.map((it: any) => {
-        const qtd = Number(it.quantity_num ?? 0);
-        const texto = (it.quantity as string | null) ?? "";
+      itens: itens.map((it) => {
+        const item = it as { quantity_num?: number | null; quantity?: string | null; name?: string | null };
+        const qtd = Number(item.quantity_num ?? 0);
+        const texto = item.quantity ?? "";
         const unidade = texto.replace(/^[\d.,\s]+/, "").trim();
         return {
-          nome: (it.name as string | null) ?? "—",
+          nome: item.name ?? "—",
           quantidade: qtd,
           unidade,
         };

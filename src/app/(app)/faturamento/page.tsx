@@ -57,7 +57,6 @@ export default async function FaturamentoPage() {
         clinica={{
           nome: settings.clinicName,
           logo: settings.branding.logoUrl,
-          logo: settings.branding.logoUrl,
           cnpj: settings.cnpj,
           endereco: settings.address,
           telefone: settings.phone,

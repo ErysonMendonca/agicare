@@ -13,7 +13,7 @@ export type ActionState = {
   error?: string; 
   ok?: boolean; 
   fieldErrors?: Record<string, string[]>;
-  data?: any;
+  data?: Record<string, unknown>;
 } | undefined;
 
 /** Texto opcional ("" é aceito e tratado como ausente na persistência). Limite

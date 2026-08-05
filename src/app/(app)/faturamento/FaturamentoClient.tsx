@@ -31,6 +31,7 @@ import {
   type GuiaTISS,
   type LoteTISS,
 } from "@/lib/data/billing";
+import { type Procedimento } from "@/lib/data/procedures";
 import { type ClinicaImpressao } from "@/lib/clinico/documento-impressao";
 import { ConferenciaModal } from "./ConferenciaModal";
 import { TissPanel } from "./TissPanel";
@@ -65,7 +66,7 @@ export function FaturamentoClient({
   lotes: LoteTISS[];
   gestor: boolean;
   podeAjustar: boolean;
-  procedimentos: any[];
+  procedimentos: Procedimento[];
   kpis: { total: number; pendentes: number; faturados: number; glosados: number };
   valorTotalLabel: string;
   /** Dados da clínica para o cabeçalho do recibo impresso. */

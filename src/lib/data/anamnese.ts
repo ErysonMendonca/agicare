@@ -37,26 +37,6 @@ function fmtDataHora(iso: string | null): string {
   })}`;
 }
 
-const DEMO_ANAMNESES: AnamneseRegistro[] = [
-  {
-    id: "demo-ana-1",
-    specialty: "Podológico",
-    dataHora: "10/06/2026 10:15",
-    profissional: "Dra. Ana Beatriz Costa",
-    conselho: "CRM-SP 123456",
-    consentimento: true,
-    assinatura: "Ana Beatriz Costa",
-    campos: {
-      doencas_sistemicas: ["Diabetes"],
-      alergias: "Nenhuma conhecida",
-      podo_risco_pre_diabetico: true,
-    },
-    atendimentoCodigo: "204815",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
-
 /** Lista anamneses do paciente (todas as especialidades — visualização liberada). */
 export async function listAnamneses(
   patientId: string,

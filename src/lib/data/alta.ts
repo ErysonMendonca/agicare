@@ -10,16 +10,6 @@ import { createClient } from "@/lib/supabase/server";
 export type MotivoAlta = { id: string; label: string };
 export type DetalheAlta = { id: string; label: string; parentId: string | null };
 
-const DEMO_MOTIVOS: MotivoAlta[] = [
-  { id: "demo-motivo-1", label: "Melhora clínica" },
-  { id: "demo-motivo-2", label: "Alta a pedido" },
-];
-
-const DEMO_DETALHES: DetalheAlta[] = [
-  { id: "demo-detalhe-1", label: "Sintomas resolvidos", parentId: "demo-motivo-1" },
-  { id: "demo-detalhe-2", label: "Responsável assinou termo", parentId: "demo-motivo-2" },
-];
-
 /**
  * Catálogos ativos de motivo/detalhe de alta da clínica ativa, ordenados por
  * sort_order/label. `detalhe` traz parent_id→parentId para filtrar por motivo.
@@ -82,15 +72,6 @@ export type DetalheAltaCfg = {
   active: boolean;
   sortOrder: number;
 };
-
-const DEMO_MOTIVOS_CFG: MotivoAltaCfg[] = [
-  { id: "demo-motivo-1", label: "Melhora clínica", active: true, sortOrder: 0 },
-  { id: "demo-motivo-2", label: "Alta a pedido", active: true, sortOrder: 1 },
-];
-const DEMO_DETALHES_CFG: DetalheAltaCfg[] = [
-  { id: "demo-detalhe-1", label: "Sintomas resolvidos", parentId: "demo-motivo-1", active: true, sortOrder: 0 },
-  { id: "demo-detalhe-2", label: "Responsável assinou termo", parentId: "demo-motivo-2", active: true, sortOrder: 0 },
-];
 
 /** Catálogos de alta (motivo + detalhe) para a config: todos, com active/ordem. */
 export async function listAltaCatalogosConfig(): Promise<{

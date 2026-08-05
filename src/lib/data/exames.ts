@@ -36,51 +36,6 @@ function fmtDataHora(iso: string | null): string {
   })}`;
 }
 
-const DEMO_EXAMES: ExamOrder[] = [
-  {
-    id: "demo-exam-1",
-    exame: "Hemograma completo",
-    tuss: "40304361",
-    categoria: "laboratorial",
-    status: "solicitado",
-    observacoes: "Coleta em jejum de 8h.",
-    lateralidade: null,
-    quando: "12/06/2026 09:15",
-    profissional: "Dra. Ana Beatriz Costa",
-    atendimentoCodigo: "0001",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "demo-exam-2",
-    exame: "Raio-X de tórax",
-    tuss: "40901114",
-    categoria: "imagem",
-    status: "concluido",
-    observacoes: null,
-    lateralidade: "Bilateral",
-    quando: "10/06/2026 14:40",
-    profissional: "Dr. Carlos Eduardo",
-    atendimentoCodigo: "0002",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-  {
-    id: "demo-exam-3",
-    exame: "TSH - Hormônio tireoestimulante",
-    tuss: "40316105",
-    categoria: "laboratorial",
-    status: "solicitado",
-    observacoes: "Avaliar função tireoidiana.",
-    lateralidade: null,
-    quando: "10/06/2026 14:38",
-    profissional: "Dr. Carlos Eduardo",
-    atendimentoCodigo: "0002",
-    cancelledAt: null,
-    cancelReason: null,
-  },
-];
-
 /**
  * Lista os pedidos de exame do paciente (mais recentes primeiro).
  * Resiliente: erro/sem permissão → lista vazia (não derruba a seção).

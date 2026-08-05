@@ -9,15 +9,6 @@ export {
   type Usuario,
 } from "@/lib/data/usuarios.shared";
 
-const MOCK_CARGOS: Cargo[] = [
-  { id: "c1", nome: "Fisioterapeuta", baseRole: "medico" },
-];
-const MOCK_USUARIOS: Usuario[] = [
-  { userId: "u1", nome: "Dr. João Pedro Oliveira", username: "joao.oliveira", roleBase: "medico", cargoId: null, cargoLabel: "Médico", ativo: true },
-  { userId: "u2", nome: "Recepção Central", username: "recepcao", roleBase: "recepcao", cargoId: null, cargoLabel: "Recepção", ativo: true },
-  { userId: "u3", nome: "Ana (Fisio)", username: null, roleBase: "medico", cargoId: "c1", cargoLabel: "Fisioterapeuta", ativo: true },
-];
-
 /** Cargos personalizados da clínica ativa. */
 export async function listCargos(): Promise<Cargo[]> {
   const clinicId = await getActiveClinicId();

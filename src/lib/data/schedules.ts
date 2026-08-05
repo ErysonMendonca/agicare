@@ -45,54 +45,6 @@ export type DiaHorario = { start: string; end: string; blocks?: BlocoHorario[] }
 export type EscalaFiltro = { specialty?: string; professionalId?: string };
 
 /** Mock usado no modo demo (espelha o fluxo real). */
-const MOCK: Escala[] = [
-  {
-    id: "esc-1",
-    code: "ESC-1001",
-    description: "Manhã - Cardiologia",
-    professionalId: "1",
-    professionalNome: "Dr. João Pedro Oliveira",
-    specialty: "Cardiologia",
-    serviceType: "Consulta",
-    slotMinutes: 30,
-    overbookLimit: 2,
-    weekdays: [1, 2, 3, 4, 5],
-    startTime: "08:00",
-    endTime: "12:00",
-    weekHours: {},
-    active: true,
-    startDate: "",
-    endDate: "",
-    procedureCodes: [],
-    examTussCodes: [],
-    recurringBlocks: [],
-    lateralidade: "",
-    obs: "",
-  },
-  {
-    id: "esc-2",
-    code: "ESC-1002",
-    description: "Tarde - Ortopedia",
-    professionalId: "2",
-    professionalNome: "Dra. Ana Paula Costa",
-    specialty: "Ortopedia",
-    serviceType: "Consulta",
-    slotMinutes: 20,
-    overbookLimit: 0,
-    weekdays: [1, 3, 5],
-    startTime: "13:00",
-    endTime: "18:00",
-    weekHours: {},
-    active: true,
-    startDate: "",
-    endDate: "",
-    procedureCodes: [],
-    examTussCodes: [],
-    recurringBlocks: [],
-    lateralidade: "",
-    obs: "",
-  },
-];
 
 /** "HH:mm:ss" | "HH:mm" → "HH:mm". */
 function hhmm(t: unknown): string {

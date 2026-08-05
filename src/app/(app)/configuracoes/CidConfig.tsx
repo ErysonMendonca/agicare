@@ -270,7 +270,7 @@ export function CidConfig({ cids }: { cids: CidCode[] }) {
 
                 {(() => {
                   let startPage = Math.max(1, paginaSegura - 2);
-                  let endPage = Math.min(totalPaginas, startPage + 4);
+                  const endPage = Math.min(totalPaginas, startPage + 4);
                   if (endPage - startPage < 4) {
                     startPage = Math.max(1, endPage - 4);
                   }

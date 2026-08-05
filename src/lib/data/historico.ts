@@ -25,19 +25,23 @@ export async function listScannedRecords(patientId: string): Promise<ScannedReco
   if (error || !data) return [];
 
   // Generate signed URLs for the files
-  const records: ScannedRecord[] = data.map((row: any) => ({
-    id: row.id,
-    patientId: row.patient_id,
-    filePath: row.file_path,
-    fileName: row.file_name,
-    fileSize: row.file_size,
-    fileType: row.file_type,
-    description: row.description,
-    uploadedBy: row.uploaded_by,
-    uploadedByName: row.auth_users?.raw_user_meta_data?.full_name ?? null,
-    createdAt: row.created_at,
-    signedUrl: null,
-  }));
+  const records: ScannedRecord[] = data.map((row) => {
+    const authUser = Array.isArray(row.auth_users) ? row.auth_users[0] : row.auth_users;
+    const meta = authUser?.raw_user_meta_data as { full_name?: string } | null | undefined;
+    return {
+      id: row.id as string,
+      patientId: row.patient_id as string,
+      filePath: row.file_path as string,
+      fileName: row.file_name as string,
+      fileSize: row.file_size as number,
+      fileType: row.file_type as string,
+      description: (row.description as string | null) ?? null,
+      uploadedBy: (row.uploaded_by as string | null) ?? null,
+      uploadedByName: meta?.full_name ?? null,
+      createdAt: row.created_at as string,
+      signedUrl: null,
+    };
+  });
 
   const paths = records.map((r) => r.filePath);
   if (paths.length > 0) {

@@ -12,7 +12,6 @@ import { Card, CardBody, CardFooter } from "@/components/ui/Card";
 import {
   createAdminProfessional,
   updateProfessional,
-  type ActionState,
 } from "@/lib/actions/professionals";
 import type { ProfissionalEdit } from "@/lib/data/professionals";
 import type { AttendanceOption } from "@/lib/data/attendance-options.shared";
@@ -43,7 +42,6 @@ function CamposAdmin({
   defaults,
   errors,
   mostrarStatus,
-  departamentos,
   isEdit,
   cargos,
 }: {
@@ -57,11 +55,20 @@ function CamposAdmin({
   const [telefone, setTelefone] = useState(defaults.phone ?? "");
   const [documento, setDocumento] = useState(defaults.document ?? "");
 
-  // Quando o servidor retorna dados preservados (state.data), re-sincroniza os estados controlados
-  useEffect(() => {
+  // Quando o servidor retorna dados preservados (state.data), re-sincroniza os
+  // estados controlados. Ajuste feito DURANTE o render (padrão React p/
+  // "resetar estado quando uma prop muda"), em vez de useEffect — evita o
+  // render em cascata que o effect causaria.
+  const [prevPhone, setPrevPhone] = useState(defaults.phone);
+  if (defaults.phone !== prevPhone) {
+    setPrevPhone(defaults.phone);
     setTelefone(defaults.phone ?? "");
+  }
+  const [prevDocument, setPrevDocument] = useState(defaults.document);
+  if (defaults.document !== prevDocument) {
+    setPrevDocument(defaults.document);
     setDocumento(defaults.document ?? "");
-  }, [defaults.phone, defaults.document]);
+  }
 
   function handleCpfCnpj(v: string) {
     const limpo = v.replace(/\D/g, "");
